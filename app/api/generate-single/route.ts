@@ -1,8 +1,8 @@
 import Groq from 'groq-sdk'
 import { NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
 import { createClient as createSupabaseAdminClient } from '@supabase/supabase-js'
 import { createClient as createAuthClient } from '@/lib/supabase/server'
+import { getOrCreateAnonId } from '@/lib/guestId'
 import { shapeForPlatform } from '@/lib/platformShapers'
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY })
@@ -83,24 +83,6 @@ function getSupabaseAdminClient() {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   )
-}
-
-async function getOrCreateAnonId(): Promise<string> {
-  const cookieStore = await cookies()
-  let anonId = cookieStore.get('anon_id')?.value
-
-  if (!anonId) {
-    anonId = crypto.randomUUID()
-    cookieStore.set('anon_id', anonId, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 60 * 60 * 24 * 365,
-      path: '/'
-    })
-  }
-
-  return anonId
 }
 
 async function isUnderGuestLimit(anonId: string): Promise<boolean> {

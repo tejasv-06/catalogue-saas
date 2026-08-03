@@ -20,7 +20,6 @@ type DraftProduct = {
   generatedContent: any | null
   status: 'draft' | 'generated' | 'approved'
   generationError: string | null
-  imageMissingAfterRestore: boolean
   skipBrandVoice: boolean
 }
 
@@ -42,6 +41,12 @@ const marketplaces = ['amazon', 'flipkart', 'myntra', 'etsy', 'tatacliq']
 
 const SESSION_STORAGE_KEY = 'catalogue-draft-session'
 const SESSION_MAX_AGE_MS = 4 * 60 * 60 * 1000
+
+// Above this, a picked-but-not-yet-submitted form image is simply not persisted
+// (falls back to today's behavior: lost on refresh) rather than risking a
+// localStorage quota error on write, which could otherwise silently break
+// persistence for the whole session, not just the image.
+const MAX_PERSISTABLE_IMAGE_BYTES = 2 * 1024 * 1024
 
 const GUEST_PRODUCT_LIMIT = 10
 
@@ -167,9 +172,6 @@ function QueueRow({
     <tr className="border-b">
       <td className="p-2">
         <ProductThumbnail imageFile={product.imageFile} imageUrl={product.imageUrl} alt={product.brandName} size={80} />
-        {product.imageMissingAfterRestore && (
-          <p className="text-xs text-amber-600 mt-1">Image lost — re-upload</p>
-        )}
       </td>
       <td className="p-2">
         <p className="font-medium text-sm">{product.brandName || '—'}</p>
@@ -246,9 +248,6 @@ function GeneratedListingDrawer({
             <p className="text-sm text-gray-500">
               {product.category} · {product.targetMarketplace}
             </p>
-            {product.imageMissingAfterRestore && (
-              <p className="text-xs text-amber-600 mt-1">Image lost after session restore — re-upload via Edit</p>
-            )}
           </div>
         </div>
 
@@ -309,11 +308,18 @@ export default function CatalogueWorkspace() {
   const [pendingRestoreCount, setPendingRestoreCount] = useState<number | null>(null)
   const [sessionReady, setSessionReady] = useState(false)
   const [selectedClient, setSelectedClient] = useState<Client | null>(null)
+  // Saved session read from localStorage on mount, held here until we also know
+  // whether the visitor is authenticated — that decides auto-restore vs. banner.
+  const [savedSessionData, setSavedSessionData] = useState<any | null>(null)
 
   const [brandName, setBrandName] = useState('')
   const [category, setCategory] = useState('')
   const [description, setDescription] = useState('')
   const [imageFile, setImageFile] = useState<File | null>(null)
+  // Base64 mirror of imageFile (when small enough), so the form's in-progress,
+  // not-yet-submitted image pick can survive a redirect/refresh via localStorage —
+  // a raw File object can't be JSON-serialized.
+  const [imageFileDataUrl, setImageFileDataUrl] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [csvFile, setCsvFile] = useState<File | null>(null)
@@ -329,9 +335,15 @@ export default function CatalogueWorkspace() {
   const [marketplaceError, setMarketplaceError] = useState<string | null>(null)
   const [marketplaceFlash, setMarketplaceFlash] = useState(false)
   const [brandMismatchPending, setBrandMismatchPending] = useState(false)
+  const [pendingImageUrl, setPendingImageUrl] = useState<string | null>(null)
+  const [uploadingImage, setUploadingImage] = useState(false)
   const [pendingCsvUpload, setPendingCsvUpload] = useState<PendingCsvUpload | null>(null)
   const [hasSession, setHasSession] = useState(false)
+  // Distinguishes "haven't checked auth yet" from "checked, guest" — hasSession
+  // alone starts false either way, which isn't enough to gate the restore decision.
+  const [hasCheckedSession, setHasCheckedSession] = useState(false)
   const [showExportGateModal, setShowExportGateModal] = useState(false)
+  const [autoDownloadPending, setAutoDownloadPending] = useState(false)
 
   // Client-side only, purely for UI: /workspace is public, so this never gates
   // access — it just decides whether to show the Brand/Clients dropdown at all,
@@ -341,14 +353,15 @@ export default function CatalogueWorkspace() {
     const supabase = createClient()
     supabase.auth.getUser().then(({ data }) => {
       setHasSession(!!data.user)
+      setHasCheckedSession(true)
     })
   }, [])
 
-  // On mount, check for a crash-recovery session without silently restoring it —
-  // the user must explicitly choose Restore or Discard via the banner. Uses
-  // localStorage (not sessionStorage) because a magic-link email typically opens
-  // in a new browser tab, and sessionStorage doesn't carry across tabs — the
-  // whole point of this recovery flow is to survive that guest-mode login round trip.
+  // On mount, read any crash-recovery session but don't yet decide what to do
+  // with it — that depends on whether this visitor turns out to be authenticated,
+  // which is still resolving asynchronously via the auth-check effect above.
+  // Uses localStorage (not sessionStorage) because a magic-link email typically
+  // opens in a new browser tab, and sessionStorage doesn't carry across tabs.
   useEffect(() => {
     try {
       const saved = localStorage.getItem(SESSION_STORAGE_KEY)
@@ -358,8 +371,8 @@ export default function CatalogueWorkspace() {
 
         if (isExpired) {
           localStorage.removeItem(SESSION_STORAGE_KEY)
-        } else if (Array.isArray(parsed.draftProducts) && parsed.draftProducts.length > 0) {
-          setPendingRestoreCount(parsed.draftProducts.length)
+        } else if (parsed.pendingDownload || (Array.isArray(parsed.draftProducts) && parsed.draftProducts.length > 0)) {
+          setSavedSessionData(parsed)
           return
         }
       }
@@ -369,35 +382,117 @@ export default function CatalogueWorkspace() {
     setSessionReady(true)
   }, [])
 
+  // Fires once both the saved session (if any) and the auth check have landed.
+  // Authenticated visitors skip the manual banner entirely and get restored
+  // straight into state; guests keep seeing the Restore/Discard banner as before.
+  useEffect(() => {
+    if (!savedSessionData || !hasCheckedSession) return
+
+    if (hasSession) {
+      void applyRestoredState(savedSessionData)
+      if (savedSessionData.pendingDownload) {
+        setAutoDownloadPending(true)
+      }
+      setSessionReady(true)
+    } else {
+      setPendingRestoreCount(savedSessionData.draftProducts?.length || 0)
+    }
+    setSavedSessionData(null)
+  }, [savedSessionData, hasCheckedSession, hasSession])
+
+  // Fires once both the restore and the "am I actually logged in now" check
+  // have landed. handleDownloadApproved's own hasSession check would otherwise
+  // still see the stale initial `false` if called directly above, since that
+  // auth check resolves asynchronously.
+  useEffect(() => {
+    if (autoDownloadPending && hasSession) {
+      setAutoDownloadPending(false)
+      handleDownloadApproved()
+    }
+  }, [autoDownloadPending, hasSession])
+
+  // Mirrors the form's in-progress imageFile into a base64 data URL so it can
+  // survive a redirect/refresh via localStorage (a raw File can't be
+  // JSON-serialized). Skipped above the size cap — see MAX_PERSISTABLE_IMAGE_BYTES.
+  useEffect(() => {
+    if (!imageFile || imageFile.size > MAX_PERSISTABLE_IMAGE_BYTES) {
+      setImageFileDataUrl(null)
+      return
+    }
+    let cancelled = false
+    const reader = new FileReader()
+    reader.onload = () => {
+      if (!cancelled) setImageFileDataUrl(reader.result as string)
+    }
+    reader.readAsDataURL(imageFile)
+    return () => {
+      cancelled = true
+    }
+  }, [imageFile])
+
   // Persist draftProducts on every change, once the initial restore/discard decision
   // is resolved (so we don't clobber a pending saved session with the initial empty array
   // before the user has seen the restore banner). File objects can't survive
-  // JSON.stringify/localStorage, so imageFile is stripped — a `hadImageFile` marker is
-  // kept instead so a restored session can tell the user their image was lost, rather than
-  // silently looking like the product never had one. CSV-sourced imageUrl links, being
-  // plain strings, survive a restore intact.
+  // JSON.stringify/localStorage — imageFile is always null on a committed product now
+  // (manual uploads are converted to a permanent Supabase Storage URL immediately on
+  // add), but it's still stripped defensively in case that invariant is ever broken.
+  // The marketplace, selected brand, and in-progress manual-entry form (including a
+  // small enough in-progress image, as a data URL) are all saved alongside the
+  // products so a restore brings back the whole session state, not just the product
+  // list. Wrapped in try/catch: an oversized data URL could push this over
+  // localStorage's quota, and a thrown QuotaExceededError here shouldn't take out
+  // persistence for the rest of the session (products, marketplace, etc).
   useEffect(() => {
     if (!sessionReady) return
-    const serializable = draftProducts.map((p) => {
-      const { imageFile, ...rest } = p
-      return { ...rest, hadImageFile: !!imageFile }
-    })
-    localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify({ savedAt: Date.now(), draftProducts: serializable }))
-  }, [draftProducts, sessionReady])
+    try {
+      const serializable = draftProducts.map(({ imageFile, ...rest }) => rest)
+      localStorage.setItem(
+        SESSION_STORAGE_KEY,
+        JSON.stringify({
+          savedAt: Date.now(),
+          draftProducts: serializable,
+          targetMarketplace,
+          selectedClient,
+          formDraft: { brandName, category, description, imageDataUrl: imageFileDataUrl }
+        })
+      )
+    } catch {
+      // most likely a localStorage quota error from an embedded image — this
+      // change just won't survive a refresh, nothing else breaks
+    }
+  }, [draftProducts, sessionReady, targetMarketplace, selectedClient, brandName, category, description, imageFileDataUrl])
+
+  async function applyRestoredState(parsed: any) {
+    const products = Array.isArray(parsed.draftProducts) ? parsed.draftProducts : []
+    setDraftProducts(products.map((p: any) => ({ ...p, imageFile: null })))
+    if (typeof parsed.targetMarketplace === 'string') {
+      setTargetMarketplace(parsed.targetMarketplace)
+    }
+    if (parsed.selectedClient) {
+      setSelectedClient(parsed.selectedClient)
+    }
+    if (parsed.formDraft) {
+      setBrandName(parsed.formDraft.brandName || '')
+      setCategory(parsed.formDraft.category || '')
+      setDescription(parsed.formDraft.description || '')
+
+      if (parsed.formDraft.imageDataUrl) {
+        try {
+          const blob = await (await fetch(parsed.formDraft.imageDataUrl)).blob()
+          const extension = blob.type.split('/')[1] || 'jpg'
+          setImageFile(new File([blob], `restored-image.${extension}`, { type: blob.type }))
+        } catch {
+          // couldn't reconstruct the image — form just comes back without one
+        }
+      }
+    }
+  }
 
   function handleRestoreSession() {
     try {
       const saved = localStorage.getItem(SESSION_STORAGE_KEY)
       if (saved) {
-        const parsed = JSON.parse(saved)
-        const products = Array.isArray(parsed.draftProducts) ? parsed.draftProducts : []
-        setDraftProducts(
-          products.map((p: any) => ({
-            ...p,
-            imageFile: null,
-            imageMissingAfterRestore: !!p.hadImageFile && !p.imageUrl
-          }))
-        )
+        void applyRestoredState(JSON.parse(saved))
       }
     } catch {
       // corrupted storage — nothing to restore
@@ -454,7 +549,21 @@ export default function CatalogueWorkspace() {
     }
   }
 
-  function handleAddProduct() {
+  async function uploadProductImage(file: File): Promise<string> {
+    const formData = new FormData()
+    formData.append('file', file)
+
+    const res = await fetch('/api/upload-image', { method: 'POST', body: formData })
+    const data = await res.json()
+
+    if (!res.ok) {
+      throw new Error(data.error || 'Image upload failed')
+    }
+
+    return data.url as string
+  }
+
+  async function handleAddProduct() {
     if (!targetMarketplace) {
       flagMissingMarketplace()
       return
@@ -467,15 +576,29 @@ export default function CatalogueWorkspace() {
     }
     setFormError(null)
 
+    let uploadedImageUrl: string | null = null
+    if (imageFile) {
+      setUploadingImage(true)
+      try {
+        uploadedImageUrl = await uploadProductImage(imageFile)
+      } catch (err: any) {
+        setFormError(err.message || 'Image upload failed. Please try again.')
+        setUploadingImage(false)
+        return
+      }
+      setUploadingImage(false)
+    }
+
     if (!editingId && selectedClient && !wordLevelMatch(brandName, selectedClient.client_name)) {
+      setPendingImageUrl(uploadedImageUrl)
       setBrandMismatchPending(true)
       return
     }
 
-    commitAddProduct(false)
+    commitAddProduct(false, uploadedImageUrl)
   }
 
-  function commitAddProduct(skipBrandVoice: boolean) {
+  function commitAddProduct(skipBrandVoice: boolean, uploadedImageUrl: string | null) {
     if (editingId) {
       setDraftProducts((prev) =>
         prev.map((p) =>
@@ -485,7 +608,7 @@ export default function CatalogueWorkspace() {
                 brandName,
                 category,
                 description,
-                ...(imageFile ? { imageFile, imageUrl: null, imageMissingAfterRestore: false } : {})
+                ...(uploadedImageUrl ? { imageFile: null, imageUrl: uploadedImageUrl } : {})
               }
             : p
         )
@@ -497,6 +620,7 @@ export default function CatalogueWorkspace() {
         fileInputRef.current.value = ''
       }
       setBrandMismatchPending(false)
+      setPendingImageUrl(null)
       return
     }
 
@@ -505,13 +629,12 @@ export default function CatalogueWorkspace() {
       brandName,
       description,
       category,
-      imageFile,
-      imageUrl: null,
+      imageFile: null,
+      imageUrl: uploadedImageUrl,
       targetMarketplace,
       generatedContent: null,
       status: 'draft',
       generationError: null,
-      imageMissingAfterRestore: false,
       skipBrandVoice
     }
 
@@ -523,6 +646,7 @@ export default function CatalogueWorkspace() {
       fileInputRef.current.value = ''
     }
     setBrandMismatchPending(false)
+    setPendingImageUrl(null)
   }
 
   function handleEditProduct(product: DraftProduct) {
@@ -589,7 +713,6 @@ export default function CatalogueWorkspace() {
         generatedContent: null,
         status: 'draft',
         generationError: null,
-        imageMissingAfterRestore: false,
         skipBrandVoice: false
       })
     }
@@ -749,6 +872,20 @@ export default function CatalogueWorkspace() {
   function handleBulkApprove() {
     if (!requireMarketplace()) return
     setDraftProducts((prev) => prev.map((p) => (p.status === 'generated' ? { ...p, status: 'approved' } : p)))
+  }
+
+  function handleSignInFromExportGate() {
+    try {
+      const saved = localStorage.getItem(SESSION_STORAGE_KEY)
+      const parsed = saved ? JSON.parse(saved) : {}
+      localStorage.setItem(
+        SESSION_STORAGE_KEY,
+        JSON.stringify({ ...parsed, savedAt: Date.now(), pendingDownload: true })
+      )
+    } catch {
+      // worst case the auto-download just doesn't fire after login — not fatal,
+      // the session itself is still safe via the regular persist effect
+    }
   }
 
   function handleDownloadApproved() {
@@ -937,19 +1074,22 @@ export default function CatalogueWorkspace() {
                     </p>
                     <div className="flex flex-wrap gap-2">
                       <button
-                        onClick={() => commitAddProduct(true)}
+                        onClick={() => commitAddProduct(true, pendingImageUrl)}
                         className="text-sm bg-white border border-amber-400 text-amber-800 px-3 py-1 rounded"
                       >
                         Add without brand voice
                       </button>
                       <button
-                        onClick={() => commitAddProduct(false)}
+                        onClick={() => commitAddProduct(false, pendingImageUrl)}
                         className="text-sm bg-amber-600 text-white px-3 py-1 rounded"
                       >
                         Add anyway with {selectedClient.client_name} voice
                       </button>
                       <button
-                        onClick={() => setBrandMismatchPending(false)}
+                        onClick={() => {
+                          setBrandMismatchPending(false)
+                          setPendingImageUrl(null)
+                        }}
                         className="text-sm text-gray-600 underline"
                       >
                         Cancel
@@ -960,10 +1100,10 @@ export default function CatalogueWorkspace() {
                   <div className="flex gap-2">
                     <button
                       onClick={handleAddProduct}
-                      disabled={guestLimitReached}
+                      disabled={guestLimitReached || uploadingImage}
                       className="flex-1 bg-black text-white p-2 rounded disabled:opacity-50"
                     >
-                      {editingId ? 'Save Changes' : 'Add Product'}
+                      {uploadingImage ? 'Uploading Image...' : editingId ? 'Save Changes' : 'Add Product'}
                     </button>
                     <button onClick={handleClearForm} className="border p-2 rounded text-sm">
                       Clear Form
@@ -1158,7 +1298,11 @@ export default function CatalogueWorkspace() {
               <button onClick={() => setShowExportGateModal(false)} className="text-sm text-gray-600 underline">
                 Cancel
               </button>
-              <Link href="/login" className="bg-black text-white px-4 py-2 rounded text-sm">
+              <Link
+                href="/login"
+                onClick={handleSignInFromExportGate}
+                className="bg-black text-white px-4 py-2 rounded text-sm"
+              >
                 Sign In
               </Link>
             </div>
