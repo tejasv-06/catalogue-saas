@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useState, type FormEvent } from 'react'
+import { Suspense, useState, type SubmitEvent } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
@@ -13,7 +13,7 @@ function LoginForm() {
   const [sent, setSent] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  async function handleSendMagicLink(e: FormEvent) {
+  async function handleSendMagicLink(e: SubmitEvent) {
     e.preventDefault()
     setSending(true)
     setError(null)
@@ -22,7 +22,7 @@ function LoginForm() {
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: `${window.location.origin}/auth/confirm`
+        emailRedirectTo: `${window.location.origin}/auth/confirm?next=/workspace`
       }
     })
 
@@ -34,6 +34,20 @@ function LoginForm() {
     }
 
     setSent(true)
+  }
+
+  async function handleGoogleSignIn() {
+    setError(null)
+    const supabase = createClient()
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}/auth/confirm?next=/workspace`
+      }
+    })
+    if (error) {
+      setError(error.message)
+    }
   }
 
   return (
@@ -66,6 +80,16 @@ function LoginForm() {
           {error && <p className="text-sm text-red-600">{error}</p>}
         </form>
       )}
+
+      <div className="flex items-center gap-2 text-xs text-gray-400">
+        <div className="flex-1 border-t" />
+        or
+        <div className="flex-1 border-t" />
+      </div>
+
+      <button onClick={handleGoogleSignIn} className="border p-2 rounded text-sm">
+        Continue with Google
+      </button>
     </div>
   )
 }
