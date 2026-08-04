@@ -1,8 +1,12 @@
 @import "tailwindcss";
 
+/* Site is intentionally dark site-wide (not OS-conditional) — these are flat
+   defaults matching Tailwind's slate-950/slate-100, not a light/dark toggle.
+   Every page also sets its own bg-slate-950 explicitly; this just prevents a
+   flash of the old light background before that class paints. */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #020617;
+  --foreground: #f1f5f9;
 }
 
 @theme inline {
@@ -10,13 +14,6 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
 }
 
 body {

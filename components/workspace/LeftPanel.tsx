@@ -90,20 +90,20 @@ export default function LeftPanel({
   onCsvCancelMismatch: () => void
 }) {
   return (
-    <div className={`w-[35%] flex flex-col gap-2 p-5 h-fit ${cardClass}`}>
-      <div className="flex gap-4 border-b border-slate-200 mb-2">
+    <div className={`w-[35%] flex flex-col gap-2 p-6 h-fit ${cardClass}`}>
+      <div className="flex gap-4 border-b border-slate-800 mb-2">
         <button
           onClick={() => onTabChange('manual')}
-          className={`p-2 text-sm font-medium border-b-2 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#2563eb] rounded-t transition-colors ${
-            activeTab === 'manual' ? 'border-[#2563eb] text-[#2563eb]' : 'border-transparent text-slate-500'
+          className={`p-2 text-sm font-medium border-b-2 hover:text-slate-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-950 focus:ring-blue-500 rounded-t transition-colors ${
+            activeTab === 'manual' ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-400'
           }`}
         >
           Manual Entry
         </button>
         <button
           onClick={() => onTabChange('csv')}
-          className={`p-2 text-sm font-medium border-b-2 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#2563eb] rounded-t transition-colors ${
-            activeTab === 'csv' ? 'border-[#2563eb] text-[#2563eb]' : 'border-transparent text-slate-500'
+          className={`p-2 text-sm font-medium border-b-2 hover:text-slate-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-950 focus:ring-blue-500 rounded-t transition-colors ${
+            activeTab === 'csv' ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-400'
           }`}
         >
           Bulk CSV Upload
@@ -146,13 +146,13 @@ export default function LeftPanel({
               </label>
               <ProductThumbnail imageFile={imageFile} imageUrl={formPreviewUrl} alt="Preview" size={48} />
             </div>
-            {formError && <p className="text-sm text-red-600">{formError}</p>}
+            {formError && <p className="text-sm text-red-400">{formError}</p>}
             {guestLimitReached && (
-              <p className="text-sm text-red-600">Free preview limit reached (10/10) — sign in to continue.</p>
+              <p className="text-sm text-red-400">Free preview limit reached (10/10) — sign in to continue.</p>
             )}
             {brandMismatchPending && selectedClient ? (
-              <div className="p-4 rounded-lg border border-amber-300 bg-amber-50 flex flex-col gap-2">
-                <p className="text-sm text-amber-800">
+              <div className="p-4 rounded-xl border border-amber-700/60 bg-amber-950/40 flex flex-col gap-2">
+                <p className="text-sm text-amber-300">
                   This product's brand doesn't match your selected brand voice ({selectedClient.client_name}).
                 </p>
                 <div className="flex flex-wrap gap-2">
@@ -187,7 +187,7 @@ export default function LeftPanel({
             <a
               href="/sample-products.csv"
               download
-              className="text-[#2563eb] underline text-sm hover:text-[#1d4ed8] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#2563eb] rounded transition-colors w-fit"
+              className="text-blue-400 underline text-sm hover:text-blue-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-950 focus:ring-blue-500 rounded transition-colors w-fit"
             >
               Download Sample CSV
             </a>
@@ -196,16 +196,16 @@ export default function LeftPanel({
               onDragOver={onDragOver}
               onDragLeave={onDragLeave}
               onDrop={onDrop}
-              className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
-                isDragging ? 'border-[#2563eb] bg-blue-50' : 'border-slate-300'
+              className={`border-2 border-dashed rounded-xl p-8 text-center transition-colors ${
+                isDragging ? 'border-blue-500 bg-blue-950/30' : 'border-slate-700'
               }`}
             >
               {csvFile ? (
-                <span className="inline-block text-sm bg-emerald-50 text-emerald-700 border border-emerald-200 px-3 py-1 rounded-md mb-2">
+                <span className="inline-block text-sm bg-emerald-950/40 text-emerald-300 border border-emerald-700/60 px-3 py-1 rounded-md mb-2">
                   Selected: {csvFile.name}
                 </span>
               ) : (
-                <p className="text-sm text-slate-500 mb-2">Drag and drop a CSV file here</p>
+                <p className="text-sm text-slate-400 mb-2">Drag and drop a CSV file here</p>
               )}
               <label className={`inline-block cursor-pointer ${buttonSecondaryClass}`}>
                 Choose file
@@ -219,11 +219,11 @@ export default function LeftPanel({
             </div>
 
             {guestLimitReached && (
-              <p className="text-sm text-red-600">Free preview limit reached (10/10) — sign in to continue.</p>
+              <p className="text-sm text-red-400">Free preview limit reached (10/10) — sign in to continue.</p>
             )}
             {pendingCsvUpload && selectedClient ? (
-              <div className="p-4 rounded-lg border border-amber-300 bg-amber-50 flex flex-col gap-2">
-                <p className="text-sm text-amber-800">
+              <div className="p-4 rounded-xl border border-amber-700/60 bg-amber-950/40 flex flex-col gap-2">
+                <p className="text-sm text-amber-300">
                   {pendingCsvUpload.mismatchedProducts.length} of{' '}
                   {pendingCsvUpload.matchingProducts.length + pendingCsvUpload.mismatchedProducts.length} rows don't
                   match your selected brand voice ({selectedClient.client_name}).
@@ -253,7 +253,7 @@ export default function LeftPanel({
               <div className={`overflow-x-auto ${cardClass}`}>
                 <table className="w-full border-collapse text-sm">
                   <thead>
-                    <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs text-slate-500">
+                    <tr className="border-b border-slate-800 bg-slate-900/50 text-left text-xs text-slate-400">
                       <th className="p-2">File</th>
                       <th className="p-2">Total</th>
                       <th className="p-2">Added</th>
@@ -261,7 +261,7 @@ export default function LeftPanel({
                     </tr>
                   </thead>
                   <tbody>
-                    <tr>
+                    <tr className="text-slate-200">
                       <td className="p-2">{csvSummary.fileName}</td>
                       <td className="p-2">{csvSummary.total}</td>
                       <td className="p-2">{csvSummary.added}</td>

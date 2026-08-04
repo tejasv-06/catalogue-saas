@@ -17,11 +17,11 @@ import {
   buttonPrimaryClass,
   buttonSecondaryClass,
   buttonDestructiveClass,
-  buttonSuccessClass,
   buttonWarningClass,
   linkButtonClass,
   sectionHeadingClass,
-  labelClass
+  labelClass,
+  cardClass
 } from '@/lib/uiClasses'
 import Link from 'next/link'
 
@@ -115,7 +115,7 @@ function GeneratedListingDrawer({
         role="dialog"
         aria-modal="true"
         aria-label={product.generatedContent ? 'View Generated Listing' : 'Generation Error'}
-        className="relative w-full max-w-md bg-white h-full p-6 overflow-y-auto shadow-xl focus:outline-none"
+        className="relative w-full max-w-md bg-slate-900 border-l border-slate-800/80 h-full p-6 overflow-y-auto shadow-xl focus:outline-none"
       >
         <div className="mb-4 flex items-center gap-2">
           <h2 className={sectionHeadingClass}>
@@ -127,16 +127,16 @@ function GeneratedListingDrawer({
         <div className="flex items-center gap-3 mb-4">
           <ProductThumbnail imageFile={product.imageFile} imageUrl={product.imageUrl} alt={product.brandName} size={60} />
           <div>
-            <p className="font-medium text-slate-900">{product.brandName}</p>
-            <p className="text-sm text-slate-500">
+            <p className="font-medium text-slate-100">{product.brandName}</p>
+            <p className="text-sm text-slate-400">
               {product.category} · {product.targetMarketplace}
             </p>
           </div>
         </div>
 
         {product.generationError && (
-          <div className="mb-4 p-4 rounded-lg bg-red-50 border border-red-200">
-            <p className="text-sm text-red-600">{product.generationError}</p>
+          <div className="mb-4 p-4 rounded-xl bg-red-950/40 border border-red-800/60">
+            <p className="text-sm text-red-300">{product.generationError}</p>
           </div>
         )}
 
@@ -144,7 +144,7 @@ function GeneratedListingDrawer({
           {displayFields.map((field) => (
             <div key={field.label}>
               <p className={labelClass}>{field.label}</p>
-              <p className="text-sm">{field.value}</p>
+              <p className="text-sm text-slate-200">{field.value}</p>
             </div>
           ))}
         </div>
@@ -152,7 +152,7 @@ function GeneratedListingDrawer({
         <div className="mt-6 flex justify-between items-center">
           <div className="flex gap-2">
             {product.status === 'generated' && (
-              <button onClick={() => onApprove(product.id)} className={buttonSuccessClass}>
+              <button onClick={() => onApprove(product.id)} className={buttonSecondaryClass}>
                 Approve
               </button>
             )}
@@ -189,9 +189,9 @@ function ExportGateModal({ onClose, onSignIn }: { onClose: () => void; onSignIn:
         role="dialog"
         aria-modal="true"
         aria-label="Sign in required"
-        className="relative bg-white rounded-lg shadow-xl p-6 max-w-sm w-full mx-4 focus:outline-none"
+        className={`relative p-6 max-w-sm w-full mx-4 focus:outline-none ${cardClass}`}
       >
-        <p className="text-sm text-slate-700 mb-4">Sign in or create a free account to download your listings.</p>
+        <p className="text-sm text-slate-300 mb-4">Sign in or create a free account to download your listings.</p>
         <div className="flex justify-end gap-2">
           <button onClick={onClose} className={linkButtonClass}>
             Cancel
@@ -873,7 +873,7 @@ export default function CatalogueWorkspace() {
   const guestLimitReached = !hasSession && draftProducts.length >= GUEST_PRODUCT_LIMIT
 
   return (
-    <div className="min-h-screen bg-slate-50/80">
+    <div className="min-h-screen bg-slate-950 text-slate-100">
       <div className="max-w-7xl mx-auto px-4 py-6">
         <AppHeader
           hasSession={hasSession}
@@ -889,12 +889,12 @@ export default function CatalogueWorkspace() {
         />
 
         {pendingRestoreCount !== null && (
-          <div className="mb-4 p-4 rounded-lg border border-yellow-300 bg-yellow-50 flex items-center justify-between gap-4">
-            <p className="text-sm text-yellow-800">
+          <div className="mb-4 p-4 rounded-xl border border-amber-700/60 bg-amber-950/40 flex items-center justify-between gap-4">
+            <p className="text-sm text-amber-300">
               A previous session with {pendingRestoreCount} product{pendingRestoreCount === 1 ? '' : 's'} was found.
             </p>
             <div className="flex gap-2 shrink-0">
-              <button onClick={handleRestoreSession} className={buttonPrimaryClass}>
+              <button onClick={handleRestoreSession} className={buttonSecondaryClass}>
                 Restore
               </button>
               <button onClick={handleDiscardSession} className={buttonSecondaryClass}>
@@ -961,7 +961,7 @@ export default function CatalogueWorkspace() {
           />
         </div>
 
-        {downloadMessage && <p className="mt-2 text-sm text-green-700">{downloadMessage}</p>}
+        {downloadMessage && <p className="mt-2 text-sm text-green-400">{downloadMessage}</p>}
       </div>
 
       {viewingProduct && (

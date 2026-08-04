@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, type FormEvent } from 'react'
+import { inputClass, buttonPrimaryClass } from '@/lib/uiClasses'
 
 export default function ContactForm() {
   const [name, setName] = useState('')
@@ -15,7 +16,7 @@ export default function ContactForm() {
   }
 
   if (submitted) {
-    return <p className="text-sm text-green-700">Thanks, we&apos;ll be in touch.</p>
+    return <p className="text-sm text-green-400">Thanks, we&apos;ll be in touch.</p>
   }
 
   return (
@@ -26,7 +27,7 @@ export default function ContactForm() {
         placeholder="Name"
         value={name}
         onChange={(e) => setName(e.target.value)}
-        className="border p-2 rounded"
+        className={inputClass}
       />
       <input
         type="email"
@@ -34,7 +35,7 @@ export default function ContactForm() {
         placeholder="Email"
         value={email}
         onChange={(e) => setEmail(e.target.value)}
-        className="border p-2 rounded"
+        className={inputClass}
       />
       <textarea
         required
@@ -42,9 +43,9 @@ export default function ContactForm() {
         value={message}
         onChange={(e) => setMessage(e.target.value)}
         rows={5}
-        className="border p-2 rounded"
+        className={inputClass}
       />
-      <button type="submit" className="bg-black text-white p-2 rounded">
+      <button type="submit" className={buttonPrimaryClass}>
         Send
       </button>
     </form>

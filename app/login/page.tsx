@@ -3,6 +3,7 @@
 import { Suspense, useState, type SubmitEvent } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { inputClass, buttonPrimaryClass, buttonSecondaryClass, cardClass } from '@/lib/uiClasses'
 
 function LoginForm() {
   const searchParams = useSearchParams()
@@ -51,15 +52,15 @@ function LoginForm() {
   }
 
   return (
-    <div className="w-full max-w-sm border rounded p-6 bg-white flex flex-col gap-4">
-      <h1 className="text-xl font-bold">Sign in</h1>
+    <div className={`w-full max-w-sm p-6 flex flex-col gap-4 ${cardClass}`}>
+      <h1 className="text-xl font-bold text-slate-100">Sign in</h1>
 
       {linkError && !sent && (
-        <p className="text-sm text-red-600">That link is invalid or expired. Please request a new one.</p>
+        <p className="text-sm text-red-400">That link is invalid or expired. Please request a new one.</p>
       )}
 
       {sent ? (
-        <p className="text-sm text-green-700">Check your email — we sent a magic link to {email}.</p>
+        <p className="text-sm text-green-400">Check your email — we sent a magic link to {email}.</p>
       ) : (
         <form onSubmit={handleSendMagicLink} className="flex flex-col gap-3">
           <input
@@ -68,26 +69,22 @@ function LoginForm() {
             placeholder="you@example.com"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="border p-2 rounded"
+            className={inputClass}
           />
-          <button
-            type="submit"
-            disabled={sending}
-            className="bg-black text-white p-2 rounded disabled:opacity-50"
-          >
+          <button type="submit" disabled={sending} className={buttonPrimaryClass}>
             {sending ? 'Sending...' : 'Send Magic Link'}
           </button>
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && <p className="text-sm text-red-400">{error}</p>}
         </form>
       )}
 
-      <div className="flex items-center gap-2 text-xs text-gray-400">
-        <div className="flex-1 border-t" />
+      <div className="flex items-center gap-2 text-xs text-slate-500">
+        <div className="flex-1 border-t border-slate-800" />
         or
-        <div className="flex-1 border-t" />
+        <div className="flex-1 border-t border-slate-800" />
       </div>
 
-      <button onClick={handleGoogleSignIn} className="border p-2 rounded text-sm">
+      <button onClick={handleGoogleSignIn} className={buttonSecondaryClass}>
         Continue with Google
       </button>
     </div>
@@ -96,7 +93,7 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 p-8">
+    <div className="min-h-screen flex items-center justify-center bg-slate-950 p-8">
       <Suspense fallback={null}>
         <LoginForm />
       </Suspense>

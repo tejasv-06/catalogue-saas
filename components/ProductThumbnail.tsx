@@ -31,7 +31,7 @@ export default function ProductThumbnail({
     return (
       <div
         style={{ width: size, height: size }}
-        className="bg-gray-100 rounded-md flex items-center justify-center text-xs text-gray-400 shrink-0"
+        className="bg-slate-800 rounded-md flex items-center justify-center text-xs text-slate-500 shrink-0"
       >
         No image
       </div>

@@ -7,7 +7,7 @@ export default function EmptyQueueState({
 }) {
   return (
     <tr>
-      <td colSpan={colSpan} className="p-8 text-center text-sm text-slate-500">
+      <td colSpan={colSpan} className="p-8 text-center text-sm text-slate-400">
         {message}
       </td>
     </tr>

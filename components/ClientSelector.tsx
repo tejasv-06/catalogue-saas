@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabaseClient'
-import { buttonPrimaryClass, cardClass, inputClass, selectClass } from '@/lib/uiClasses'
+import { buttonSecondaryClass, cardClass, inputClass, selectClass } from '@/lib/uiClasses'
 
 export type Client = {
   id: string
@@ -93,7 +93,7 @@ export default function ClientSelector({
       </select>
 
       {showNewClientForm && (
-        <div className={`flex flex-col gap-2 p-4 max-w-sm ${cardClass}`}>
+        <div className={`flex flex-col gap-2 p-6 max-w-sm ${cardClass}`}>
           <input
             type="text"
             placeholder="Brand name"
@@ -107,7 +107,7 @@ export default function ClientSelector({
             onChange={(e) => setNewClientGuidelines(e.target.value)}
             className={inputClass}
           />
-          <button onClick={handleSaveNewClient} disabled={saving} className={buttonPrimaryClass}>
+          <button onClick={handleSaveNewClient} disabled={saving} className={buttonSecondaryClass}>
             {saving ? 'Saving...' : 'Save Brand'}
           </button>
         </div>

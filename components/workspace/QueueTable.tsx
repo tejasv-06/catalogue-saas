@@ -7,7 +7,7 @@ import EmptyQueueState from '@/components/workspace/EmptyQueueState'
 import TableSkeleton from '@/components/workspace/TableSkeleton'
 import {
   buttonPrimaryClass,
-  buttonSuccessClass,
+  buttonSecondaryClass,
   buttonDestructiveSmallClass,
   linkButtonClass,
   linkButtonDestructiveClass,
@@ -34,18 +34,18 @@ function QueueRow({
   onRetry: (id: string) => void
 }) {
   return (
-    <tr className="border-b border-slate-200">
+    <tr className="border-b border-slate-800">
       <td className="p-2">
         <ProductThumbnail imageFile={product.imageFile} imageUrl={product.imageUrl} alt={product.brandName} size={80} />
       </td>
       <td className="p-2">
-        <p className="font-medium text-sm text-slate-900">{product.brandName || '—'}</p>
-        <p className="text-xs text-slate-500">{product.category || '—'}</p>
+        <p className="font-medium text-sm text-slate-100">{product.brandName || '—'}</p>
+        <p className="text-xs text-slate-400">{product.category || '—'}</p>
       </td>
-      <td className="p-2 text-sm text-slate-600 max-w-xs">{truncate(product.description, 80)}</td>
+      <td className="p-2 text-sm text-slate-300 max-w-xs">{truncate(product.description, 80)}</td>
       <td className="p-2">
         <StatusBadge status={isGenerating ? 'generating' : product.status} />
-        {product.generationError && <p className="text-xs text-red-600 mt-1">{product.generationError}</p>}
+        {product.generationError && <p className="text-xs text-red-400 mt-1">{product.generationError}</p>}
       </td>
       <td className="p-2 whitespace-nowrap space-x-2">
         {(product.generatedContent || product.generationError) && (
@@ -99,7 +99,7 @@ export default function QueueTable({
   onRetry: (id: string) => void
 }) {
   return (
-    <div className={`w-[65%] min-w-0 p-5 ${cardClass}`}>
+    <div className={`w-[65%] min-w-0 p-6 ${cardClass}`}>
       <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
         <div className="flex flex-wrap items-center gap-2">
           <button
@@ -112,19 +112,19 @@ export default function QueueTable({
           <button
             onClick={onBulkApprove}
             disabled={!targetMarketplace || !draftProducts.some((p) => p.status === 'generated')}
-            className={buttonSuccessClass}
+            className={buttonSecondaryClass}
           >
             Bulk Approve All Generated
           </button>
         </div>
-        <button onClick={onDownloadApproved} disabled={!targetMarketplace || !hasApproved} className={buttonPrimaryClass}>
+        <button onClick={onDownloadApproved} disabled={!targetMarketplace || !hasApproved} className={buttonSecondaryClass}>
           Download Approved CSV
         </button>
       </div>
-      <div className="overflow-x-auto rounded-lg border border-slate-200">
+      <div className="overflow-x-auto rounded-xl border border-slate-800">
         <table className="w-full border-collapse">
           <thead>
-            <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs text-slate-500">
+            <tr className="border-b border-slate-800 bg-slate-900/50 text-left text-xs text-slate-400">
               <th className="p-2">Thumbnail</th>
               <th className="p-2">Brand / Category</th>
               <th className="p-2">Raw Input</th>
