@@ -127,8 +127,8 @@ function GeneratedListingDrawer({
         <div className="flex items-center gap-3 mb-4">
           <ProductThumbnail imageFile={product.imageFile} imageUrl={product.imageUrl} alt={product.brandName} size={60} />
           <div>
-            <p className="font-medium">{product.brandName}</p>
-            <p className="text-sm text-gray-500">
+            <p className="font-medium text-slate-900">{product.brandName}</p>
+            <p className="text-sm text-slate-500">
               {product.category} · {product.targetMarketplace}
             </p>
           </div>
@@ -191,7 +191,7 @@ function ExportGateModal({ onClose, onSignIn }: { onClose: () => void; onSignIn:
         aria-label="Sign in required"
         className="relative bg-white rounded-lg shadow-xl p-6 max-w-sm w-full mx-4 focus:outline-none"
       >
-        <p className="text-sm text-gray-700 mb-4">Sign in or create a free account to download your listings.</p>
+        <p className="text-sm text-slate-700 mb-4">Sign in or create a free account to download your listings.</p>
         <div className="flex justify-end gap-2">
           <button onClick={onClose} className={linkButtonClass}>
             Cancel
@@ -873,8 +873,8 @@ export default function CatalogueWorkspace() {
   const guestLimitReached = !hasSession && draftProducts.length >= GUEST_PRODUCT_LIMIT
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="p-8">
+    <div className="min-h-screen bg-slate-50/80">
+      <div className="max-w-7xl mx-auto px-4 py-6">
         <AppHeader
           hasSession={hasSession}
           targetMarketplace={targetMarketplace}

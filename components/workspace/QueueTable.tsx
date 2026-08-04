@@ -34,15 +34,15 @@ function QueueRow({
   onRetry: (id: string) => void
 }) {
   return (
-    <tr className="border-b">
+    <tr className="border-b border-slate-200">
       <td className="p-2">
         <ProductThumbnail imageFile={product.imageFile} imageUrl={product.imageUrl} alt={product.brandName} size={80} />
       </td>
       <td className="p-2">
-        <p className="font-medium text-sm">{product.brandName || '—'}</p>
-        <p className="text-xs text-gray-500">{product.category || '—'}</p>
+        <p className="font-medium text-sm text-slate-900">{product.brandName || '—'}</p>
+        <p className="text-xs text-slate-500">{product.category || '—'}</p>
       </td>
-      <td className="p-2 text-sm text-gray-600 max-w-xs">{truncate(product.description, 80)}</td>
+      <td className="p-2 text-sm text-slate-600 max-w-xs">{truncate(product.description, 80)}</td>
       <td className="p-2">
         <StatusBadge status={isGenerating ? 'generating' : product.status} />
         {product.generationError && <p className="text-xs text-red-600 mt-1">{product.generationError}</p>}
@@ -101,8 +101,8 @@ export default function QueueTable({
   onRetry: (id: string) => void
 }) {
   return (
-    <div className="w-[65%] min-w-0">
-      <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+    <div className={`w-[65%] min-w-0 p-5 ${cardClass}`}>
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
         <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={onGenerateAll}
@@ -112,7 +112,7 @@ export default function QueueTable({
             {generating ? 'Generating...' : 'Generate Content for All'}
           </button>
           {generationProgress && (
-            <span className="text-sm text-gray-500">
+            <span className="text-sm text-slate-500">
               Generating {generationProgress.current} of {generationProgress.total}...
             </span>
           )}
@@ -128,10 +128,10 @@ export default function QueueTable({
           Download Approved CSV
         </button>
       </div>
-      <div className={`overflow-x-auto ${cardClass}`}>
+      <div className="overflow-x-auto rounded-lg border border-slate-200">
         <table className="w-full border-collapse">
           <thead>
-            <tr className="border-b bg-gray-50 text-left text-xs text-gray-500">
+            <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs text-slate-500">
               <th className="p-2">Thumbnail</th>
               <th className="p-2">Brand / Category</th>
               <th className="p-2">Raw Input</th>

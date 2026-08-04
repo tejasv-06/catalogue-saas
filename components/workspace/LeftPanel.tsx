@@ -90,27 +90,27 @@ export default function LeftPanel({
   onCsvCancelMismatch: () => void
 }) {
   return (
-    <div className="w-[35%] flex flex-col gap-2 h-fit">
-      <div className="flex gap-4 border-b mb-2">
+    <div className={`w-[35%] flex flex-col gap-2 p-5 h-fit ${cardClass}`}>
+      <div className="flex gap-4 border-b border-slate-200 mb-2">
         <button
           onClick={() => onTabChange('manual')}
-          className={`p-2 text-sm font-medium border-b-2 hover:text-black focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-black rounded-t transition-colors ${
-            activeTab === 'manual' ? 'border-black text-black' : 'border-transparent text-gray-500'
+          className={`p-2 text-sm font-medium border-b-2 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-600 rounded-t transition-colors ${
+            activeTab === 'manual' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500'
           }`}
         >
           Manual Entry
         </button>
         <button
           onClick={() => onTabChange('csv')}
-          className={`p-2 text-sm font-medium border-b-2 hover:text-black focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-black rounded-t transition-colors ${
-            activeTab === 'csv' ? 'border-black text-black' : 'border-transparent text-gray-500'
+          className={`p-2 text-sm font-medium border-b-2 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-600 rounded-t transition-colors ${
+            activeTab === 'csv' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500'
           }`}
         >
           Bulk CSV Upload
         </button>
       </div>
 
-      <div className={`flex flex-col gap-2 p-4 ${cardClass}`}>
+      <div className="flex flex-col gap-2">
         {activeTab === 'manual' ? (
           <>
             <input
@@ -187,7 +187,7 @@ export default function LeftPanel({
             <a
               href="/sample-products.csv"
               download
-              className="text-blue-600 underline text-sm hover:text-blue-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-600 rounded transition-colors w-fit"
+              className="text-indigo-600 underline text-sm hover:text-indigo-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-600 rounded transition-colors w-fit"
             >
               Download Sample CSV
             </a>
@@ -196,16 +196,16 @@ export default function LeftPanel({
               onDragOver={onDragOver}
               onDragLeave={onDragLeave}
               onDrop={onDrop}
-              className={`border-2 border-dashed rounded-lg p-8 text-center ${
-                isDragging ? 'border-black bg-gray-50' : 'border-gray-300'
+              className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
+                isDragging ? 'border-indigo-600 bg-indigo-50' : 'border-slate-300'
               }`}
             >
               {csvFile ? (
-                <span className="inline-block text-sm bg-green-50 text-green-700 border border-green-200 px-3 py-1 rounded-md mb-2">
+                <span className="inline-block text-sm bg-emerald-50 text-emerald-700 border border-emerald-200 px-3 py-1 rounded-md mb-2">
                   Selected: {csvFile.name}
                 </span>
               ) : (
-                <p className="text-sm text-gray-500 mb-2">Drag and drop a CSV file here</p>
+                <p className="text-sm text-slate-500 mb-2">Drag and drop a CSV file here</p>
               )}
               <label className={`inline-block cursor-pointer ${buttonSecondaryClass}`}>
                 Choose file
@@ -253,7 +253,7 @@ export default function LeftPanel({
               <div className={`overflow-x-auto ${cardClass}`}>
                 <table className="w-full border-collapse text-sm">
                   <thead>
-                    <tr className="border-b bg-gray-50 text-left text-xs text-gray-500">
+                    <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs text-slate-500">
                       <th className="p-2">File</th>
                       <th className="p-2">Total</th>
                       <th className="p-2">Added</th>
