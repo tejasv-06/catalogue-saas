@@ -39,8 +39,8 @@ function QueueRow({
         <ProductThumbnail imageFile={product.imageFile} imageUrl={product.imageUrl} alt={product.brandName} size={80} />
       </td>
       <td className="py-3 px-4">
-        <p className="font-medium text-sm text-slate-100">{product.brandName || '—'}</p>
-        <p className="text-xs text-slate-400">{product.category || '—'}</p>
+        <p className="font-medium text-sm text-slate-100">{product.brandName || '-'}</p>
+        <p className="text-xs text-slate-400">{product.category || '-'}</p>
       </td>
       <td className="py-3 px-4 text-sm text-slate-300 max-w-xs">{truncate(product.description, 80)}</td>
       <td className="py-3 px-4">
@@ -118,14 +118,14 @@ export default function QueueTable({
             disabled={!targetMarketplace || !hasDraft || generating}
             className={generateIsPrimary ? buttonPrimaryClass : buttonSecondaryClass}
           >
-            {generating ? 'Generating...' : 'Generate Content for All'}
+            {generating ? 'Generating...' : 'Generate Content'}
           </button>
           <button
             onClick={onBulkApprove}
             disabled={!targetMarketplace || !hasGenerated}
             className={bulkApproveIsPrimary ? buttonPrimaryClass : buttonSecondaryClass}
           >
-            Bulk Approve All Generated
+            Bulk Approve
           </button>
         </div>
         <button
@@ -133,7 +133,7 @@ export default function QueueTable({
           disabled={!targetMarketplace || !hasApproved}
           className={downloadIsPrimary ? buttonPrimaryClass : buttonSecondaryClass}
         >
-          Download Approved CSV
+          Download CSV
         </button>
       </div>
       <div className="overflow-x-auto rounded-xl border border-slate-800">

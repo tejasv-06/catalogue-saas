@@ -794,7 +794,7 @@ export default function CatalogueWorkspace() {
       }
     } catch {
       setDraftProducts((prev) =>
-        prev.map((p) => (p.id === product.id ? { ...p, generationError: 'Network error — request failed' } : p))
+        prev.map((p) => (p.id === product.id ? { ...p, generationError: 'Network error - request failed' } : p))
       )
     }
   }
@@ -862,7 +862,7 @@ export default function CatalogueWorkspace() {
       setDraftProducts((prev) => prev.filter((p) => !includedIds.has(p.id)))
       setDownloadMessage(`Downloaded and cleared ${flattenedRows.length} approved products`)
     } catch {
-      alert('Download failed — approved products were not cleared. Please try again.')
+      alert('Download failed - approved products were not cleared. Please try again.')
     }
   }
 

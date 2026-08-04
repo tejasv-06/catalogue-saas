@@ -148,7 +148,7 @@ export default function LeftPanel({
             </div>
             {formError && <p className="text-sm text-red-400">{formError}</p>}
             {guestLimitReached && (
-              <p className="text-sm text-red-400">Free preview limit reached (10/10) — sign in to continue.</p>
+              <p className="text-sm text-red-400">Free preview limit reached (10/10) - sign in to continue.</p>
             )}
             {brandMismatchPending && selectedClient ? (
               <div className="p-4 rounded-xl border border-amber-700/60 bg-amber-950/40 flex flex-col gap-2">
@@ -219,7 +219,7 @@ export default function LeftPanel({
             </div>
 
             {guestLimitReached && (
-              <p className="text-sm text-red-400">Free preview limit reached (10/10) — sign in to continue.</p>
+              <p className="text-sm text-red-400">Free preview limit reached (10/10) - sign in to continue.</p>
             )}
             {pendingCsvUpload && selectedClient ? (
               <div className="p-4 rounded-xl border border-amber-700/60 bg-amber-950/40 flex flex-col gap-2">

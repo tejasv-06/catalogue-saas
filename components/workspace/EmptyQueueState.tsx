@@ -1,6 +1,6 @@
 export default function EmptyQueueState({
   colSpan = 5,
-  message = 'No products yet — add one manually or upload a CSV to get started.'
+  message = 'No products yet - add one manually or upload a CSV to get started.'
 }: {
   colSpan?: number
   message?: string
