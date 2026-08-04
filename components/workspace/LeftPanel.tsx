@@ -94,16 +94,16 @@ export default function LeftPanel({
       <div className="flex gap-4 border-b border-slate-200 mb-2">
         <button
           onClick={() => onTabChange('manual')}
-          className={`p-2 text-sm font-medium border-b-2 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-600 rounded-t transition-colors ${
-            activeTab === 'manual' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500'
+          className={`p-2 text-sm font-medium border-b-2 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#2563eb] rounded-t transition-colors ${
+            activeTab === 'manual' ? 'border-[#2563eb] text-[#2563eb]' : 'border-transparent text-slate-500'
           }`}
         >
           Manual Entry
         </button>
         <button
           onClick={() => onTabChange('csv')}
-          className={`p-2 text-sm font-medium border-b-2 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-600 rounded-t transition-colors ${
-            activeTab === 'csv' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500'
+          className={`p-2 text-sm font-medium border-b-2 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#2563eb] rounded-t transition-colors ${
+            activeTab === 'csv' ? 'border-[#2563eb] text-[#2563eb]' : 'border-transparent text-slate-500'
           }`}
         >
           Bulk CSV Upload
@@ -187,7 +187,7 @@ export default function LeftPanel({
             <a
               href="/sample-products.csv"
               download
-              className="text-indigo-600 underline text-sm hover:text-indigo-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-600 rounded transition-colors w-fit"
+              className="text-[#2563eb] underline text-sm hover:text-[#1d4ed8] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#2563eb] rounded transition-colors w-fit"
             >
               Download Sample CSV
             </a>
@@ -197,7 +197,7 @@ export default function LeftPanel({
               onDragLeave={onDragLeave}
               onDrop={onDrop}
               className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
-                isDragging ? 'border-indigo-600 bg-indigo-50' : 'border-slate-300'
+                isDragging ? 'border-[#2563eb] bg-blue-50' : 'border-slate-300'
               }`}
             >
               {csvFile ? (

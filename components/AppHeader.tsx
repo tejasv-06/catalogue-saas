@@ -1,10 +1,11 @@
 "use client"
 
 import type { RefObject } from 'react'
+import Image from 'next/image'
 import LogoutButton from '@/components/LogoutButton'
 import ClientSelector, { type Client } from '@/components/ClientSelector'
 import { SUPPORTED_MARKETPLACES } from '@/lib/platformShapers'
-import { selectClass, pageHeadingClass } from '@/lib/uiClasses'
+import { selectClass } from '@/lib/uiClasses'
 
 function UsagePill({
   hasSession,
@@ -16,13 +17,13 @@ function UsagePill({
   guestProductLimit: number
 }) {
   if (!hasSession) {
-    return <span className="text-sm font-medium text-slate-700">{`${productCount}/${guestProductLimit} (free preview)`}</span>
+    return <span className="text-sm font-medium text-slate-200">{`${productCount}/${guestProductLimit} (free preview)`}</span>
   }
 
   // TODO(Milestone 34): swap for real per-account credits once usage-based
   // billing exists. Showing the honest in-session count in the meantime
   // rather than a fabricated number that isn't backed by anything real.
-  return <span className="text-sm font-medium text-slate-700">{`Products in Session (${productCount})`}</span>
+  return <span className="text-sm font-medium text-slate-200">{`Products in Session (${productCount})`}</span>
 }
 
 export default function AppHeader({
@@ -49,8 +50,11 @@ export default function AppHeader({
   onSelectClient: (client: Client | null) => void
 }) {
   return (
-    <div className="bg-white border border-slate-200/80 rounded-xl p-4 shadow-sm mb-6 flex items-center justify-between gap-4">
-      <h1 className={pageHeadingClass}>Catalogue Workspace</h1>
+    <div className="bg-[#0f2942] rounded-xl p-4 shadow-sm mb-6 flex items-center justify-between gap-4">
+      <div className="flex items-center gap-3">
+        <Image src="/logo.png" alt="" width={40} height={40} className="rounded-lg" priority />
+        <span className="text-2xl font-bold text-white">Tesolute Workspace</span>
+      </div>
 
       <div className="flex items-center gap-4">
         <div className="flex flex-col gap-1">
@@ -76,7 +80,7 @@ export default function AppHeader({
             </select>
             <UsagePill hasSession={hasSession} productCount={productCount} guestProductLimit={guestProductLimit} />
           </div>
-          {marketplaceError && <p className="text-xs font-medium text-red-500">{marketplaceError}</p>}
+          {marketplaceError && <p className="text-xs font-medium text-red-300">{marketplaceError}</p>}
         </div>
         {hasSession && <ClientSelector selectedClientId={selectedClientId} onSelectClient={onSelectClient} />}
         <LogoutButton />

@@ -62,7 +62,10 @@ export default function Home() {
             products once, and get marketplace-ready titles, bullets, and keywords for Amazon, Flipkart, Myntra,
             Etsy, and more.
           </p>
-          <Link href="/workspace" className="inline-block bg-black text-white px-6 py-3 rounded text-lg">
+          <Link
+            href="/workspace"
+            className="inline-block bg-[#2563eb] hover:bg-[#1d4ed8] text-white px-6 py-3 rounded-lg text-lg font-medium transition-colors"
+          >
             Try Workspace
           </Link>
         </section>
