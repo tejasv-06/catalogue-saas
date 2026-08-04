@@ -34,18 +34,18 @@ function QueueRow({
   onRetry: (id: string) => void
 }) {
   return (
-    <tr className="border-b border-slate-800/60">
+    <tr className="border-b border-[var(--row-border)]">
       <td className="py-3 px-4">
         <ProductThumbnail imageFile={product.imageFile} imageUrl={product.imageUrl} alt={product.brandName} size={80} />
       </td>
       <td className="py-3 px-4">
-        <p className="font-medium text-sm text-slate-100">{product.brandName || '-'}</p>
-        <p className="text-xs text-slate-400">{product.category || '-'}</p>
+        <p className="font-medium text-sm text-[var(--heading-text)]">{product.brandName || '-'}</p>
+        <p className="text-xs text-[var(--muted-text)]">{product.category || '-'}</p>
       </td>
-      <td className="py-3 px-4 text-sm text-slate-300 max-w-xs">{truncate(product.description, 80)}</td>
+      <td className="py-3 px-4 text-sm text-[var(--body-text)] max-w-xs">{truncate(product.description, 80)}</td>
       <td className="py-3 px-4">
         <StatusBadge status={isGenerating ? 'generating' : product.status} />
-        {product.generationError && <p className="text-xs text-red-400 mt-1">{product.generationError}</p>}
+        {product.generationError && <p className="text-xs text-[var(--danger-link-text)] mt-1">{product.generationError}</p>}
       </td>
       <td className="py-3 px-4 whitespace-nowrap space-x-2">
         {(product.generatedContent || product.generationError) && (
@@ -136,10 +136,10 @@ export default function QueueTable({
           Download CSV
         </button>
       </div>
-      <div className="overflow-x-auto rounded-xl border border-slate-800">
+      <div className="overflow-x-auto rounded-xl border border-[var(--card-border)]">
         <table className="w-full border-collapse">
           <thead>
-            <tr className="border-b border-slate-800/60 bg-slate-900/50 text-left text-xs text-slate-400">
+            <tr className="border-b border-[var(--row-border)] bg-[var(--table-head-bg)] text-left text-xs text-[var(--muted-text)]">
               <th className="py-3 px-4">Thumbnail</th>
               <th className="py-3 px-4">Brand / Category</th>
               <th className="py-3 px-4">Raw Input</th>

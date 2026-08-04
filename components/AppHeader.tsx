@@ -5,6 +5,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import LogoutButton from '@/components/LogoutButton'
 import ClientSelector, { type Client } from '@/components/ClientSelector'
+import ThemeToggle from '@/components/ThemeToggle'
 import { SUPPORTED_MARKETPLACES } from '@/lib/platformShapers'
 import { selectClass } from '@/lib/uiClasses'
 
@@ -18,15 +19,19 @@ function UsagePill({
   guestProductLimit: number
 }) {
   if (!hasSession) {
-    return <span className="text-sm font-medium text-white/90">{`${productCount}/${guestProductLimit} (free preview)`}</span>
+    return (
+      <span className="text-sm font-medium text-[var(--muted-text)]">{`${productCount}/${guestProductLimit} (free preview)`}</span>
+    )
   }
 
   // TODO(Milestone 34): swap for real per-account credits once usage-based
   // billing exists. Showing the honest in-session count in the meantime
   // rather than a fabricated number that isn't backed by anything real.
-  return <span className="text-sm font-medium text-white/90">{`Products in Session (${productCount})`}</span>
+  return <span className="text-sm font-medium text-[var(--muted-text)]">{`Products in Session (${productCount})`}</span>
 }
 
+// Sits directly on the page background, not inside a card — a persistent
+// top bar rather than another elevated panel, per the layout spec.
 export default function AppHeader({
   hasSession,
   targetMarketplace,
@@ -51,17 +56,17 @@ export default function AppHeader({
   onSelectClient: (client: Client | null) => void
 }) {
   return (
-    <div className="bg-[#112236] border border-white/15 shadow-lg text-white rounded-2xl p-4 mb-6 flex items-center justify-between gap-4">
+    <div className="mb-6 flex items-center justify-between gap-4">
       <div className="flex items-center gap-4">
         <Link
           href="/"
-          className="text-sm text-white/90 hover:text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#112236] focus:ring-blue-500/40 rounded transition-colors"
+          className="text-sm text-[var(--muted-text)] hover:text-[var(--heading-text)] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[var(--page-bg)] focus:ring-blue-500/40 rounded transition-colors"
         >
           ← Back to Home
         </Link>
         <div className="flex items-center gap-3">
           <Image src="/logo.png" alt="" width={40} height={40} className="rounded-lg" priority />
-          <span className="text-2xl font-bold text-white">Tesolute Workspace</span>
+          <span className="text-2xl font-bold text-[var(--heading-text)]">Tesolute Workspace</span>
         </div>
       </div>
 
@@ -89,9 +94,10 @@ export default function AppHeader({
             </select>
             <UsagePill hasSession={hasSession} productCount={productCount} guestProductLimit={guestProductLimit} />
           </div>
-          {marketplaceError && <p className="text-xs font-medium text-red-200">{marketplaceError}</p>}
+          {marketplaceError && <p className="text-xs font-medium text-[var(--danger-link-text)]">{marketplaceError}</p>}
         </div>
         {hasSession && <ClientSelector selectedClientId={selectedClientId} onSelectClient={onSelectClient} />}
+        <ThemeToggle />
         <LogoutButton />
       </div>
     </div>

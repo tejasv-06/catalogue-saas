@@ -16,7 +16,7 @@ export default function ContactForm() {
   }
 
   if (submitted) {
-    return <p className="text-sm text-green-400">Thanks, we&apos;ll be in touch.</p>
+    return <p className="text-sm text-[var(--success-text)]">Thanks, we&apos;ll be in touch.</p>
   }
 
   return (

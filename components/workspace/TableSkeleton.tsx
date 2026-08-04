@@ -6,10 +6,10 @@ export default function TableSkeleton({ rows = 4, columns = 5 }: { rows?: number
   return (
     <>
       {Array.from({ length: rows }).map((_, rowIndex) => (
-        <tr key={rowIndex} className="border-b border-slate-800/60 animate-pulse">
+        <tr key={rowIndex} className="border-b border-[var(--row-border)] animate-pulse">
           {Array.from({ length: columns }).map((_, colIndex) => (
             <td key={colIndex} className="py-3 px-4">
-              <div className="h-4 bg-slate-800 rounded-md w-full max-w-[160px]" />
+              <div className="h-4 rounded-md w-full max-w-[160px] bg-[var(--skeleton-bg)]" />
             </td>
           ))}
         </tr>

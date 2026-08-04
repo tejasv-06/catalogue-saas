@@ -11,7 +11,9 @@ import {
   buttonAmberSolidClass,
   linkButtonClass,
   inputClass,
-  cardClass
+  cardClass,
+  warningBannerClass,
+  warningTextClass
 } from '@/lib/uiClasses'
 
 export default function LeftPanel({
@@ -91,19 +93,19 @@ export default function LeftPanel({
 }) {
   return (
     <div className={`w-[35%] flex flex-col gap-2 p-6 h-fit ${cardClass}`}>
-      <div className="flex gap-1 p-1 bg-slate-950/40 rounded-xl mb-2 w-fit">
+      <div className="flex gap-1 p-1 rounded-xl mb-2 w-fit bg-[var(--tab-track-bg)]">
         <button
           onClick={() => onTabChange('manual')}
-          className={`px-4 py-2 text-sm font-medium rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#112236] focus:ring-blue-500 transition-colors ${
-            activeTab === 'manual' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-100'
+          className={`px-4 py-2 text-sm font-medium rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[var(--card-bg)] focus:ring-blue-500 transition-colors ${
+            activeTab === 'manual' ? 'bg-blue-600 text-white shadow-sm' : 'text-[var(--muted-text)] hover:text-[var(--heading-text)]'
           }`}
         >
           Manual Entry
         </button>
         <button
           onClick={() => onTabChange('csv')}
-          className={`px-4 py-2 text-sm font-medium rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#112236] focus:ring-blue-500 transition-colors ${
-            activeTab === 'csv' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-100'
+          className={`px-4 py-2 text-sm font-medium rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[var(--card-bg)] focus:ring-blue-500 transition-colors ${
+            activeTab === 'csv' ? 'bg-blue-600 text-white shadow-sm' : 'text-[var(--muted-text)] hover:text-[var(--heading-text)]'
           }`}
         >
           Bulk CSV Upload
@@ -146,13 +148,13 @@ export default function LeftPanel({
               </label>
               <ProductThumbnail imageFile={imageFile} imageUrl={formPreviewUrl} alt="Preview" size={48} />
             </div>
-            {formError && <p className="text-sm text-red-400">{formError}</p>}
+            {formError && <p className="text-sm text-[var(--danger-link-text)]">{formError}</p>}
             {guestLimitReached && (
-              <p className="text-sm text-red-400">Free preview limit reached (10/10) - sign in to continue.</p>
+              <p className="text-sm text-[var(--danger-link-text)]">Free preview limit reached (10/10) - sign in to continue.</p>
             )}
             {brandMismatchPending && selectedClient ? (
-              <div className="p-4 rounded-xl border border-amber-700/60 bg-amber-950/40 flex flex-col gap-2">
-                <p className="text-sm text-amber-300">
+              <div className={`flex flex-col gap-2 ${warningBannerClass}`}>
+                <p className={warningTextClass}>
                   This product's brand doesn't match your selected brand voice ({selectedClient.client_name}).
                 </p>
                 <div className="flex flex-wrap gap-3">
@@ -187,7 +189,7 @@ export default function LeftPanel({
             <a
               href="/sample-products.csv"
               download
-              className="text-blue-400 underline text-sm hover:text-blue-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#112236] focus:ring-blue-500 rounded transition-colors w-fit"
+              className="text-sm underline w-fit rounded transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[var(--card-bg)] focus:ring-blue-500 text-blue-600 hover:opacity-80"
             >
               Download Sample CSV
             </a>
@@ -197,15 +199,15 @@ export default function LeftPanel({
               onDragLeave={onDragLeave}
               onDrop={onDrop}
               className={`border-2 border-dashed rounded-xl p-8 text-center transition-colors ${
-                isDragging ? 'border-blue-500 bg-blue-950/30' : 'border-slate-700'
+                isDragging ? 'border-blue-500 bg-[var(--drop-active-bg)]' : 'border-[var(--dropzone-border)]'
               }`}
             >
               {csvFile ? (
-                <span className="inline-block text-sm bg-emerald-950/40 text-emerald-300 border border-emerald-700/60 px-3 py-1 rounded-md mb-2">
+                <span className="inline-block text-sm px-3 py-1 rounded-md mb-2 border bg-[var(--success-bg)] text-[var(--success-text)] border-[var(--success-border)]">
                   Selected: {csvFile.name}
                 </span>
               ) : (
-                <p className="text-sm text-slate-400 mb-2">Drag and drop a CSV file here</p>
+                <p className="text-sm text-[var(--muted-text)] mb-2">Drag and drop a CSV file here</p>
               )}
               <label className={`inline-block cursor-pointer ${buttonSecondaryClass}`}>
                 Choose file
@@ -219,11 +221,11 @@ export default function LeftPanel({
             </div>
 
             {guestLimitReached && (
-              <p className="text-sm text-red-400">Free preview limit reached (10/10) - sign in to continue.</p>
+              <p className="text-sm text-[var(--danger-link-text)]">Free preview limit reached (10/10) - sign in to continue.</p>
             )}
             {pendingCsvUpload && selectedClient ? (
-              <div className="p-4 rounded-xl border border-amber-700/60 bg-amber-950/40 flex flex-col gap-2">
-                <p className="text-sm text-amber-300">
+              <div className={`flex flex-col gap-2 ${warningBannerClass}`}>
+                <p className={warningTextClass}>
                   {pendingCsvUpload.mismatchedProducts.length} of{' '}
                   {pendingCsvUpload.matchingProducts.length + pendingCsvUpload.mismatchedProducts.length} rows don't
                   match your selected brand voice ({selectedClient.client_name}).
@@ -253,7 +255,7 @@ export default function LeftPanel({
               <div className={`overflow-x-auto ${cardClass}`}>
                 <table className="w-full border-collapse text-sm">
                   <thead>
-                    <tr className="border-b border-slate-800/60 bg-slate-900/50 text-left text-xs text-slate-400">
+                    <tr className="border-b border-[var(--row-border)] bg-[var(--table-head-bg)] text-left text-xs text-[var(--muted-text)]">
                       <th className="py-3 px-4">File</th>
                       <th className="py-3 px-4">Total</th>
                       <th className="py-3 px-4">Added</th>
@@ -261,7 +263,7 @@ export default function LeftPanel({
                     </tr>
                   </thead>
                   <tbody>
-                    <tr className="text-slate-200">
+                    <tr className="text-[var(--body-text)]">
                       <td className="py-3 px-4">{csvSummary.fileName}</td>
                       <td className="py-3 px-4">{csvSummary.total}</td>
                       <td className="py-3 px-4">{csvSummary.added}</td>

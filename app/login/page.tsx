@@ -75,10 +75,10 @@ function LoginForm() {
 
   return (
     <div className={`w-full max-w-sm p-6 flex flex-col gap-4 ${cardClass}`}>
-      <h1 className="text-xl font-bold text-slate-100">Sign in</h1>
+      <h1 className="text-xl font-bold text-[var(--heading-text)]">Sign in</h1>
 
       {linkError && (
-        <p className="text-sm text-red-400">That sign-in attempt is invalid or expired. Please try again.</p>
+        <p className="text-sm text-[var(--danger-link-text)]">That sign-in attempt is invalid or expired. Please try again.</p>
       )}
 
       {step === 'email' ? (
@@ -94,11 +94,11 @@ function LoginForm() {
           <button type="submit" disabled={sending} className={buttonPrimaryClass}>
             {sending ? 'Sending...' : 'Send Code'}
           </button>
-          {error && <p className="text-sm text-red-400">{error}</p>}
+          {error && <p className="text-sm text-[var(--danger-link-text)]">{error}</p>}
         </form>
       ) : (
         <form onSubmit={handleVerifyCode} className="flex flex-col gap-3">
-          <p className="text-sm text-slate-300">Enter the code we sent to {email}.</p>
+          <p className="text-sm text-[var(--body-text)]">Enter the code we sent to {email}.</p>
           <input
             type="text"
             inputMode="numeric"
@@ -124,14 +124,14 @@ function LoginForm() {
           >
             Use a different email
           </button>
-          {error && <p className="text-sm text-red-400">{error}</p>}
+          {error && <p className="text-sm text-[var(--danger-link-text)]">{error}</p>}
         </form>
       )}
 
-      <div className="flex items-center gap-2 text-xs text-slate-500">
-        <div className="flex-1 border-t border-slate-800" />
+      <div className="flex items-center gap-2 text-xs text-[var(--muted-text)]">
+        <div className="flex-1 border-t border-[var(--card-border)]" />
         or
-        <div className="flex-1 border-t border-slate-800" />
+        <div className="flex-1 border-t border-[var(--card-border)]" />
       </div>
 
       <button onClick={handleGoogleSignIn} className={buttonSecondaryClass}>
@@ -143,7 +143,7 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#0b1726] p-8">
+    <div className="min-h-screen flex items-center justify-center bg-[var(--page-bg)] p-8">
       <Suspense fallback={null}>
         <LoginForm />
       </Suspense>

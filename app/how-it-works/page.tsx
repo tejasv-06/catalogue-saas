@@ -22,18 +22,18 @@ const steps = [
 
 export default function HowItWorksPage() {
   return (
-    <div className="flex flex-col min-h-screen bg-[#0b1726] text-slate-100">
+    <div className="flex flex-col min-h-screen bg-[var(--page-bg)] text-[var(--body-text)]">
       <Navbar />
       <main className="flex-1 max-w-3xl mx-auto px-6 py-16">
-        <h1 className="text-3xl font-bold text-slate-100 mb-4">How Tesolute works</h1>
-        <p className="text-slate-300 mb-12">
+        <h1 className="text-3xl font-bold text-[var(--heading-text)] mb-4">How Tesolute works</h1>
+        <p className="text-[var(--body-text)] mb-12">
           A closer look at the four steps that take you from raw product data to a marketplace-ready listing.
         </p>
         <div className="flex flex-col gap-10">
           {steps.map((step) => (
             <div key={step.title}>
-              <h2 className="text-xl font-semibold text-slate-100 mb-2">{step.title}</h2>
-              <p className="text-slate-300">{step.body}</p>
+              <h2 className="text-xl font-semibold text-[var(--heading-text)] mb-2">{step.title}</h2>
+              <p className="text-[var(--body-text)]">{step.body}</p>
             </div>
           ))}
         </div>

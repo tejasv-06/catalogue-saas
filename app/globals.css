@@ -1,13 +1,106 @@
 @import "tailwindcss";
 
-/* Site is intentionally dark site-wide (not OS-conditional) — these are flat
-   defaults matching the page background (#0b1726) and slate-100 text, not a
-   light/dark toggle. Every page also sets its own bg-[#0b1726] explicitly;
-   this just prevents a flash of the old light background before that class
-   paints. */
+/* Theme system: an explicit toggle (ThemeToggle component), not
+   OS-conditional. Dark ("Night") is the default/baseline — :root holds those
+   values; :root[data-theme="light"] overrides them for "Day" mode. Every
+   theme-sensitive class across the app reads these vars instead of hardcoded
+   colors, so the toggle only ever needs to flip this one attribute. */
 :root {
   --background: #0b1726;
   --foreground: #f1f5f9;
+
+  --page-bg: #0b1726;
+  --card-bg: #112236;
+  --card-border: rgba(255, 255, 255, 0.1);
+  --input-bg: #080f1a;
+  --input-border: #1e293b;
+
+  --heading-text: #ffffff;
+  --body-text: #cbd5e1;
+  --muted-text: #94a3b8;
+  --label-text: #94a3b8;
+  --link-text: #94a3b8;
+  --link-text-hover: #f1f5f9;
+
+  --row-border: rgba(30, 41, 59, 0.6);
+  --table-head-bg: rgba(15, 23, 42, 0.5);
+
+  --secondary-btn-bg: rgba(30, 41, 59, 0.8);
+  --secondary-btn-bg-hover: #1e293b;
+  --secondary-btn-text: #e2e8f0;
+  --secondary-btn-border: rgba(51, 65, 85, 0.8);
+
+  --disabled-bg: rgba(15, 23, 42, 0.4);
+  --disabled-text: #64748b;
+
+  --warn-bg: rgba(69, 26, 3, 0.4);
+  --warn-bg-hover: rgba(120, 53, 15, 0.5);
+  --warn-border: rgba(180, 83, 9, 0.6);
+  --warn-text: #fcd34d;
+
+  --danger-bg: rgba(69, 10, 10, 0.4);
+  --danger-border: rgba(153, 27, 27, 0.6);
+  --danger-text: #fca5a5;
+  --danger-link-text: #f87171;
+
+  --success-bg: rgba(2, 44, 34, 0.4);
+  --success-border: rgba(4, 120, 87, 0.6);
+  --success-text: #6ee7b7;
+
+  --tab-track-bg: rgba(2, 6, 23, 0.4);
+  --dropzone-border: #334155;
+  --drop-active-bg: rgba(23, 37, 84, 0.3);
+  --placeholder-bg: #1e293b;
+  --skeleton-bg: #1e293b;
+}
+
+:root[data-theme="light"] {
+  --background: #f8fafc;
+  --foreground: #0f172a;
+
+  --page-bg: #f8fafc;
+  --card-bg: #ffffff;
+  --card-border: #e2e8f0;
+  --input-bg: #ffffff;
+  --input-border: #e2e8f0;
+
+  --heading-text: #0f172a;
+  --body-text: #334155;
+  --muted-text: #64748b;
+  --label-text: #64748b;
+  --link-text: #64748b;
+  --link-text-hover: #0f172a;
+
+  --row-border: #e2e8f0;
+  --table-head-bg: #f8fafc;
+
+  --secondary-btn-bg: #f1f5f9;
+  --secondary-btn-bg-hover: #e2e8f0;
+  --secondary-btn-text: #334155;
+  --secondary-btn-border: #e2e8f0;
+
+  --disabled-bg: #e2e8f0;
+  --disabled-text: #94a3b8;
+
+  --warn-bg: #fffbeb;
+  --warn-bg-hover: #fef3c7;
+  --warn-border: #fcd34d;
+  --warn-text: #92400e;
+
+  --danger-bg: #fef2f2;
+  --danger-border: #fecaca;
+  --danger-text: #b91c1c;
+  --danger-link-text: #dc2626;
+
+  --success-bg: #ecfdf5;
+  --success-border: #a7f3d0;
+  --success-text: #047857;
+
+  --tab-track-bg: #f1f5f9;
+  --dropzone-border: #cbd5e1;
+  --drop-active-bg: #eff6ff;
+  --placeholder-bg: #f1f5f9;
+  --skeleton-bg: #e2e8f0;
 }
 
 @theme inline {

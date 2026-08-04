@@ -26,7 +26,27 @@ export default function RootLayout({
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      // The pre-paint script below sets data-theme on this element before
+      // React hydrates, based on localStorage — something the server can't
+      // know when it renders. That's an intentional, expected mismatch (the
+      // same technique next-themes and similar libraries use), not a bug to
+      // fix by removing the script.
+      suppressHydrationWarning
     >
+      <head>
+        {/* Runs before paint so a saved "light" preference doesn't flash the
+            dark theme first — sets the same data-theme attribute ThemeToggle
+            manages at runtime. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try {
+              if (localStorage.getItem('theme') === 'light') {
+                document.documentElement.setAttribute('data-theme', 'light');
+              }
+            } catch (e) {}`
+          }}
+        />
+      </head>
       <body className="min-h-full flex flex-col">{children}</body>
     </html>
   );

@@ -21,7 +21,11 @@ import {
   linkButtonClass,
   sectionHeadingClass,
   labelClass,
-  cardClass
+  cardClass,
+  warningBannerClass,
+  warningTextClass,
+  dangerBannerClass,
+  dangerTextClass
 } from '@/lib/uiClasses'
 import Link from 'next/link'
 
@@ -115,7 +119,7 @@ function GeneratedListingDrawer({
         role="dialog"
         aria-modal="true"
         aria-label={product.generatedContent ? 'View Generated Listing' : 'Generation Error'}
-        className="relative w-full max-w-md bg-[#112236] border-l border-slate-800/80 h-full p-6 overflow-y-auto shadow-xl focus:outline-none"
+        className="relative w-full max-w-md border-l h-full p-6 overflow-y-auto shadow-xl focus:outline-none bg-[var(--card-bg)] border-[var(--card-border)]"
       >
         <div className="mb-4 flex items-center gap-2">
           <h2 className={sectionHeadingClass}>
@@ -127,16 +131,16 @@ function GeneratedListingDrawer({
         <div className="flex items-center gap-3 mb-4">
           <ProductThumbnail imageFile={product.imageFile} imageUrl={product.imageUrl} alt={product.brandName} size={60} />
           <div>
-            <p className="font-medium text-slate-100">{product.brandName}</p>
-            <p className="text-sm text-slate-400">
+            <p className="font-medium text-[var(--heading-text)]">{product.brandName}</p>
+            <p className="text-sm text-[var(--muted-text)]">
               {product.category} · {product.targetMarketplace}
             </p>
           </div>
         </div>
 
         {product.generationError && (
-          <div className="mb-4 p-4 rounded-xl bg-red-950/40 border border-red-800/60">
-            <p className="text-sm text-red-300">{product.generationError}</p>
+          <div className={`mb-4 ${dangerBannerClass}`}>
+            <p className={dangerTextClass}>{product.generationError}</p>
           </div>
         )}
 
@@ -144,7 +148,7 @@ function GeneratedListingDrawer({
           {displayFields.map((field) => (
             <div key={field.label}>
               <p className={labelClass}>{field.label}</p>
-              <p className="text-sm text-slate-200">{field.value}</p>
+              <p className="text-sm text-[var(--body-text)]">{field.value}</p>
             </div>
           ))}
         </div>
@@ -191,7 +195,7 @@ function ExportGateModal({ onClose, onSignIn }: { onClose: () => void; onSignIn:
         aria-label="Sign in required"
         className={`relative p-6 max-w-sm w-full mx-4 focus:outline-none ${cardClass}`}
       >
-        <p className="text-sm text-slate-300 mb-4">Sign in or create a free account to download your listings.</p>
+        <p className="text-sm text-[var(--body-text)] mb-4">Sign in or create a free account to download your listings.</p>
         <div className="flex justify-end gap-2">
           <button onClick={onClose} className={linkButtonClass}>
             Cancel
@@ -873,7 +877,7 @@ export default function CatalogueWorkspace() {
   const guestLimitReached = !hasSession && draftProducts.length >= GUEST_PRODUCT_LIMIT
 
   return (
-    <div className="min-h-screen bg-[#0b1726] text-slate-100">
+    <div className="min-h-screen bg-[var(--page-bg)] text-[var(--body-text)]">
       <div className="max-w-7xl mx-auto px-4 py-6">
         <AppHeader
           hasSession={hasSession}
@@ -889,8 +893,8 @@ export default function CatalogueWorkspace() {
         />
 
         {pendingRestoreCount !== null && (
-          <div className="mb-4 p-4 rounded-xl border border-amber-700/60 bg-amber-950/40 flex items-center justify-between gap-4">
-            <p className="text-sm text-amber-300">
+          <div className={`mb-4 flex items-center justify-between gap-4 ${warningBannerClass}`}>
+            <p className={warningTextClass}>
               A previous session with {pendingRestoreCount} product{pendingRestoreCount === 1 ? '' : 's'} was found.
             </p>
             <div className="flex gap-2 shrink-0">
@@ -961,7 +965,7 @@ export default function CatalogueWorkspace() {
           />
         </div>
 
-        {downloadMessage && <p className="mt-2 text-sm text-green-400">{downloadMessage}</p>}
+        {downloadMessage && <p className="mt-2 text-sm text-[var(--success-text)]">{downloadMessage}</p>}
       </div>
 
       {viewingProduct && (
