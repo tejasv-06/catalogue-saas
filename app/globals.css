@@ -1,12 +1,12 @@
 @import "tailwindcss";
 
 /* Site is intentionally dark site-wide (not OS-conditional) — these are flat
-   defaults matching the page background (#113856) and slate-100 text, not a
-   light/dark toggle. Every page also sets its own bg-[#113856] explicitly;
+   defaults matching the page background (#0b1726) and slate-100 text, not a
+   light/dark toggle. Every page also sets its own bg-[#0b1726] explicitly;
    this just prevents a flash of the old light background before that class
    paints. */
 :root {
-  --background: #113856;
+  --background: #0b1726;
   --foreground: #f1f5f9;
 }
 

@@ -51,11 +51,11 @@ export default function AppHeader({
   onSelectClient: (client: Client | null) => void
 }) {
   return (
-    <div className="bg-[#113856] backdrop-blur-md border border-white/15 shadow-lg text-white rounded-2xl p-4 mb-6 flex items-center justify-between gap-4">
+    <div className="bg-[#112236] border border-white/15 shadow-lg text-white rounded-2xl p-4 mb-6 flex items-center justify-between gap-4">
       <div className="flex items-center gap-4">
         <Link
           href="/"
-          className="text-sm text-white/90 hover:text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#113856] focus:ring-blue-500/40 rounded transition-colors"
+          className="text-sm text-white/90 hover:text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#112236] focus:ring-blue-500/40 rounded transition-colors"
         >
           ← Back to Home
         </Link>

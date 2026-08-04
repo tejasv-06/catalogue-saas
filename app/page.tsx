@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import Navbar from '@/components/Navbar'
+import { cardClass } from '@/lib/uiClasses'
 
 const features = [
   {
@@ -51,7 +52,7 @@ const testimonials = [
 
 export default function Home() {
   return (
-    <div className="flex flex-col min-h-screen bg-[#113856] text-slate-100">
+    <div className="flex flex-col min-h-screen bg-[#0b1726] text-slate-100">
       <Navbar />
 
       <main className="flex-1">
@@ -76,7 +77,7 @@ export default function Home() {
             {features.map((feature) => (
               <div
                 key={feature.title}
-                className="bg-slate-900/70 border border-slate-800/80 rounded-2xl p-6 shadow-xl backdrop-blur-sm hover:border-slate-700 transition"
+                className={`p-6 hover:border-slate-700 transition ${cardClass}`}
               >
                 <h3 className="font-semibold text-slate-100 mb-2">{feature.title}</h3>
                 <p className="text-sm text-slate-300">{feature.description}</p>
@@ -116,7 +117,7 @@ export default function Home() {
             {testimonials.map((t) => (
               <div
                 key={t.name}
-                className="bg-slate-900/70 border border-slate-800/80 rounded-2xl p-6 shadow-xl backdrop-blur-sm hover:border-slate-700 transition"
+                className={`p-6 hover:border-slate-700 transition ${cardClass}`}
               >
                 <p className="text-sm text-slate-300 mb-4">&ldquo;{t.quote}&rdquo;</p>
                 <p className="text-sm font-semibold text-slate-100">{t.name}</p>
