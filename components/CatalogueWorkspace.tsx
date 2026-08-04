@@ -949,7 +949,6 @@ export default function CatalogueWorkspace() {
             currentlyGeneratingId={currentlyGeneratingId}
             targetMarketplace={targetMarketplace}
             generating={generating}
-            generationProgress={generationProgress}
             hasApproved={hasApproved}
             loading={!sessionReady}
             onGenerateAll={handleGenerateAll}

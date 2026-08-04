@@ -74,7 +74,6 @@ export default function QueueTable({
   currentlyGeneratingId,
   targetMarketplace,
   generating,
-  generationProgress,
   hasApproved,
   loading,
   onGenerateAll,
@@ -89,7 +88,6 @@ export default function QueueTable({
   currentlyGeneratingId: string | null
   targetMarketplace: string
   generating: boolean
-  generationProgress: { current: number; total: number } | null
   hasApproved: boolean
   loading: boolean
   onGenerateAll: () => void
@@ -111,7 +109,6 @@ export default function QueueTable({
           >
             {generating ? 'Generating...' : 'Generate Content for All'}
           </button>
-          {generationProgress && <span className="text-sm text-slate-500">Generating...</span>}
           <button
             onClick={onBulkApprove}
             disabled={!targetMarketplace || !draftProducts.some((p) => p.status === 'generated')}
