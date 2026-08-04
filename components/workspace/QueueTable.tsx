@@ -111,11 +111,7 @@ export default function QueueTable({
           >
             {generating ? 'Generating...' : 'Generate Content for All'}
           </button>
-          {generationProgress && (
-            <span className="text-sm text-slate-500">
-              Generating {generationProgress.current} of {generationProgress.total}...
-            </span>
-          )}
+          {generationProgress && <span className="text-sm text-slate-500">Generating...</span>}
           <button
             onClick={onBulkApprove}
             disabled={!targetMarketplace || !draftProducts.some((p) => p.status === 'generated')}
