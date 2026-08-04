@@ -10,6 +10,11 @@ function LoginForm() {
   const searchParams = useSearchParams()
   const linkError = searchParams.get('error') === 'auth'
 
+  // Only accept a same-origin relative path — reject absolute/protocol-relative
+  // URLs (e.g. "//evil.com") so this can't be used as an open redirect.
+  const rawNext = searchParams.get('next')
+  const next = rawNext && rawNext.startsWith('/') && !rawNext.startsWith('//') ? rawNext : '/workspace'
+
   const [step, setStep] = useState<'email' | 'code'>('email')
   const [email, setEmail] = useState('')
   const [code, setCode] = useState('')
@@ -55,7 +60,7 @@ function LoginForm() {
       return
     }
 
-    router.push('/workspace')
+    router.push(next)
     router.refresh()
   }
 
@@ -65,7 +70,7 @@ function LoginForm() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/auth/confirm?next=/workspace`
+        redirectTo: `${window.location.origin}/auth/confirm?next=${next}`
       }
     })
     if (error) {

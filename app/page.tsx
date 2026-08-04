@@ -86,6 +86,24 @@ export default function Home() {
           </div>
         </section>
 
+        <section className="max-w-5xl mx-auto px-6 pb-16">
+          <div className={`p-8 flex flex-col sm:flex-row items-center justify-between gap-6 ${cardClass}`}>
+            <div>
+              <h2 className="text-xl font-bold text-[var(--heading-text)] mb-2">AI Account Audit &amp; Revenue Insights</h2>
+              <p className="text-sm text-[var(--body-text)] max-w-xl">
+                Upload your Amazon sales &amp; traffic report and get a verified, AI-written diagnosis of what&apos;s
+                working, what isn&apos;t, and what to fix next.
+              </p>
+            </div>
+            <Link
+              href="/audit"
+              className="shrink-0 inline-block bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl text-sm font-medium shadow-lg shadow-blue-500/20 transition-colors"
+            >
+              Run an Audit
+            </Link>
+          </div>
+        </section>
+
         <section className="py-16 bg-[var(--table-head-bg)]">
           <div className="max-w-5xl mx-auto px-6">
             <h2 className="text-2xl font-bold text-[var(--heading-text)] text-center mb-10">How it works</h2>
