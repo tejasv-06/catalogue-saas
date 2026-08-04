@@ -4,40 +4,26 @@ import { useEffect, useRef, useState, type DragEvent } from 'react'
 import Papa from 'papaparse'
 import { pick } from '@/lib/csvMapping'
 import { exportColumns, flattenRow } from '@/lib/exportShapers'
-import ClientSelector, { type Client } from '@/components/ClientSelector'
-import LogoutButton from '@/components/LogoutButton'
+import { type Client } from '@/components/ClientSelector'
+import StatusBadge from '@/components/StatusBadge'
+import ProductThumbnail from '@/components/ProductThumbnail'
+import AppHeader from '@/components/AppHeader'
+import LeftPanel from '@/components/workspace/LeftPanel'
+import QueueTable from '@/components/workspace/QueueTable'
 import { createClient } from '@/lib/supabase/client'
+import { useFocusTrap } from '@/lib/useFocusTrap'
+import type { DraftProduct, CsvSummary, PendingCsvUpload } from '@/lib/types'
+import {
+  buttonPrimaryClass,
+  buttonSecondaryClass,
+  buttonDestructiveClass,
+  buttonSuccessClass,
+  buttonWarningClass,
+  linkButtonClass,
+  sectionHeadingClass,
+  labelClass
+} from '@/lib/uiClasses'
 import Link from 'next/link'
-
-type DraftProduct = {
-  id: string
-  brandName: string
-  description: string
-  category: string
-  imageFile: File | null
-  imageUrl: string | null
-  targetMarketplace: string
-  generatedContent: any | null
-  status: 'draft' | 'generated' | 'approved'
-  generationError: string | null
-  skipBrandVoice: boolean
-}
-
-type CsvSummary = {
-  fileName: string
-  total: number
-  added: number
-  skipped: number
-}
-
-type PendingCsvUpload = {
-  fileName: string
-  total: number
-  matchingProducts: DraftProduct[]
-  mismatchedProducts: DraftProduct[]
-}
-
-const marketplaces = ['amazon', 'flipkart', 'myntra', 'etsy', 'tatacliq']
 
 const SESSION_STORAGE_KEY = 'catalogue-draft-session'
 const SESSION_MAX_AGE_MS = 4 * 60 * 60 * 1000
@@ -49,10 +35,6 @@ const SESSION_MAX_AGE_MS = 4 * 60 * 60 * 1000
 const MAX_PERSISTABLE_IMAGE_BYTES = 2 * 1024 * 1024
 
 const GUEST_PRODUCT_LIMIT = 10
-
-function truncate(text: string, length: number) {
-  return text.length > length ? text.slice(0, length) + '…' : text
-}
 
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -104,116 +86,6 @@ function getDisplayFields(marketplace: string, gc: any): { label: string; value:
   }
 }
 
-function ProductThumbnail({
-  imageFile,
-  imageUrl,
-  alt,
-  size = 80
-}: {
-  imageFile: File | null
-  imageUrl: string | null
-  alt: string
-  size?: number
-}) {
-  const [objectUrl, setObjectUrl] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (!imageFile) {
-      setObjectUrl(null)
-      return
-    }
-    const url = URL.createObjectURL(imageFile)
-    setObjectUrl(url)
-    return () => URL.revokeObjectURL(url)
-  }, [imageFile])
-
-  const src = objectUrl || imageUrl
-
-  if (!src) {
-    return (
-      <div
-        style={{ width: size, height: size }}
-        className="bg-gray-100 rounded flex items-center justify-center text-xs text-gray-400 shrink-0"
-      >
-        No image
-      </div>
-    )
-  }
-
-  return (
-    // next/image can't load blob: URLs, so a plain <img> is required for uploaded-file previews
-    // eslint-disable-next-line @next/next/no-img-element
-    <img src={src} alt={alt} style={{ width: size, height: size }} className="object-cover rounded shrink-0" />
-  )
-}
-
-function QueueRow({
-  product,
-  isGenerating,
-  onView,
-  onEdit,
-  onDelete,
-  onRetry
-}: {
-  product: DraftProduct
-  isGenerating: boolean
-  onView: (id: string) => void
-  onEdit: (product: DraftProduct) => void
-  onDelete: (id: string) => void
-  onRetry: (id: string) => void
-}) {
-  const statusStyles: Record<DraftProduct['status'], string> = {
-    draft: 'bg-gray-200 text-gray-700',
-    generated: 'bg-blue-100 text-blue-700',
-    approved: 'bg-green-100 text-green-700'
-  }
-
-  return (
-    <tr className="border-b">
-      <td className="p-2">
-        <ProductThumbnail imageFile={product.imageFile} imageUrl={product.imageUrl} alt={product.brandName} size={80} />
-      </td>
-      <td className="p-2">
-        <p className="font-medium text-sm">{product.brandName || '—'}</p>
-        <p className="text-xs text-gray-500">{product.category || '—'}</p>
-      </td>
-      <td className="p-2 text-sm text-gray-600 max-w-xs">{truncate(product.description, 80)}</td>
-      <td className="p-2">
-        {isGenerating ? (
-          <span className="text-xs px-2 py-1 rounded-full bg-yellow-100 text-yellow-700 animate-pulse">
-            Generating…
-          </span>
-        ) : (
-          <span className={`text-xs px-2 py-1 rounded-full ${statusStyles[product.status]}`}>{product.status}</span>
-        )}
-        {product.generationError && <p className="text-xs text-red-600 mt-1">{product.generationError}</p>}
-      </td>
-      <td className="p-2 whitespace-nowrap space-x-2">
-        {(product.generatedContent || product.generationError) && (
-          <button onClick={() => onView(product.id)} className="text-sm text-blue-600 underline">
-            {product.generatedContent ? 'View Generated Listing' : 'View Error'}
-          </button>
-        )}
-        {product.generationError && (
-          <button
-            onClick={() => onRetry(product.id)}
-            disabled={isGenerating}
-            className="text-xs font-medium text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 px-2 py-1 rounded"
-          >
-            Retry
-          </button>
-        )}
-        <button onClick={() => onEdit(product)} className="text-sm text-gray-600 underline">
-          Edit
-        </button>
-        <button onClick={() => onDelete(product.id)} className="text-sm text-red-600 underline">
-          Delete
-        </button>
-      </td>
-    </tr>
-  )
-}
-
 function GeneratedListingDrawer({
   product,
   onClose,
@@ -231,14 +103,25 @@ function GeneratedListingDrawer({
     ? getDisplayFields(product.targetMarketplace, product.generatedContent)
     : []
 
+  const containerRef = useRef<HTMLDivElement>(null)
+  useFocusTrap(containerRef, onClose)
+
   return (
     <div className="fixed inset-0 z-30 flex justify-end">
-      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-      <div className="relative w-full max-w-md bg-white h-full p-6 overflow-y-auto shadow-xl">
-        <div className="mb-4">
-          <h2 className="text-lg font-bold">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div
+        ref={containerRef}
+        tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
+        aria-label={product.generatedContent ? 'View Generated Listing' : 'Generation Error'}
+        className="relative w-full max-w-md bg-white h-full p-6 overflow-y-auto shadow-xl focus:outline-none"
+      >
+        <div className="mb-4 flex items-center gap-2">
+          <h2 className={sectionHeadingClass}>
             {product.generatedContent ? 'View Generated Listing' : 'Generation Error'}
           </h2>
+          <StatusBadge status={product.status} />
         </div>
 
         <div className="flex items-center gap-3 mb-4">
@@ -252,7 +135,7 @@ function GeneratedListingDrawer({
         </div>
 
         {product.generationError && (
-          <div className="mb-4 p-3 rounded bg-red-50 border border-red-200">
+          <div className="mb-4 p-4 rounded-lg bg-red-50 border border-red-200">
             <p className="text-sm text-red-600">{product.generationError}</p>
           </div>
         )}
@@ -260,7 +143,7 @@ function GeneratedListingDrawer({
         <div className="space-y-2">
           {displayFields.map((field) => (
             <div key={field.label}>
-              <p className="text-xs font-medium text-gray-500 uppercase">{field.label}</p>
+              <p className={labelClass}>{field.label}</p>
               <p className="text-sm">{field.value}</p>
             </div>
           ))}
@@ -269,30 +152,53 @@ function GeneratedListingDrawer({
         <div className="mt-6 flex justify-between items-center">
           <div className="flex gap-2">
             {product.status === 'generated' && (
-              <button onClick={() => onApprove(product.id)} className="bg-green-600 text-white p-2 rounded text-sm">
+              <button onClick={() => onApprove(product.id)} className={buttonSuccessClass}>
                 Approve
               </button>
             )}
             {product.status === 'approved' && (
-              <button onClick={() => onUnapprove(product.id)} className="bg-yellow-600 text-white p-2 rounded text-sm">
+              <button onClick={() => onUnapprove(product.id)} className={buttonWarningClass}>
                 Unapprove
               </button>
             )}
             {product.generationError && (
-              <button
-                onClick={() => onRetry(product.id)}
-                className="bg-red-600 text-white p-2 rounded text-sm font-medium"
-              >
+              <button onClick={() => onRetry(product.id)} className={buttonDestructiveClass}>
                 Retry
               </button>
             )}
           </div>
-          <button
-            onClick={onClose}
-            className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-md font-medium border border-gray-300 transition-colors"
-          >
+          <button onClick={onClose} className={buttonSecondaryClass}>
             Close
           </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ExportGateModal({ onClose, onSignIn }: { onClose: () => void; onSignIn: () => void }) {
+  const containerRef = useRef<HTMLDivElement>(null)
+  useFocusTrap(containerRef, onClose)
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div
+        ref={containerRef}
+        tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Sign in required"
+        className="relative bg-white rounded-lg shadow-xl p-6 max-w-sm w-full mx-4 focus:outline-none"
+      >
+        <p className="text-sm text-gray-700 mb-4">Sign in or create a free account to download your listings.</p>
+        <div className="flex justify-end gap-2">
+          <button onClick={onClose} className={linkButtonClass}>
+            Cancel
+          </button>
+          <Link href="/login" onClick={onSignIn} className={buttonPrimaryClass}>
+            Sign In
+          </Link>
         </div>
       </div>
     </div>
@@ -523,6 +429,12 @@ export default function CatalogueWorkspace() {
     setTimeout(() => setMarketplaceFlash(false), 1200)
   }
 
+  function handleMarketplaceChange(value: string) {
+    setTargetMarketplace(value)
+    setMarketplaceError(null)
+    setMarketplaceFlash(false)
+  }
+
   function wordLevelMatch(a: string, b: string): boolean {
     const normA = a.trim().toLowerCase()
     const normB = b.trim().toLowerCase()
@@ -534,6 +446,27 @@ export default function CatalogueWorkspace() {
     const wordsB = normB.split(/\s+/).filter(Boolean)
 
     return wordsB.some((word) => wordsA.has(word))
+  }
+
+  function handleBrandNameChange(value: string) {
+    setBrandName(value)
+    setFormError(null)
+    setBrandMismatchPending(false)
+  }
+
+  function handleCategoryChange(value: string) {
+    setCategory(value)
+    setFormError(null)
+  }
+
+  function handleDescriptionChange(value: string) {
+    setDescription(value)
+    setFormError(null)
+  }
+
+  function handleCancelBrandMismatch() {
+    setBrandMismatchPending(false)
+    setPendingImageUrl(null)
   }
 
   function handleClearForm() {
@@ -665,6 +598,11 @@ export default function CatalogueWorkspace() {
     setDraftProducts((prev) => prev.filter((p) => p.id !== id))
     if (viewingId === id) setViewingId(null)
     if (editingId === id) handleClearForm()
+  }
+
+  function handleCsvFileChange(file: File | null) {
+    setCsvFile(file)
+    setPendingCsvUpload(null)
   }
 
   async function handleUploadCsv() {
@@ -937,343 +875,91 @@ export default function CatalogueWorkspace() {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="p-8">
-        <div className="flex items-center justify-between mb-4">
-          <h1 className="text-2xl font-bold">Catalogue Workspace</h1>
-          <LogoutButton />
-        </div>
+        <AppHeader
+          hasSession={hasSession}
+          targetMarketplace={targetMarketplace}
+          onMarketplaceChange={handleMarketplaceChange}
+          marketplaceError={marketplaceError}
+          marketplaceFlash={marketplaceFlash}
+          marketplaceSelectRef={marketplaceSelectRef}
+          productCount={draftProducts.length}
+          guestProductLimit={GUEST_PRODUCT_LIMIT}
+          selectedClientId={selectedClient?.id || ''}
+          onSelectClient={setSelectedClient}
+        />
 
         {pendingRestoreCount !== null && (
-          <div className="mb-4 p-3 border border-yellow-300 bg-yellow-50 rounded flex items-center justify-between gap-4">
+          <div className="mb-4 p-4 rounded-lg border border-yellow-300 bg-yellow-50 flex items-center justify-between gap-4">
             <p className="text-sm text-yellow-800">
               A previous session with {pendingRestoreCount} product{pendingRestoreCount === 1 ? '' : 's'} was found.
             </p>
             <div className="flex gap-2 shrink-0">
-              <button onClick={handleRestoreSession} className="bg-black text-white px-3 py-1 rounded text-sm">
+              <button onClick={handleRestoreSession} className={buttonPrimaryClass}>
                 Restore
               </button>
-              <button onClick={handleDiscardSession} className="border px-3 py-1 rounded text-sm">
+              <button onClick={handleDiscardSession} className={buttonSecondaryClass}>
                 Discard
               </button>
             </div>
           </div>
         )}
 
-        <div className="flex items-center gap-4 mb-4">
-          <div className="flex flex-col gap-1">
-            <div className="flex items-center gap-4">
-              <select
-                ref={marketplaceSelectRef}
-                value={targetMarketplace}
-                onChange={(e) => {
-                  setTargetMarketplace(e.target.value)
-                  setMarketplaceError(null)
-                  setMarketplaceFlash(false)
-                }}
-                className={`border p-2 rounded ${
-                  marketplaceError
-                    ? `border-red-500 ring-2 ring-red-500 ${marketplaceFlash ? 'animate-pulse' : ''}`
-                    : ''
-                }`}
-              >
-                <option value="" disabled>
-                  Select a marketplace
-                </option>
-                {marketplaces.map((marketplace) => (
-                  <option key={marketplace} value={marketplace}>
-                    {marketplace}
-                  </option>
-                ))}
-              </select>
-              <span className="text-sm font-medium">
-                {hasSession
-                  ? `Products in Session (${draftProducts.length})`
-                  : `${draftProducts.length}/${GUEST_PRODUCT_LIMIT} (free preview)`}
-              </span>
-            </div>
-            {marketplaceError && <p className="text-sm font-medium text-red-500">{marketplaceError}</p>}
-          </div>
-          {hasSession && (
-            <ClientSelector selectedClientId={selectedClient?.id || ''} onSelectClient={setSelectedClient} />
-          )}
-        </div>
-
-        <div className="flex gap-4 border-b mb-6">
-          <button
-            onClick={() => setActiveTab('manual')}
-            className={`p-2 text-sm font-medium border-b-2 ${
-              activeTab === 'manual' ? 'border-black text-black' : 'border-transparent text-gray-500'
-            }`}
-          >
-            Manual Entry
-          </button>
-          <button
-            onClick={() => setActiveTab('csv')}
-            className={`p-2 text-sm font-medium border-b-2 ${
-              activeTab === 'csv' ? 'border-black text-black' : 'border-transparent text-gray-500'
-            }`}
-          >
-            Bulk CSV Upload
-          </button>
-        </div>
-
         <div className="flex gap-6">
-          <div className="w-[35%] flex flex-col gap-2 p-4 border rounded bg-white h-fit">
-            {activeTab === 'manual' ? (
-              <>
-                <input
-                  type="text"
-                  placeholder="Brand name"
-                  value={brandName}
-                  onChange={(e) => {
-                    setBrandName(e.target.value)
-                    setFormError(null)
-                    setBrandMismatchPending(false)
-                  }}
-                  className="border p-2 rounded"
-                />
-                <input
-                  type="text"
-                  placeholder="Category"
-                  value={category}
-                  onChange={(e) => {
-                    setCategory(e.target.value)
-                    setFormError(null)
-                  }}
-                  className="border p-2 rounded"
-                />
-                <textarea
-                  placeholder="Description"
-                  value={description}
-                  onChange={(e) => {
-                    setDescription(e.target.value)
-                    setFormError(null)
-                  }}
-                  className="border p-2 rounded"
-                />
-                <div className="flex items-center gap-2 min-w-0">
-                  <label className="flex-1 min-w-0 truncate border p-2 rounded text-center cursor-pointer text-sm text-gray-500">
-                    Upload Product Image
-                    <input
-                      type="file"
-                      accept="image/*"
-                      ref={fileInputRef}
-                      onChange={(e) => setImageFile(e.target.files?.[0] ?? null)}
-                      className="hidden"
-                    />
-                  </label>
-                  <ProductThumbnail imageFile={imageFile} imageUrl={formPreviewUrl} alt="Preview" size={48} />
-                </div>
-                {formError && <p className="text-sm text-red-600">{formError}</p>}
-                {guestLimitReached && (
-                  <p className="text-sm text-red-600">Free preview limit reached (10/10) — sign in to continue.</p>
-                )}
-                {brandMismatchPending && selectedClient ? (
-                  <div className="p-3 border border-amber-300 bg-amber-50 rounded flex flex-col gap-2">
-                    <p className="text-sm text-amber-800">
-                      This product's brand doesn't match your selected brand voice ({selectedClient.client_name}).
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        onClick={() => commitAddProduct(true, pendingImageUrl)}
-                        className="text-sm bg-white border border-amber-400 text-amber-800 px-3 py-1 rounded"
-                      >
-                        Add without brand voice
-                      </button>
-                      <button
-                        onClick={() => commitAddProduct(false, pendingImageUrl)}
-                        className="text-sm bg-amber-600 text-white px-3 py-1 rounded"
-                      >
-                        Add anyway with {selectedClient.client_name} voice
-                      </button>
-                      <button
-                        onClick={() => {
-                          setBrandMismatchPending(false)
-                          setPendingImageUrl(null)
-                        }}
-                        className="text-sm text-gray-600 underline"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex gap-2">
-                    <button
-                      onClick={handleAddProduct}
-                      disabled={guestLimitReached || uploadingImage}
-                      className="flex-1 bg-black text-white p-2 rounded disabled:opacity-50"
-                    >
-                      {uploadingImage ? 'Uploading Image...' : editingId ? 'Save Changes' : 'Add Product'}
-                    </button>
-                    <button onClick={handleClearForm} className="border p-2 rounded text-sm">
-                      Clear Form
-                    </button>
-                  </div>
-                )}
-              </>
-            ) : (
-              <>
-                <a href="/sample-products.csv" download className="text-blue-600 underline text-sm">
-                  Download Sample CSV
-                </a>
+          <LeftPanel
+            activeTab={activeTab}
+            onTabChange={setActiveTab}
+            brandName={brandName}
+            onBrandNameChange={handleBrandNameChange}
+            category={category}
+            onCategoryChange={handleCategoryChange}
+            description={description}
+            onDescriptionChange={handleDescriptionChange}
+            imageFile={imageFile}
+            onImageFileChange={setImageFile}
+            formPreviewUrl={formPreviewUrl}
+            fileInputRef={fileInputRef}
+            formError={formError}
+            guestLimitReached={guestLimitReached}
+            brandMismatchPending={brandMismatchPending}
+            selectedClient={selectedClient}
+            pendingImageUrl={pendingImageUrl}
+            onCommitAddProduct={commitAddProduct}
+            onCancelBrandMismatch={handleCancelBrandMismatch}
+            onAddProduct={handleAddProduct}
+            onClearForm={handleClearForm}
+            uploadingImage={uploadingImage}
+            editingId={editingId}
+            csvFile={csvFile}
+            onCsvFileChange={handleCsvFileChange}
+            csvSummary={csvSummary}
+            isDragging={isDragging}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            pendingCsvUpload={pendingCsvUpload}
+            onUploadCsv={handleUploadCsv}
+            onCsvAddWithoutBrandVoice={handleCsvAddWithoutBrandVoice}
+            onCsvAddOnlyMatching={handleCsvAddOnlyMatching}
+            onCsvAddAllWithBrandVoice={handleCsvAddAllWithBrandVoice}
+            onCsvCancelMismatch={handleCsvCancelMismatch}
+          />
 
-                <div
-                  onDragOver={handleDragOver}
-                  onDragLeave={handleDragLeave}
-                  onDrop={handleDrop}
-                  className={`border-2 border-dashed rounded p-8 text-center ${
-                    isDragging ? 'border-black bg-gray-50' : 'border-gray-300'
-                  }`}
-                >
-                  {csvFile ? (
-                    <span className="inline-block text-sm bg-green-50 text-green-700 border border-green-200 px-3 py-1 rounded-md mb-2">
-                      Selected: {csvFile.name}
-                    </span>
-                  ) : (
-                    <p className="text-sm text-gray-500 mb-2">Drag and drop a CSV file here</p>
-                  )}
-                  <label className="inline-block border p-2 rounded cursor-pointer text-sm text-gray-500">
-                    Choose file
-                    <input
-                      type="file"
-                      accept=".csv"
-                      onChange={(e) => {
-                        setCsvFile(e.target.files?.[0] ?? null)
-                        setPendingCsvUpload(null)
-                      }}
-                      className="hidden"
-                    />
-                  </label>
-                </div>
-
-                {guestLimitReached && (
-                  <p className="text-sm text-red-600">Free preview limit reached (10/10) — sign in to continue.</p>
-                )}
-                {pendingCsvUpload && selectedClient ? (
-                  <div className="p-3 border border-amber-300 bg-amber-50 rounded flex flex-col gap-2">
-                    <p className="text-sm text-amber-800">
-                      {pendingCsvUpload.mismatchedProducts.length} of{' '}
-                      {pendingCsvUpload.matchingProducts.length + pendingCsvUpload.mismatchedProducts.length} rows
-                      don't match your selected brand voice ({selectedClient.client_name}).
-                    </p>
-                    <div className="flex flex-col gap-2">
-                      <button
-                        onClick={handleCsvAddWithoutBrandVoice}
-                        className="text-sm bg-white border border-amber-400 text-amber-800 px-3 py-1 rounded"
-                      >
-                        Add all without brand voice
-                      </button>
-                      <button
-                        onClick={handleCsvAddOnlyMatching}
-                        className="text-sm bg-white border border-amber-400 text-amber-800 px-3 py-1 rounded"
-                      >
-                        Add only matching rows with brand voice, skip mismatches
-                      </button>
-                      <button
-                        onClick={handleCsvAddAllWithBrandVoice}
-                        className="text-sm bg-amber-600 text-white px-3 py-1 rounded"
-                      >
-                        Add all anyway with {selectedClient.client_name} voice
-                      </button>
-                      <button onClick={handleCsvCancelMismatch} className="text-sm text-gray-600 underline">
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <button
-                    onClick={handleUploadCsv}
-                    disabled={guestLimitReached}
-                    className="bg-black text-white p-2 rounded disabled:opacity-50"
-                  >
-                    Upload CSV
-                  </button>
-                )}
-
-                {csvSummary && (
-                  <div className="overflow-x-auto border rounded bg-white">
-                    <table className="w-full border-collapse text-sm">
-                      <thead>
-                        <tr className="border-b bg-gray-50 text-left text-xs text-gray-500">
-                          <th className="p-2">File</th>
-                          <th className="p-2">Total</th>
-                          <th className="p-2">Added</th>
-                          <th className="p-2">Skipped</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr>
-                          <td className="p-2">{csvSummary.fileName}</td>
-                          <td className="p-2">{csvSummary.total}</td>
-                          <td className="p-2">{csvSummary.added}</td>
-                          <td className="p-2">{csvSummary.skipped}</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-
-          <div className="w-[65%] min-w-0">
-            <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  onClick={handleGenerateAll}
-                  disabled={!targetMarketplace || !draftProducts.some((p) => p.status === 'draft') || generating}
-                  className="bg-black text-white p-2 rounded disabled:opacity-50 text-sm"
-                >
-                  {generating ? 'Generating...' : 'Generate Content for All'}
-                </button>
-                {generationProgress && (
-                  <span className="text-sm text-gray-500">
-                    Generating {generationProgress.current} of {generationProgress.total}...
-                  </span>
-                )}
-                <button
-                  onClick={handleBulkApprove}
-                  disabled={!targetMarketplace || !draftProducts.some((p) => p.status === 'generated')}
-                  className="bg-green-600 text-white p-2 rounded disabled:opacity-50 text-sm"
-                >
-                  Bulk Approve All Generated
-                </button>
-              </div>
-              <button
-                onClick={handleDownloadApproved}
-                disabled={!targetMarketplace || !hasApproved}
-                className="bg-black text-white p-2 rounded disabled:opacity-50 text-sm"
-              >
-                Download Approved CSV
-              </button>
-            </div>
-            <div className="overflow-x-auto border rounded bg-white">
-              <table className="w-full border-collapse">
-                <thead>
-                  <tr className="border-b bg-gray-50 text-left text-xs text-gray-500">
-                    <th className="p-2">Thumbnail</th>
-                    <th className="p-2">Brand / Category</th>
-                    <th className="p-2">Raw Input</th>
-                    <th className="p-2">Status</th>
-                    <th className="p-2">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {draftProducts.map((product) => (
-                    <QueueRow
-                      key={product.id}
-                      product={product}
-                      isGenerating={product.id === currentlyGeneratingId}
-                      onView={setViewingId}
-                      onEdit={handleEditProduct}
-                      onDelete={handleDeleteProduct}
-                      onRetry={handleRetryProduct}
-                    />
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          <QueueTable
+            draftProducts={draftProducts}
+            currentlyGeneratingId={currentlyGeneratingId}
+            targetMarketplace={targetMarketplace}
+            generating={generating}
+            generationProgress={generationProgress}
+            hasApproved={hasApproved}
+            loading={!sessionReady}
+            onGenerateAll={handleGenerateAll}
+            onBulkApprove={handleBulkApprove}
+            onDownloadApproved={handleDownloadApproved}
+            onView={setViewingId}
+            onEdit={handleEditProduct}
+            onDelete={handleDeleteProduct}
+            onRetry={handleRetryProduct}
+          />
         </div>
 
         {downloadMessage && <p className="mt-2 text-sm text-green-700">{downloadMessage}</p>}
@@ -1290,24 +976,13 @@ export default function CatalogueWorkspace() {
       )}
 
       {showExportGateModal && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setShowExportGateModal(false)} />
-          <div className="relative bg-white rounded-lg shadow-xl p-6 max-w-sm w-full mx-4">
-            <p className="text-gray-800 mb-4">Sign in or create a free account to download your listings.</p>
-            <div className="flex justify-end gap-2">
-              <button onClick={() => setShowExportGateModal(false)} className="text-sm text-gray-600 underline">
-                Cancel
-              </button>
-              <Link
-                href="/login"
-                onClick={handleSignInFromExportGate}
-                className="bg-black text-white px-4 py-2 rounded text-sm"
-              >
-                Sign In
-              </Link>
-            </div>
-          </div>
-        </div>
+        <ExportGateModal
+          onClose={() => setShowExportGateModal(false)}
+          onSignIn={() => {
+            handleSignInFromExportGate()
+            setShowExportGateModal(false)
+          }}
+        />
       )}
     </div>
   )

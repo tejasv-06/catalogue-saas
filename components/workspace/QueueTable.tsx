@@ -1,0 +1,165 @@
+"use client"
+
+import type { DraftProduct } from '@/lib/types'
+import ProductThumbnail from '@/components/ProductThumbnail'
+import StatusBadge from '@/components/StatusBadge'
+import EmptyQueueState from '@/components/workspace/EmptyQueueState'
+import TableSkeleton from '@/components/workspace/TableSkeleton'
+import {
+  buttonPrimaryClass,
+  buttonSuccessClass,
+  buttonDestructiveSmallClass,
+  linkButtonClass,
+  linkButtonDestructiveClass,
+  cardClass
+} from '@/lib/uiClasses'
+
+function truncate(text: string, length: number) {
+  return text.length > length ? text.slice(0, length) + '…' : text
+}
+
+function QueueRow({
+  product,
+  isGenerating,
+  onView,
+  onEdit,
+  onDelete,
+  onRetry
+}: {
+  product: DraftProduct
+  isGenerating: boolean
+  onView: (id: string) => void
+  onEdit: (product: DraftProduct) => void
+  onDelete: (id: string) => void
+  onRetry: (id: string) => void
+}) {
+  return (
+    <tr className="border-b">
+      <td className="p-2">
+        <ProductThumbnail imageFile={product.imageFile} imageUrl={product.imageUrl} alt={product.brandName} size={80} />
+      </td>
+      <td className="p-2">
+        <p className="font-medium text-sm">{product.brandName || '—'}</p>
+        <p className="text-xs text-gray-500">{product.category || '—'}</p>
+      </td>
+      <td className="p-2 text-sm text-gray-600 max-w-xs">{truncate(product.description, 80)}</td>
+      <td className="p-2">
+        <StatusBadge status={isGenerating ? 'generating' : product.status} />
+        {product.generationError && <p className="text-xs text-red-600 mt-1">{product.generationError}</p>}
+      </td>
+      <td className="p-2 whitespace-nowrap space-x-2">
+        {(product.generatedContent || product.generationError) && (
+          <button onClick={() => onView(product.id)} className={linkButtonClass}>
+            {product.generatedContent ? 'View Generated Listing' : 'View Error'}
+          </button>
+        )}
+        {product.generationError && (
+          <button onClick={() => onRetry(product.id)} disabled={isGenerating} className={buttonDestructiveSmallClass}>
+            Retry
+          </button>
+        )}
+        <button onClick={() => onEdit(product)} className={linkButtonClass}>
+          Edit
+        </button>
+        <button onClick={() => onDelete(product.id)} className={linkButtonDestructiveClass}>
+          Delete
+        </button>
+      </td>
+    </tr>
+  )
+}
+
+export default function QueueTable({
+  draftProducts,
+  currentlyGeneratingId,
+  targetMarketplace,
+  generating,
+  generationProgress,
+  hasApproved,
+  loading,
+  onGenerateAll,
+  onBulkApprove,
+  onDownloadApproved,
+  onView,
+  onEdit,
+  onDelete,
+  onRetry
+}: {
+  draftProducts: DraftProduct[]
+  currentlyGeneratingId: string | null
+  targetMarketplace: string
+  generating: boolean
+  generationProgress: { current: number; total: number } | null
+  hasApproved: boolean
+  loading: boolean
+  onGenerateAll: () => void
+  onBulkApprove: () => void
+  onDownloadApproved: () => void
+  onView: (id: string) => void
+  onEdit: (product: DraftProduct) => void
+  onDelete: (id: string) => void
+  onRetry: (id: string) => void
+}) {
+  return (
+    <div className="w-[65%] min-w-0">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={onGenerateAll}
+            disabled={!targetMarketplace || !draftProducts.some((p) => p.status === 'draft') || generating}
+            className={buttonPrimaryClass}
+          >
+            {generating ? 'Generating...' : 'Generate Content for All'}
+          </button>
+          {generationProgress && (
+            <span className="text-sm text-gray-500">
+              Generating {generationProgress.current} of {generationProgress.total}...
+            </span>
+          )}
+          <button
+            onClick={onBulkApprove}
+            disabled={!targetMarketplace || !draftProducts.some((p) => p.status === 'generated')}
+            className={buttonSuccessClass}
+          >
+            Bulk Approve All Generated
+          </button>
+        </div>
+        <button onClick={onDownloadApproved} disabled={!targetMarketplace || !hasApproved} className={buttonPrimaryClass}>
+          Download Approved CSV
+        </button>
+      </div>
+      <div className={`overflow-x-auto ${cardClass}`}>
+        <table className="w-full border-collapse">
+          <thead>
+            <tr className="border-b bg-gray-50 text-left text-xs text-gray-500">
+              <th className="p-2">Thumbnail</th>
+              <th className="p-2">Brand / Category</th>
+              <th className="p-2">Raw Input</th>
+              <th className="p-2">Status</th>
+              <th className="p-2">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <TableSkeleton />
+            ) : draftProducts.length === 0 ? (
+              <EmptyQueueState />
+            ) : (
+              draftProducts.map((product) => (
+                <QueueRow
+                  key={product.id}
+                  product={product}
+                  isGenerating={product.id === currentlyGeneratingId}
+                  onView={onView}
+                  onEdit={onEdit}
+                  onDelete={onDelete}
+                  onRetry={onRetry}
+                />
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}

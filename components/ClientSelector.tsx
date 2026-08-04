@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabaseClient'
+import { buttonPrimaryClass, cardClass, inputClass } from '@/lib/uiClasses'
 
 export type Client = {
   id: string
@@ -81,11 +82,7 @@ export default function ClientSelector({
 
   return (
     <div className="flex flex-col gap-1">
-      <select
-        value={showNewClientForm ? NEW_CLIENT_VALUE : selectedClientId}
-        onChange={handleSelectChange}
-        className="border p-2 rounded"
-      >
+      <select value={showNewClientForm ? NEW_CLIENT_VALUE : selectedClientId} onChange={handleSelectChange} className={inputClass}>
         <option value="">No brand selected</option>
         {clients.map((client) => (
           <option key={client.id} value={client.id}>
@@ -96,25 +93,21 @@ export default function ClientSelector({
       </select>
 
       {showNewClientForm && (
-        <div className="flex flex-col gap-2 p-3 border rounded bg-white max-w-sm">
+        <div className={`flex flex-col gap-2 p-4 max-w-sm ${cardClass}`}>
           <input
             type="text"
             placeholder="Brand name"
             value={newClientName}
             onChange={(e) => setNewClientName(e.target.value)}
-            className="border p-2 rounded"
+            className={inputClass}
           />
           <textarea
             placeholder="Brand guidelines"
             value={newClientGuidelines}
             onChange={(e) => setNewClientGuidelines(e.target.value)}
-            className="border p-2 rounded"
+            className={inputClass}
           />
-          <button
-            onClick={handleSaveNewClient}
-            disabled={saving}
-            className="bg-black text-white p-2 rounded disabled:opacity-50 text-sm"
-          >
+          <button onClick={handleSaveNewClient} disabled={saving} className={buttonPrimaryClass}>
             {saving ? 'Saving...' : 'Save Brand'}
           </button>
         </div>

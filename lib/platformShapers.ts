@@ -5,6 +5,15 @@ type AiResult = {
   keywordPool: string[]
 }
 
+// Marketplaces with real shaping (below) and export-column mapping
+// (lib/exportShapers.ts) — the single source of truth for what the app
+// actually supports end-to-end. tatacliq was previously offered in the
+// dropdown but has no case in either file (falls through to the generic
+// `default` below, and to `flattenRow`'s `default: return null` on export,
+// which silently drops approved tatacliq products from the CSV) — dropped
+// here until real support is built. shopify was never added.
+export const SUPPORTED_MARKETPLACES = ['amazon', 'flipkart', 'myntra', 'etsy'] as const
+
 export function shapeForPlatform(marketplace: string, ai: AiResult, product: any) {
   const pool = ai.keywordPool || []
 
