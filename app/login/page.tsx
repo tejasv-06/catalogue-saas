@@ -1,31 +1,29 @@
 'use client'
 
 import { Suspense, useState, type SubmitEvent } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { inputClass, buttonPrimaryClass, buttonSecondaryClass, cardClass } from '@/lib/uiClasses'
 
 function LoginForm() {
+  const router = useRouter()
   const searchParams = useSearchParams()
   const linkError = searchParams.get('error') === 'auth'
 
+  const [step, setStep] = useState<'email' | 'code'>('email')
   const [email, setEmail] = useState('')
+  const [code, setCode] = useState('')
   const [sending, setSending] = useState(false)
-  const [sent, setSent] = useState(false)
+  const [verifying, setVerifying] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  async function handleSendMagicLink(e: SubmitEvent) {
+  async function handleSendCode(e: SubmitEvent) {
     e.preventDefault()
     setSending(true)
     setError(null)
 
     const supabase = createClient()
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        emailRedirectTo: `${window.location.origin}/auth/confirm?next=/workspace`
-      }
-    })
+    const { error } = await supabase.auth.signInWithOtp({ email })
 
     setSending(false)
 
@@ -34,7 +32,26 @@ function LoginForm() {
       return
     }
 
-    setSent(true)
+    setStep('code')
+  }
+
+  async function handleVerifyCode(e: SubmitEvent) {
+    e.preventDefault()
+    setVerifying(true)
+    setError(null)
+
+    const supabase = createClient()
+    const { error } = await supabase.auth.verifyOtp({ email, token: code, type: 'email' })
+
+    setVerifying(false)
+
+    if (error) {
+      setError(error.message)
+      return
+    }
+
+    router.push('/workspace')
+    router.refresh()
   }
 
   async function handleGoogleSignIn() {
@@ -55,14 +72,12 @@ function LoginForm() {
     <div className={`w-full max-w-sm p-6 flex flex-col gap-4 ${cardClass}`}>
       <h1 className="text-xl font-bold text-slate-100">Sign in</h1>
 
-      {linkError && !sent && (
-        <p className="text-sm text-red-400">That link is invalid or expired. Please request a new one.</p>
+      {linkError && (
+        <p className="text-sm text-red-400">That sign-in attempt is invalid or expired. Please try again.</p>
       )}
 
-      {sent ? (
-        <p className="text-sm text-green-400">Check your email — we sent a magic link to {email}.</p>
-      ) : (
-        <form onSubmit={handleSendMagicLink} className="flex flex-col gap-3">
+      {step === 'email' ? (
+        <form onSubmit={handleSendCode} className="flex flex-col gap-3">
           <input
             type="email"
             required
@@ -72,7 +87,38 @@ function LoginForm() {
             className={inputClass}
           />
           <button type="submit" disabled={sending} className={buttonPrimaryClass}>
-            {sending ? 'Sending...' : 'Send Magic Link'}
+            {sending ? 'Sending...' : 'Send Code'}
+          </button>
+          {error && <p className="text-sm text-red-400">{error}</p>}
+        </form>
+      ) : (
+        <form onSubmit={handleVerifyCode} className="flex flex-col gap-3">
+          <p className="text-sm text-slate-300">Enter the 6-digit code we sent to {email}.</p>
+          <input
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            maxLength={6}
+            required
+            placeholder="123456"
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            className={inputClass}
+            autoFocus
+          />
+          <button type="submit" disabled={verifying} className={buttonPrimaryClass}>
+            {verifying ? 'Verifying...' : 'Verify Code'}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setStep('email')
+              setCode('')
+              setError(null)
+            }}
+            className={buttonSecondaryClass}
+          >
+            Use a different email
           </button>
           {error && <p className="text-sm text-red-400">{error}</p>}
         </form>

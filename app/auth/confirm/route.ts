@@ -15,6 +15,10 @@ export async function GET(request: NextRequest) {
     if (!error) {
       return NextResponse.redirect(new URL(next, request.url))
     }
+    // Was silently swallowed before — logging it is the only way to tell
+    // "code already used" (link scanners, double-clicks) apart from an
+    // actual expired/invalid code without guessing.
+    console.error('exchangeCodeForSession failed:', error.message)
   }
 
   return NextResponse.redirect(new URL('/login?error=auth', request.url))
