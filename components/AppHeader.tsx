@@ -18,13 +18,13 @@ function UsagePill({
   guestProductLimit: number
 }) {
   if (!hasSession) {
-    return <span className="text-sm font-medium text-slate-400">{`${productCount}/${guestProductLimit} (free preview)`}</span>
+    return <span className="text-sm font-medium text-white/90">{`${productCount}/${guestProductLimit} (free preview)`}</span>
   }
 
   // TODO(Milestone 34): swap for real per-account credits once usage-based
   // billing exists. Showing the honest in-session count in the meantime
   // rather than a fabricated number that isn't backed by anything real.
-  return <span className="text-sm font-medium text-slate-400">{`Products in Session (${productCount})`}</span>
+  return <span className="text-sm font-medium text-white/90">{`Products in Session (${productCount})`}</span>
 }
 
 export default function AppHeader({
@@ -51,11 +51,11 @@ export default function AppHeader({
   onSelectClient: (client: Client | null) => void
 }) {
   return (
-    <div className="bg-slate-950/80 backdrop-blur-md border border-slate-800/80 text-white rounded-2xl p-4 mb-6 flex items-center justify-between gap-4">
+    <div className="bg-[#113856] backdrop-blur-md border border-white/15 shadow-lg text-white rounded-2xl p-4 mb-6 flex items-center justify-between gap-4">
       <div className="flex items-center gap-4">
         <Link
           href="/"
-          className="text-sm text-slate-400 hover:text-slate-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-950 focus:ring-blue-500/40 rounded transition-colors"
+          className="text-sm text-white/90 hover:text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#113856] focus:ring-blue-500/40 rounded transition-colors"
         >
           ← Back to Home
         </Link>
@@ -89,7 +89,7 @@ export default function AppHeader({
             </select>
             <UsagePill hasSession={hasSession} productCount={productCount} guestProductLimit={guestProductLimit} />
           </div>
-          {marketplaceError && <p className="text-xs font-medium text-red-400">{marketplaceError}</p>}
+          {marketplaceError && <p className="text-xs font-medium text-red-200">{marketplaceError}</p>}
         </div>
         {hasSession && <ClientSelector selectedClientId={selectedClientId} onSelectClient={onSelectClient} />}
         <LogoutButton />

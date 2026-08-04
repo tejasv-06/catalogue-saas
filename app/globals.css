@@ -1,11 +1,12 @@
 @import "tailwindcss";
 
 /* Site is intentionally dark site-wide (not OS-conditional) — these are flat
-   defaults matching Tailwind's slate-950/slate-100, not a light/dark toggle.
-   Every page also sets its own bg-slate-950 explicitly; this just prevents a
-   flash of the old light background before that class paints. */
+   defaults matching the page background (#113856) and slate-100 text, not a
+   light/dark toggle. Every page also sets its own bg-[#113856] explicitly;
+   this just prevents a flash of the old light background before that class
+   paints. */
 :root {
-  --background: #020617;
+  --background: #113856;
   --foreground: #f1f5f9;
 }
 

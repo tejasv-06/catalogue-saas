@@ -94,7 +94,7 @@ export default function LeftPanel({
       <div className="flex gap-4 border-b border-slate-800 mb-2">
         <button
           onClick={() => onTabChange('manual')}
-          className={`p-2 text-sm font-medium border-b-2 hover:text-slate-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-950 focus:ring-blue-500 rounded-t transition-colors ${
+          className={`p-2 text-sm font-medium border-b-2 hover:text-slate-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#113856] focus:ring-blue-500 rounded-t transition-colors ${
             activeTab === 'manual' ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-400'
           }`}
         >
@@ -102,7 +102,7 @@ export default function LeftPanel({
         </button>
         <button
           onClick={() => onTabChange('csv')}
-          className={`p-2 text-sm font-medium border-b-2 hover:text-slate-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-950 focus:ring-blue-500 rounded-t transition-colors ${
+          className={`p-2 text-sm font-medium border-b-2 hover:text-slate-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#113856] focus:ring-blue-500 rounded-t transition-colors ${
             activeTab === 'csv' ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-400'
           }`}
         >
@@ -187,7 +187,7 @@ export default function LeftPanel({
             <a
               href="/sample-products.csv"
               download
-              className="text-blue-400 underline text-sm hover:text-blue-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-950 focus:ring-blue-500 rounded transition-colors w-fit"
+              className="text-blue-400 underline text-sm hover:text-blue-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#113856] focus:ring-blue-500 rounded transition-colors w-fit"
             >
               Download Sample CSV
             </a>

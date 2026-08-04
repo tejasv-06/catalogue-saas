@@ -22,7 +22,7 @@ const steps = [
 
 export default function HowItWorksPage() {
   return (
-    <div className="flex flex-col min-h-screen bg-slate-950 text-slate-100">
+    <div className="flex flex-col min-h-screen bg-[#113856] text-slate-100">
       <Navbar />
       <main className="flex-1 max-w-3xl mx-auto px-6 py-16">
         <h1 className="text-3xl font-bold text-slate-100 mb-4">How Tesolute works</h1>

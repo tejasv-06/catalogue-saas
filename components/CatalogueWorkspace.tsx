@@ -873,7 +873,7 @@ export default function CatalogueWorkspace() {
   const guestLimitReached = !hasSession && draftProducts.length >= GUEST_PRODUCT_LIMIT
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
+    <div className="min-h-screen bg-[#113856] text-slate-100">
       <div className="max-w-7xl mx-auto px-4 py-6">
         <AppHeader
           hasSession={hasSession}

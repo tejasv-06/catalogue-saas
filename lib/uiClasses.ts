@@ -7,10 +7,16 @@
 // but recolored for a dark background instead of the light one they
 // originally assumed.
 
-const focusRing = 'focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-950'
+const focusRing = 'focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#113856]'
 
+// ring-white/40: the button's own fill (blue-600) only has ~2.36:1 contrast
+// against the flat #113856 background — under the 3:1 WCAG 1.4.11 non-text-
+// contrast guideline for UI-component boundaries. A translucent white ring
+// at 40% opacity composites to ~3.30:1 against #113856, which restores the
+// button's visual separation (recomputed fresh for this background — the
+// /50 used for the lighter #134f73 background was more than this one needs).
 export const buttonPrimaryClass =
-  `bg-blue-600 hover:bg-blue-500 text-white font-medium text-sm px-5 py-3 rounded-xl shadow-lg shadow-blue-500/20 ${focusRing} focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition`
+  `bg-blue-600 hover:bg-blue-500 text-white font-medium text-sm px-5 py-3 rounded-xl shadow-lg shadow-blue-500/20 ring-1 ring-white/40 ${focusRing} focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition`
 
 export const buttonSecondaryClass =
   `bg-slate-800/80 hover:bg-slate-800 text-slate-200 border border-slate-700/80 rounded-xl px-4 py-2.5 text-sm font-medium ${focusRing} focus:ring-slate-500 disabled:opacity-50 disabled:cursor-not-allowed transition`
@@ -24,7 +30,7 @@ export const buttonWarningClass =
 // Small footprint variants, for dense contexts like table rows where the
 // full-size buttons would be too tall.
 export const buttonPrimarySmallClass =
-  `bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded-lg text-xs font-medium ${focusRing} focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition`
+  `bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded-lg text-xs font-medium ring-1 ring-white/40 ${focusRing} focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition`
 
 export const buttonSecondarySmallClass =
   `bg-slate-800/80 hover:bg-slate-800 text-slate-200 border border-slate-700/80 px-2 py-1 rounded-lg text-xs font-medium ${focusRing} focus:ring-slate-500 disabled:opacity-50 disabled:cursor-not-allowed transition`
