@@ -40,8 +40,13 @@ function LoginForm() {
     setVerifying(true)
     setError(null)
 
+    // Strip anything that isn't a digit — a pasted code commonly picks up
+    // stray whitespace/newlines from the email, which would otherwise make
+    // an exact-match token comparison fail silently-looking.
+    const cleanedCode = code.replace(/\D/g, '')
+
     const supabase = createClient()
-    const { error } = await supabase.auth.verifyOtp({ email, token: code, type: 'email' })
+    const { error } = await supabase.auth.verifyOtp({ email, token: cleanedCode, type: 'email' })
 
     setVerifying(false)
 
@@ -93,14 +98,13 @@ function LoginForm() {
         </form>
       ) : (
         <form onSubmit={handleVerifyCode} className="flex flex-col gap-3">
-          <p className="text-sm text-slate-300">Enter the 6-digit code we sent to {email}.</p>
+          <p className="text-sm text-slate-300">Enter the code we sent to {email}.</p>
           <input
             type="text"
             inputMode="numeric"
             pattern="[0-9]*"
-            maxLength={6}
             required
-            placeholder="123456"
+            placeholder="Enter code"
             value={code}
             onChange={(e) => setCode(e.target.value)}
             className={inputClass}

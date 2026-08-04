@@ -98,26 +98,41 @@ export default function QueueTable({
   onDelete: (id: string) => void
   onRetry: (id: string) => void
 }) {
+  // Sequential "what's next" highlight: exactly one of the three actions is
+  // primary blue at a time, based on where the queue actually is — not the
+  // active tab or any manual toggle. Mutually exclusive by construction:
+  // hasDraft implies neither of the other two can be true yet, and so on.
+  const hasDraft = draftProducts.some((p) => p.status === 'draft')
+  const hasGenerated = draftProducts.some((p) => p.status === 'generated')
+
+  const generateIsPrimary = hasDraft
+  const bulkApproveIsPrimary = !hasDraft && hasGenerated
+  const downloadIsPrimary = !hasDraft && !hasGenerated && hasApproved
+
   return (
     <div className={`w-[65%] min-w-0 p-6 ${cardClass}`}>
       <div className="flex flex-row flex-wrap items-center justify-between gap-3 mb-4">
         <div className="flex flex-row flex-wrap items-center gap-3">
           <button
             onClick={onGenerateAll}
-            disabled={!targetMarketplace || !draftProducts.some((p) => p.status === 'draft') || generating}
-            className={buttonPrimaryClass}
+            disabled={!targetMarketplace || !hasDraft || generating}
+            className={generateIsPrimary ? buttonPrimaryClass : buttonSecondaryClass}
           >
             {generating ? 'Generating...' : 'Generate Content for All'}
           </button>
           <button
             onClick={onBulkApprove}
-            disabled={!targetMarketplace || !draftProducts.some((p) => p.status === 'generated')}
-            className={buttonSecondaryClass}
+            disabled={!targetMarketplace || !hasGenerated}
+            className={bulkApproveIsPrimary ? buttonPrimaryClass : buttonSecondaryClass}
           >
             Bulk Approve All Generated
           </button>
         </div>
-        <button onClick={onDownloadApproved} disabled={!targetMarketplace || !hasApproved} className={buttonSecondaryClass}>
+        <button
+          onClick={onDownloadApproved}
+          disabled={!targetMarketplace || !hasApproved}
+          className={downloadIsPrimary ? buttonPrimaryClass : buttonSecondaryClass}
+        >
           Download Approved CSV
         </button>
       </div>
