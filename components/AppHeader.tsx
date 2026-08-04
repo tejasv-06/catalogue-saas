@@ -71,7 +71,7 @@ export default function AppHeader({
           ← Back to Home
         </Link>
         <div className="flex items-center gap-3">
-          <Image src="/logo.png" alt="" width={40} height={40} className="rounded-lg" priority />
+          <Image src="/logo.png" alt="" width={40} height={40} priority />
           <span className="text-2xl font-bold text-[var(--heading-text)]">Tesolute Workspace</span>
         </div>
       </div>

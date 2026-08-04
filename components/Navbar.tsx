@@ -12,7 +12,7 @@ export default async function Navbar() {
     <nav className="border-b shadow-lg bg-[var(--card-bg)] border-[var(--card-border)]">
       <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
         <Link href="/" className="flex items-center gap-2">
-          <Image src="/logo.png" alt="" width={36} height={36} className="rounded-lg" priority />
+          <Image src="/logo.png" alt="" width={36} height={36} priority />
           <span className="font-bold text-lg text-[var(--heading-text)]">Tesolute</span>
         </Link>
         <div className="flex items-center gap-6">

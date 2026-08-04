@@ -15,6 +15,16 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Tesolute — AI Catalogue Listings",
   description: "AI-powered catalogue listing tool for e-commerce sellers and agencies.",
+  manifest: "/site.webmanifest",
+  icons: {
+    // favicon.ico and apple-icon.png live in app/ and are auto-detected by
+    // Next.js file convention — only the /public icons need declaring here.
+    icon: [
+      { url: "/favicon-96x96.png", sizes: "96x96", type: "image/png" },
+      { url: "/web-app-manifest-192x192.png", sizes: "192x192", type: "image/png" },
+      { url: "/web-app-manifest-512x512.png", sizes: "512x512", type: "image/png" },
+    ],
+  },
 };
 
 export default function RootLayout({
