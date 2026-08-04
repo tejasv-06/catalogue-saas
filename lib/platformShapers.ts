@@ -14,6 +14,15 @@ type AiResult = {
 // here until real support is built. shopify was never added.
 export const SUPPORTED_MARKETPLACES = ['amazon', 'flipkart', 'myntra', 'etsy'] as const
 
+// Title Case labels for display — dropdowns/UI text show these while the
+// lowercase keys above stay the values passed to the API and shapers.
+export const MARKETPLACE_LABELS: Record<(typeof SUPPORTED_MARKETPLACES)[number], string> = {
+  amazon: 'Amazon',
+  flipkart: 'Flipkart',
+  myntra: 'Myntra',
+  etsy: 'Etsy'
+}
+
 export function shapeForPlatform(marketplace: string, ai: AiResult, product: any) {
   const pool = ai.keywordPool || []
 

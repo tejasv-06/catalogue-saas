@@ -6,8 +6,14 @@ import Link from 'next/link'
 import LogoutButton from '@/components/LogoutButton'
 import ClientSelector, { type Client } from '@/components/ClientSelector'
 import ThemeToggle from '@/components/ThemeToggle'
-import { SUPPORTED_MARKETPLACES } from '@/lib/platformShapers'
+import { SUPPORTED_MARKETPLACES, MARKETPLACE_LABELS } from '@/lib/platformShapers'
 import { selectClass } from '@/lib/uiClasses'
+
+// Uses var(--card-border) rather than Tailwind's dark: variant — this app's
+// theme is an explicit data-theme toggle (see globals.css), not OS-driven,
+// and dark: isn't wired to that attribute, so every other themed element
+// here reads the same CSS vars to stay in sync with the toggle.
+const dividerClass = 'border-l border-[var(--card-border)] h-5 mx-2'
 
 function UsagePill({
   hasSession,
@@ -70,35 +76,42 @@ export default function AppHeader({
         </div>
       </div>
 
-      <div className="flex items-center gap-4">
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-3">
-            <select
-              ref={marketplaceSelectRef}
-              value={targetMarketplace}
-              onChange={(e) => onMarketplaceChange(e.target.value)}
-              className={`${selectClass} ${
-                marketplaceError
-                  ? `border-red-500 ring-2 ring-red-500 ${marketplaceFlash ? 'animate-pulse' : ''}`
-                  : ''
-              }`}
-            >
-              <option value="" disabled>
-                Select a marketplace
-              </option>
-              {SUPPORTED_MARKETPLACES.map((marketplace) => (
-                <option key={marketplace} value={marketplace}>
-                  {marketplace}
+      <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-2">
+              <select
+                ref={marketplaceSelectRef}
+                value={targetMarketplace}
+                onChange={(e) => onMarketplaceChange(e.target.value)}
+                className={`${selectClass} ${
+                  marketplaceError
+                    ? `border-red-500 ring-2 ring-red-500 ${marketplaceFlash ? 'animate-pulse' : ''}`
+                    : ''
+                }`}
+              >
+                <option value="" disabled>
+                  Select a marketplace
                 </option>
-              ))}
-            </select>
-            <UsagePill hasSession={hasSession} productCount={productCount} guestProductLimit={guestProductLimit} />
+                {SUPPORTED_MARKETPLACES.map((marketplace) => (
+                  <option key={marketplace} value={marketplace}>
+                    {MARKETPLACE_LABELS[marketplace]}
+                  </option>
+                ))}
+              </select>
+              <UsagePill hasSession={hasSession} productCount={productCount} guestProductLimit={guestProductLimit} />
+            </div>
+            {marketplaceError && <p className="text-xs font-medium text-[var(--danger-link-text)]">{marketplaceError}</p>}
           </div>
-          {marketplaceError && <p className="text-xs font-medium text-[var(--danger-link-text)]">{marketplaceError}</p>}
+          {hasSession && <ClientSelector selectedClientId={selectedClientId} onSelectClient={onSelectClient} />}
         </div>
-        {hasSession && <ClientSelector selectedClientId={selectedClientId} onSelectClient={onSelectClient} />}
-        <ThemeToggle />
-        <LogoutButton />
+
+        <div className={dividerClass} />
+
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
+          <LogoutButton />
+        </div>
       </div>
     </div>
   )
