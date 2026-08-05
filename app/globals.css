@@ -106,12 +106,26 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-plus-jakarta-sans);
   --font-mono: var(--font-geist-mono);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  /* Previously hardcoded to "Arial, Helvetica, sans-serif" here, which
+     silently overrode whatever font next/font loaded above (Geist before,
+     Plus Jakarta Sans now) — the loaded font was never actually applied.
+     var(--font-sans) is the fix; the Arial/Helvetica chain stays only as a
+     fallback if the variable somehow fails to resolve. */
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+}
+
+/* Tighter letter-spacing and line-height on every heading tag, set once
+   here rather than repeated per-heading className across every page —
+   Plus Jakarta Sans at bold weights reads slightly loose at default
+   tracking on large headline sizes without this. */
+h1, h2, h3, h4, h5, h6 {
+  letter-spacing: -0.02em;
+  line-height: 1.2;
 }

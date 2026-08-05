@@ -72,7 +72,7 @@ export default function Home() {
       <Navbar />
 
       <main className="flex-1">
-        <section className="max-w-5xl mx-auto px-6 pt-16 pb-8">
+        <section className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-16 pb-8">
           <div className={`p-8 grid grid-cols-1 lg:grid-cols-2 gap-8 items-center ${cardClass}`}>
             <div>
               <span className={eyebrowClass}>Listing Generation</span>
@@ -103,7 +103,7 @@ export default function Home() {
           </div>
         </section>
 
-        <section className="max-w-5xl mx-auto px-6 pb-16">
+        <section className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pb-16">
           <div className={`p-8 grid grid-cols-1 lg:grid-cols-2 gap-8 items-center ${cardClass}`}>
             <div>
               <span className={eyebrowClass}>Account Audit</span>
@@ -137,7 +137,7 @@ export default function Home() {
           </div>
         </section>
 
-        <section className="max-w-5xl mx-auto px-6 py-16">
+        <section className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
           <h2 className="text-2xl font-bold text-[var(--heading-text)] text-center mb-10">Everything you need to list faster</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {features.map((feature) => (
@@ -153,9 +153,9 @@ export default function Home() {
         </section>
 
         <section className="py-16 bg-[var(--table-head-bg)]">
-          <div className="max-w-5xl mx-auto px-6">
+          <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
             <h2 className="text-2xl font-bold text-[var(--heading-text)] text-center mb-10">How it works</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
               {steps.map((step, i) => (
                 <div key={step.title} className="text-center">
                   <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center mx-auto mb-3 font-bold">
@@ -174,12 +174,12 @@ export default function Home() {
           </div>
         </section>
 
-        <section className="max-w-5xl mx-auto px-6 py-16">
+        <section className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
           <h2 className="text-2xl font-bold text-[var(--heading-text)] text-center mb-2">What sellers are saying</h2>
           <p className="text-center text-xs text-[var(--muted-text)] mb-10">
             (Placeholder quotes, will be replaced with real customer testimonials)
           </p>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {testimonials.map((t) => (
               <div
                 key={t.name}
@@ -195,7 +195,7 @@ export default function Home() {
       </main>
 
       <footer className="border-t py-8 border-[var(--card-border)]">
-        <div className="max-w-5xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-[var(--muted-text)]">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-[var(--muted-text)]">
           <p>&copy; {new Date().getFullYear()} Tesolute. All rights reserved.</p>
           <div className="flex gap-6">
             <Link href="/" className="hover:text-[var(--heading-text)] transition-colors">

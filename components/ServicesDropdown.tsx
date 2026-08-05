@@ -3,7 +3,10 @@
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 
-const SERVICES = [
+// Exported so MobileMenu can render the same two services as a flat list
+// instead of nesting a hover-dropdown inside a drawer, which doesn't
+// translate well to touch.
+export const SERVICES = [
   {
     href: '/workspace',
     title: 'AI Listing Generator',

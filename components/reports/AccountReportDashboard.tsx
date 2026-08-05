@@ -135,7 +135,7 @@ function StatCard({
         <span className={labelClass}>{label}</span>
         {status && <StatusBadge status={status} />}
       </div>
-      <span className="text-3xl font-bold text-[var(--heading-text)]">{value}</span>
+      <span className="text-3xl font-bold tracking-tight tabular-nums text-[var(--heading-text)]">{value}</span>
       {sublabel && <span className={bodyTextClass}>{sublabel}</span>}
     </div>
   )
@@ -143,7 +143,7 @@ function StatCard({
 
 function ChartTooltipShell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)] px-3 py-2 text-xs shadow-xl max-w-xs">
+    <div className="rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)] px-3 py-2 text-xs shadow-xl max-w-[85vw] sm:max-w-xs break-words">
       {children}
     </div>
   )
@@ -409,13 +409,13 @@ export default function AccountReportDashboard({ stats }: { stats: AccountReport
         </p>
 
         {insights && (
-          <div className="flex items-center gap-2 ml-auto">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto sm:ml-auto">
             <input
               type="text"
               placeholder="Brand Name"
               value={accountName}
               onChange={(e) => setAccountName(e.target.value)}
-              className={`${inputClass} w-48 py-2`}
+              className={`${inputClass} w-full sm:w-48 py-2`}
             />
             <button onClick={handleExport} disabled={exporting} className={buttonPrimaryClass}>
               {exporting ? 'Preparing...' : 'Download Report (.docx)'}
@@ -438,7 +438,7 @@ export default function AccountReportDashboard({ stats }: { stats: AccountReport
 
       {insights && <AccountNarrative insights={insights} verificationWarnings={verificationWarnings} />}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
         <StatCard
           label="Total Revenue"
           value={formatCurrency(stats.totalRevenue)}
@@ -478,7 +478,8 @@ export default function AccountReportDashboard({ stats }: { stats: AccountReport
           {thresholdCount} product{thresholdCount === 1 ? '' : 's'} bring{thresholdCount === 1 ? 's' : ''} in{' '}
           {formatPercent(stats.revenueConcentration.cumulativeRevenuePercent)} of your revenue.
         </p>
-        <ResponsiveContainer width="100%" height={360}>
+        <div className="h-[280px] sm:h-[350px]">
+        <ResponsiveContainer width="100%" height="100%">
           <BarChart data={revenueChartData} margin={{ top: 24, right: 8, left: 8, bottom: 90 }}>
             <CartesianGrid stroke={CHART_GRID} vertical={false} />
             <XAxis dataKey="asin" tick={revenueXAxisTick} interval={0} axisLine={{ stroke: CHART_GRID }} />
@@ -508,6 +509,7 @@ export default function AccountReportDashboard({ stats }: { stats: AccountReport
             </Bar>
           </BarChart>
         </ResponsiveContainer>
+        </div>
       </div>
 
       <div className={`p-6 ${cardClass}`}>
@@ -515,7 +517,12 @@ export default function AccountReportDashboard({ stats }: { stats: AccountReport
         <p className={`${bodyTextClass} mt-1 mb-4`}>
           Products ranked by sessions, colored by conversion: red means visits with zero sales.
         </p>
-        <ResponsiveContainer width="100%" height={Math.max(leakageData.length * 32, 200)}>
+        {/* Height is intentionally dynamic, not the fixed h-[280px] sm:h-[350px]
+            pattern used elsewhere: this is a horizontal bar chart where each
+            row needs a fixed slice of vertical space, so height must scale
+            with the number of ASINs, not the viewport. The 280px floor still
+            matches the mobile baseline used by the other chart. */}
+        <ResponsiveContainer width="100%" height={Math.max(leakageData.length * 32, 280)} minHeight={280}>
           <BarChart data={leakageData} layout="vertical" margin={{ top: 8, right: 24, left: 8, bottom: 8 }}>
             <CartesianGrid stroke={CHART_GRID} horizontal={false} />
             <XAxis type="number" tick={{ fill: CHART_AXIS, fontSize: 12 }} axisLine={{ stroke: CHART_GRID }} tickLine={{ stroke: CHART_GRID }} />
@@ -536,7 +543,7 @@ export default function AccountReportDashboard({ stats }: { stats: AccountReport
             </Bar>
           </BarChart>
         </ResponsiveContainer>
-        <div className="flex flex-wrap items-center gap-4 mt-3 text-xs">
+        <div className="flex flex-wrap items-center gap-3 sm:gap-4 mt-3 text-xs">
           <LegendDot color={CONVERSION_COLORS.zero} label="0% conversion" />
           <LegendDot color={CONVERSION_COLORS.low} label="< 2% conversion" />
           <LegendDot color={CONVERSION_COLORS.good} label="≥ 2% conversion" />
@@ -551,7 +558,7 @@ export default function AccountReportDashboard({ stats }: { stats: AccountReport
         {stats.highTrafficZeroSales.length === 0 ? (
           <p className={bodyTextClass}>No high-traffic, zero-sales products found.</p>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto w-full -mx-4 px-4 sm:mx-0 sm:px-0">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left border-b border-[var(--row-border)]">
