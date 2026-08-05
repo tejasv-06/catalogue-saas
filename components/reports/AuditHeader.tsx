@@ -1,31 +1,11 @@
-import Image from 'next/image'
-import Link from 'next/link'
-import LogoutButton from '@/components/LogoutButton'
-import ThemeToggle from '@/components/ThemeToggle'
+import { pageHeadingClass } from '@/lib/uiClasses'
 
-// Same shell as AppHeader (workspace) — sits directly on the page background,
-// not inside a card. Trimmed down: no marketplace/brand controls, since none
-// of that applies to an account audit.
+// Logo, credits balance, theme toggle, and logout all moved into AppSidebar
+// (shared with /workspace) — this is just the page heading now.
 export default function AuditHeader() {
   return (
-    <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-      <div className="flex flex-wrap items-center gap-3 sm:gap-4">
-        <Link
-          href="/"
-          className="text-sm text-[var(--muted-text)] hover:text-[var(--heading-text)] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[var(--page-bg)] focus:ring-blue-500/40 rounded transition-colors"
-        >
-          ← Back to Home
-        </Link>
-        <div className="flex items-center gap-3">
-          <Image src="/logo.png" alt="" width={40} height={40} priority />
-          <span className="text-lg sm:text-2xl font-bold text-[var(--heading-text)]">Account Audit & Insights</span>
-        </div>
-      </div>
-
-      <div className="flex items-center gap-2 shrink-0">
-        <ThemeToggle />
-        <LogoutButton />
-      </div>
+    <div className="mb-6">
+      <h1 className={pageHeadingClass}>Account Audit &amp; Insights</h1>
     </div>
   )
 }

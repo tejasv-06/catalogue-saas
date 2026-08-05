@@ -18,6 +18,8 @@ import type { AccountReportStats } from '@/lib/accountReportStats'
 import type { AccountInsights, AccountInsightsResponse, ActionPlanCategory, ActionPlanItem } from '@/lib/accountInsights'
 import { normalizeActionPlanCategory } from '@/lib/accountInsights'
 import { formatCurrency, formatPercent } from '@/lib/formatAccountStats'
+import { CREDIT_COSTS } from '@/lib/creditCosts'
+import { notifyCreditsChanged } from '@/components/CreditsBalance'
 import {
   cardClass,
   labelClass,
@@ -306,6 +308,7 @@ export default function AccountReportDashboard({ stats }: { stats: AccountReport
       const { insights: nextInsights, verificationWarnings: warnings } = data as AccountInsightsResponse
       setInsights(nextInsights)
       setVerificationWarnings(warnings)
+      notifyCreditsChanged()
     } catch (err) {
       setGenerateError(err instanceof Error ? err.message : 'Failed to generate insights')
     } finally {
@@ -401,7 +404,9 @@ export default function AccountReportDashboard({ stats }: { stats: AccountReport
     <div className="flex flex-col gap-6">
       <div className={`p-6 flex flex-wrap items-center gap-4 ${cardClass}`}>
         <button onClick={handleGenerate} disabled={generating} className={buttonPrimaryClass}>
-          {generating ? 'Generating...' : insights ? 'Regenerate AI Insights' : 'Generate AI Insights'}
+          {generating
+            ? 'Generating...'
+            : `${insights ? 'Regenerate' : 'Generate'} AI Insights (${CREDIT_COSTS.accountAudit} credits)`}
         </button>
         <p className={bodyTextClass}>
           Written by AI from the verified numbers below: every figure it uses is copied from this report, not

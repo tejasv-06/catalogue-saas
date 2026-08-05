@@ -5,6 +5,7 @@ import { createClient as createAuthClient } from '@/lib/supabase/server'
 import { getOrCreateAnonId } from '@/lib/guestId'
 import { shapeForPlatform } from '@/lib/platformShapers'
 import { GUEST_GENERATION_LIMIT } from '@/lib/limits'
+import { CREDIT_COSTS, InsufficientCreditsError, assertSufficientCredits, deductCredits } from '@/lib/credits'
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY })
 
@@ -115,13 +116,22 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => null)
   const { brandName, description, category, targetMarketplace, imageBase64, imageUrl, brandGuidelines } = body || {}
 
-  if (!description || !targetMarketplace) {
-    return NextResponse.json({ error: 'Missing description or targetMarketplace' }, { status: 400 })
+  // hasDescription gates both the validation below and the prompt branch
+  // further down (image-only mode kicks in when this is false) — computed
+  // once here so both stay in sync.
+  const hasDescription = !!(description && String(description).trim())
+
+  if (!targetMarketplace) {
+    return NextResponse.json({ error: 'Missing targetMarketplace' }, { status: 400 })
+  }
+  if (!hasDescription && !imageBase64 && !imageUrl) {
+    return NextResponse.json({ error: 'Provide a description or a product image' }, { status: 400 })
   }
 
   const authClient = await createAuthClient()
   const { data: authData } = await authClient.auth.getClaims()
   const isGuest = !authData?.claims
+  const userId = authData?.claims?.sub as string | undefined
 
   let anonId: string | null = null
 
@@ -141,10 +151,33 @@ export async function POST(request: Request) {
       // for every guest over an infra/config issue — fail open for this request.
       console.error('Guest usage check failed, allowing generation:', err.message)
     }
+  } else if (userId) {
+    // Unlike the guest check above, this fails CLOSED on infra errors — this
+    // is the actual credit-metered path now, so an infra hiccup letting
+    // every signed-in generation through for free would defeat the point of
+    // having credits at all.
+    try {
+      await assertSufficientCredits(userId, CREDIT_COSTS.listingGeneration)
+    } catch (err: any) {
+      if (err instanceof InsufficientCreditsError) {
+        return NextResponse.json(
+          { error: err.message, creditsRemaining: err.available, creditsRequired: err.required },
+          { status: 403 }
+        )
+      }
+      console.error('Credit check failed:', err.message)
+      return NextResponse.json({ error: 'Could not verify credit balance. Please try again.' }, { status: 500 })
+    }
   }
 
   try {
-    const promptText = `Brand: ${brandName || 'N/A'}\nCategory: ${category || 'unspecified'}\nRaw description: ${description}`
+    // Identical to before whenever a description is present. When it's not
+    // (image-only mode), the raw-description line is swapped for a plain
+    // statement of that fact — there's no "Raw description: undefined" or
+    // similar leaking into the prompt.
+    const promptText = hasDescription
+      ? `Brand: ${brandName || 'N/A'}\nCategory: ${category || 'unspecified'}\nRaw description: ${description}`
+      : `Brand: ${brandName || 'N/A'}\nCategory: ${category || 'unspecified'}\nNo raw description was provided for this product.`
 
     const resolvedImageUrl = imageBase64
       ? imageBase64
@@ -152,10 +185,18 @@ export async function POST(request: Request) {
         ? formatDirectImageUrl(imageUrl)
         : null
 
+    // Empty string when hasDescription is true, so the template literal
+    // below interpolates nothing there — systemPrompt is byte-for-byte the
+    // same string existing callers have always gotten. This paragraph only
+    // ever reaches the model on the new image-only path.
+    const imageOnlyInstruction = hasDescription
+      ? ''
+      : `\n\nNo product description was provided for this listing — the attached image is the ONLY source of information you have. Construct the entire listing (title, description, bullets, keywordPool) purely from analyzing the image. Be as specific and concrete as possible about visible attributes: exact color, material or fabric, style, cut or shape, pattern, and any text or branding visible on the product itself. Only state what is visibly evident — do not invent specifications, materials, or use-cases you cannot actually see.`
+
     const systemPrompt = `You are an expert e-commerce SEO copywriter. Given a brand, category, raw product description, and (when provided) a product image, generate high-ranking marketplace content.
 When an image is provided, analyze its visual details — exact color shade, pattern, fabric texture, neckline, sleeve type, embellishments — and weave those specifics directly into the title, bullets, and keywordPool.${
       brandGuidelines ? `\nFollow these brand-specific guidelines when writing: ${brandGuidelines}` : ''
-    }
+    }${imageOnlyInstruction}
 Respond ONLY with valid JSON in exactly this shape:
 {
   "title": "string, compelling and keyword-rich",
@@ -196,10 +237,17 @@ CRITICAL: Output ONLY valid, raw JSON. Do NOT wrap output in markdown fences (no
       rawContent = await runCompletion(!!resolvedImageUrl)
     } catch (err: any) {
       if (resolvedImageUrl && isInvalidImageError(err)) {
-        // the image itself was rejected (unreachable / not real image bytes / unsupported
-        // format) — fall back to a text-only generation rather than failing the whole
-        // listing over one bad image URL
-        rawContent = await runCompletion(false)
+        if (hasDescription) {
+          // the image itself was rejected (unreachable / not real image bytes / unsupported
+          // format) — fall back to a text-only generation rather than failing the whole
+          // listing over one bad image URL
+          rawContent = await runCompletion(false)
+        } else {
+          // Image-only mode has no description to fall back to — retrying
+          // without the image would send the model an empty prompt and an
+          // instruction to analyze an image that isn't there.
+          throw new Error('The uploaded image could not be processed. Please try a different image.')
+        }
       } else {
         throw err
       }
@@ -217,6 +265,15 @@ CRITICAL: Output ONLY valid, raw JSON. Do NOT wrap output in markdown fences (no
         // Don't discard an already-successful generation just because the
         // usage-count bookkeeping failed.
         console.error('Failed to increment guest usage:', err.message)
+      }
+    } else if (userId) {
+      try {
+        await deductCredits(userId, CREDIT_COSTS.listingGeneration)
+      } catch (err: any) {
+        // Same reasoning as the guest-usage increment above: the generation
+        // already succeeded and shipped to the client — a bookkeeping write
+        // failing afterward shouldn't turn that into an error response.
+        console.error('Failed to deduct credits:', err.message)
       }
     }
 

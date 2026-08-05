@@ -5,13 +5,16 @@ import ProductThumbnail from '@/components/ProductThumbnail'
 import StatusBadge from '@/components/StatusBadge'
 import EmptyQueueState from '@/components/workspace/EmptyQueueState'
 import TableSkeleton from '@/components/workspace/TableSkeleton'
+import { CREDIT_COSTS } from '@/lib/creditCosts'
 import {
   buttonPrimaryClass,
   buttonSecondaryClass,
   buttonDestructiveSmallClass,
   linkButtonClass,
   linkButtonDestructiveClass,
-  cardClass
+  cardClass,
+  warningBannerClass,
+  warningTextClass
 } from '@/lib/uiClasses'
 
 function truncate(text: string, length: number) {
@@ -76,6 +79,9 @@ export default function QueueTable({
   generating,
   hasApproved,
   loading,
+  hasSession,
+  pendingCount,
+  bulkStoppedMessage,
   onGenerateAll,
   onBulkApprove,
   onDownloadApproved,
@@ -90,6 +96,9 @@ export default function QueueTable({
   generating: boolean
   hasApproved: boolean
   loading: boolean
+  hasSession: boolean
+  pendingCount: number
+  bulkStoppedMessage: string | null
   onGenerateAll: () => void
   onBulkApprove: () => void
   onDownloadApproved: () => void
@@ -109,8 +118,25 @@ export default function QueueTable({
   const bulkApproveIsPrimary = !hasDraft && hasGenerated
   const downloadIsPrimary = !hasDraft && !hasGenerated && hasApproved
 
+  // Guests aren't credit-metered (they have the separate free-preview count
+  // shown in the header), so the cost preview only applies once signed in —
+  // computed from the actual pending count, not hardcoded, so it can't drift
+  // from what generating will actually cost.
+  const generateLabel = generating
+    ? 'Generating...'
+    : hasSession && pendingCount > 0
+      ? `Generate ${pendingCount} listing${pendingCount === 1 ? '' : 's'} (${pendingCount * CREDIT_COSTS.listingGeneration} credit${
+          pendingCount * CREDIT_COSTS.listingGeneration === 1 ? '' : 's'
+        })`
+      : 'Generate Content'
+
   return (
     <div className={`w-full min-w-0 p-6 ${cardClass}`}>
+      {bulkStoppedMessage && (
+        <div className={`mb-4 ${warningBannerClass}`}>
+          <p className={warningTextClass}>{bulkStoppedMessage}</p>
+        </div>
+      )}
       <div className="flex flex-row flex-wrap items-center justify-between gap-3 mb-4">
         <div className="flex flex-row flex-wrap items-center gap-3">
           <button
@@ -118,7 +144,7 @@ export default function QueueTable({
             disabled={!targetMarketplace || !hasDraft || generating}
             className={generateIsPrimary ? buttonPrimaryClass : buttonSecondaryClass}
           >
-            {generating ? 'Generating...' : 'Generate Content'}
+            {generateLabel}
           </button>
           <button
             onClick={onBulkApprove}

@@ -18,7 +18,6 @@ import {
 
 export default function LeftPanel({
   activeTab,
-  onTabChange,
   brandName,
   onBrandNameChange,
   category,
@@ -55,7 +54,6 @@ export default function LeftPanel({
   onCsvCancelMismatch
 }: {
   activeTab: 'manual' | 'csv'
-  onTabChange: (tab: 'manual' | 'csv') => void
   brandName: string
   onBrandNameChange: (value: string) => void
   category: string
@@ -93,25 +91,6 @@ export default function LeftPanel({
 }) {
   return (
     <div className={`w-full min-w-0 flex flex-col gap-2 p-6 h-fit ${cardClass}`}>
-      <div className="flex gap-1 p-1 rounded-xl mb-2 w-fit bg-[var(--tab-track-bg)]">
-        <button
-          onClick={() => onTabChange('manual')}
-          className={`px-4 py-2 text-sm font-medium rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[var(--card-bg)] focus:ring-blue-500 transition-colors ${
-            activeTab === 'manual' ? 'bg-blue-600 text-white shadow-sm' : 'text-[var(--muted-text)] hover:text-[var(--heading-text)]'
-          }`}
-        >
-          Manual Entry
-        </button>
-        <button
-          onClick={() => onTabChange('csv')}
-          className={`px-4 py-2 text-sm font-medium rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[var(--card-bg)] focus:ring-blue-500 transition-colors ${
-            activeTab === 'csv' ? 'bg-blue-600 text-white shadow-sm' : 'text-[var(--muted-text)] hover:text-[var(--heading-text)]'
-          }`}
-        >
-          Bulk CSV Upload
-        </button>
-      </div>
-
       <div className="flex flex-col gap-2">
         {activeTab === 'manual' ? (
           <>

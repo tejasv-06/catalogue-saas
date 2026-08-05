@@ -8,9 +8,14 @@ import { type Client } from '@/components/ClientSelector'
 import StatusBadge from '@/components/StatusBadge'
 import ProductThumbnail from '@/components/ProductThumbnail'
 import AppHeader from '@/components/AppHeader'
+import TopHeader from '@/components/TopHeader'
 import LeftPanel from '@/components/workspace/LeftPanel'
+import ImageOnlyPanel from '@/components/workspace/ImageOnlyPanel'
+import AppSidebar, { type WorkspaceDestination } from '@/components/AppSidebar'
 import QueueTable from '@/components/workspace/QueueTable'
 import { createClient } from '@/lib/supabase/client'
+import CreditsBalance, { notifyCreditsChanged } from '@/components/CreditsBalance'
+import { CREDIT_COSTS } from '@/lib/creditCosts'
 import { useFocusTrap } from '@/lib/useFocusTrap'
 import type { DraftProduct, CsvSummary, PendingCsvUpload } from '@/lib/types'
 import {
@@ -212,7 +217,7 @@ function ExportGateModal({ onClose, onSignIn }: { onClose: () => void; onSignIn:
 export default function CatalogueWorkspace() {
   const [targetMarketplace, setTargetMarketplace] = useState('')
   const [draftProducts, setDraftProducts] = useState<DraftProduct[]>([])
-  const [activeTab, setActiveTab] = useState<'manual' | 'csv'>('manual')
+  const [activeTab, setActiveTab] = useState<WorkspaceDestination>('manual')
   const [viewingId, setViewingId] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [pendingRestoreCount, setPendingRestoreCount] = useState<number | null>(null)
@@ -239,6 +244,7 @@ export default function CatalogueWorkspace() {
   const [generating, setGenerating] = useState(false)
   const [generationProgress, setGenerationProgress] = useState<{ current: number; total: number } | null>(null)
   const [currentlyGeneratingId, setCurrentlyGeneratingId] = useState<string | null>(null)
+  const [bulkStoppedMessage, setBulkStoppedMessage] = useState<string | null>(null)
   const [formError, setFormError] = useState<string | null>(null)
   const [downloadMessage, setDownloadMessage] = useState<string | null>(null)
   const marketplaceSelectRef = useRef<HTMLSelectElement>(null)
@@ -265,6 +271,19 @@ export default function CatalogueWorkspace() {
       setHasSession(!!data.user)
       setHasCheckedSession(true)
     })
+  }, [])
+
+  // AppSidebar's csv/manual/image items link here as /workspace?tab=<id>
+  // when clicked from outside /workspace (e.g. from /audit) — this is what
+  // makes that navigation land on the actual destination clicked, rather
+  // than always landing on the default Manual Entry panel. Read directly
+  // from window.location instead of useSearchParams() so this component
+  // doesn't need a Suspense boundary added upstream just for this.
+  useEffect(() => {
+    const tab = new URLSearchParams(window.location.search).get('tab')
+    if (tab === 'csv' || tab === 'manual' || tab === 'image') {
+      setActiveTab(tab)
+    }
   }, [])
 
   // On mount, read any crash-recovery session but don't yet decide what to do
@@ -535,7 +554,48 @@ export default function CatalogueWorkspace() {
     commitAddProduct(false, uploadedImageUrl)
   }
 
-  function commitAddProduct(skipBrandVoice: boolean, uploadedImageUrl: string | null) {
+  // Image-only adds: brand/category are optional here (unlike manual entry),
+  // and there's no brand-voice-mismatch gate — that check exists to catch a
+  // typed brand name that doesn't match the selected client, and there's
+  // nothing to mismatch-check when the field was deliberately left blank.
+  async function handleAddImageOnlyProduct() {
+    if (!targetMarketplace) {
+      flagMissingMarketplace()
+      return
+    }
+    setMarketplaceError(null)
+
+    if (!imageFile && !editingId) {
+      setFormError('An image is required.')
+      return
+    }
+    setFormError(null)
+
+    let uploadedImageUrl: string | null = null
+    if (imageFile) {
+      setUploadingImage(true)
+      try {
+        uploadedImageUrl = await uploadProductImage(imageFile)
+      } catch (err: any) {
+        setFormError(err.message || 'Image upload failed. Please try again.')
+        setUploadingImage(false)
+        return
+      }
+      setUploadingImage(false)
+    }
+
+    // Explicit '' override rather than falling through to the shared
+    // `description` state — brandName/category/imageFile are reused across
+    // all three destinations, but if a user typed a description while on
+    // Manual Entry and then switched to this panel without clearing the
+    // form, that leftover text must not silently end up on an "image only"
+    // product.
+    commitAddProduct(true, uploadedImageUrl, '')
+  }
+
+  function commitAddProduct(skipBrandVoice: boolean, uploadedImageUrl: string | null, descriptionOverride?: string) {
+    const effectiveDescription = descriptionOverride ?? description
+
     if (editingId) {
       setDraftProducts((prev) =>
         prev.map((p) =>
@@ -544,7 +604,7 @@ export default function CatalogueWorkspace() {
                 ...p,
                 brandName,
                 category,
-                description,
+                description: effectiveDescription,
                 ...(uploadedImageUrl ? { imageFile: null, imageUrl: uploadedImageUrl } : {})
               }
             : p
@@ -564,7 +624,7 @@ export default function CatalogueWorkspace() {
     const newProduct: DraftProduct = {
       id: crypto.randomUUID(),
       brandName,
-      description,
+      description: effectiveDescription,
       category,
       imageFile: null,
       imageUrl: uploadedImageUrl,
@@ -741,13 +801,27 @@ export default function CatalogueWorkspace() {
     if (pending.length === 0) return
 
     setGenerating(true)
+    setBulkStoppedMessage(null)
 
     for (let i = 0; i < pending.length; i++) {
       const product = pending[i]
       setGenerationProgress({ current: i + 1, total: pending.length })
       setCurrentlyGeneratingId(product.id)
 
-      await generateForProduct(product)
+      const outcome = await generateForProduct(product)
+
+      // Insufficient credits: every remaining pending item would fail the
+      // identical way (the balance doesn't change between attempts), so stop
+      // the batch here rather than burning a failed request per remaining
+      // item. Any other per-item error (bad image, transient network issue)
+      // keeps going — that failure is specific to one item, not the batch.
+      if (outcome === 'insufficient_credits') {
+        const remaining = pending.length - (i + 1)
+        setBulkStoppedMessage(
+          `Stopped after ${i + 1} of ${pending.length} — out of credits. ${remaining} item${remaining === 1 ? '' : 's'} still in the queue; retry once you have more credits.`
+        )
+        break
+      }
     }
 
     setCurrentlyGeneratingId(null)
@@ -764,7 +838,7 @@ export default function CatalogueWorkspace() {
     setCurrentlyGeneratingId(null)
   }
 
-  async function generateForProduct(product: DraftProduct) {
+  async function generateForProduct(product: DraftProduct): Promise<'success' | 'insufficient_credits' | 'error'> {
     try {
       const imageBase64 = product.imageFile ? await fileToBase64(product.imageFile) : null
 
@@ -791,15 +865,19 @@ export default function CatalogueWorkspace() {
               : p
           )
         )
-      } else {
-        setDraftProducts((prev) =>
-          prev.map((p) => (p.id === product.id ? { ...p, generationError: data.error || 'Generation failed' } : p))
-        )
+        if (hasSession) notifyCreditsChanged()
+        return 'success'
       }
+
+      setDraftProducts((prev) =>
+        prev.map((p) => (p.id === product.id ? { ...p, generationError: data.error || 'Generation failed' } : p))
+      )
+      return res.status === 403 && typeof data.creditsRemaining === 'number' ? 'insufficient_credits' : 'error'
     } catch {
       setDraftProducts((prev) =>
         prev.map((p) => (p.id === product.id ? { ...p, generationError: 'Network error - request failed' } : p))
       )
+      return 'error'
     }
   }
 
@@ -871,101 +949,143 @@ export default function CatalogueWorkspace() {
   }
 
   const hasApproved = draftProducts.some((p) => p.status === 'approved')
+  const pendingCount = draftProducts.filter((p) => p.status === 'draft').length
   const viewingProduct = draftProducts.find((p) => p.id === viewingId) || null
   const editingProduct = editingId ? draftProducts.find((p) => p.id === editingId) || null : null
   const formPreviewUrl = imageFile ? null : editingProduct?.imageUrl ?? null
   const guestLimitReached = !hasSession && draftProducts.length >= GUEST_PRODUCT_LIMIT
 
+  // What TopHeader shows in its usage slot — guests never accrue credits
+  // (they're on the separate free-preview counter), signed-in users get the
+  // real balance. Computed here rather than inside TopHeader so it stays a
+  // plain shared shell with no guest-vs-signed-in branching of its own.
+  const usageSlot = hasSession ? (
+    <CreditsBalance />
+  ) : (
+    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border bg-[var(--secondary-btn-bg)] border-[var(--secondary-btn-border)] text-[var(--secondary-btn-text)] whitespace-nowrap">
+      {`${draftProducts.length}/${GUEST_PRODUCT_LIMIT} Free Preview`}
+    </span>
+  )
+
   return (
     <div className="min-h-screen bg-[var(--page-bg)] text-[var(--body-text)]">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
-        <AppHeader
-          hasSession={hasSession}
-          targetMarketplace={targetMarketplace}
-          onMarketplaceChange={handleMarketplaceChange}
-          marketplaceError={marketplaceError}
-          marketplaceFlash={marketplaceFlash}
-          marketplaceSelectRef={marketplaceSelectRef}
-          productCount={draftProducts.length}
-          guestProductLimit={GUEST_PRODUCT_LIMIT}
-          selectedClientId={selectedClient?.id || ''}
-          onSelectClient={setSelectedClient}
-        />
+      <TopHeader usageSlot={usageSlot} />
 
-        {pendingRestoreCount !== null && (
-          <div className={`mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 ${warningBannerClass}`}>
-            <p className={warningTextClass}>
-              A previous session with {pendingRestoreCount} product{pendingRestoreCount === 1 ? '' : 's'} was found.
-            </p>
-            <div className="flex gap-2 shrink-0">
-              <button onClick={handleRestoreSession} className={buttonSecondaryClass}>
-                Restore
-              </button>
-              <button onClick={handleDiscardSession} className={buttonSecondaryClass}>
-                Discard
-              </button>
-            </div>
-          </div>
-        )}
+      {/* pt-16 clears the fixed header for everything below, including
+          AppSidebar's mobile in-flow bar — its desktop rail is unaffected
+          either way since position:fixed ignores parent padding entirely. */}
+      <div className="pt-16">
+        <AppSidebar activeDestination={activeTab} onDestinationChange={setActiveTab} />
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <LeftPanel
-            activeTab={activeTab}
-            onTabChange={setActiveTab}
-            brandName={brandName}
-            onBrandNameChange={handleBrandNameChange}
-            category={category}
-            onCategoryChange={handleCategoryChange}
-            description={description}
-            onDescriptionChange={handleDescriptionChange}
-            imageFile={imageFile}
-            onImageFileChange={setImageFile}
-            formPreviewUrl={formPreviewUrl}
-            fileInputRef={fileInputRef}
-            formError={formError}
-            guestLimitReached={guestLimitReached}
-            brandMismatchPending={brandMismatchPending}
-            selectedClient={selectedClient}
-            pendingImageUrl={pendingImageUrl}
-            onCommitAddProduct={commitAddProduct}
-            onCancelBrandMismatch={handleCancelBrandMismatch}
-            onAddProduct={handleAddProduct}
-            onClearForm={handleClearForm}
-            uploadingImage={uploadingImage}
-            editingId={editingId}
-            csvFile={csvFile}
-            onCsvFileChange={handleCsvFileChange}
-            csvSummary={csvSummary}
-            isDragging={isDragging}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-            pendingCsvUpload={pendingCsvUpload}
-            onUploadCsv={handleUploadCsv}
-            onCsvAddWithoutBrandVoice={handleCsvAddWithoutBrandVoice}
-            onCsvAddOnlyMatching={handleCsvAddOnlyMatching}
-            onCsvAddAllWithBrandVoice={handleCsvAddAllWithBrandVoice}
-            onCsvCancelMismatch={handleCsvCancelMismatch}
-          />
-
-          <QueueTable
-            draftProducts={draftProducts}
-            currentlyGeneratingId={currentlyGeneratingId}
+        <div className="lg:pl-14">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+          <AppHeader
+            hasSession={hasSession}
             targetMarketplace={targetMarketplace}
-            generating={generating}
-            hasApproved={hasApproved}
-            loading={!sessionReady}
-            onGenerateAll={handleGenerateAll}
-            onBulkApprove={handleBulkApprove}
-            onDownloadApproved={handleDownloadApproved}
-            onView={setViewingId}
-            onEdit={handleEditProduct}
-            onDelete={handleDeleteProduct}
-            onRetry={handleRetryProduct}
+            onMarketplaceChange={handleMarketplaceChange}
+            marketplaceError={marketplaceError}
+            marketplaceFlash={marketplaceFlash}
+            marketplaceSelectRef={marketplaceSelectRef}
+            selectedClientId={selectedClient?.id || ''}
+            onSelectClient={setSelectedClient}
           />
-        </div>
 
-        {downloadMessage && <p className="mt-2 text-sm text-[var(--success-text)]">{downloadMessage}</p>}
+          {pendingRestoreCount !== null && (
+            <div className={`mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 ${warningBannerClass}`}>
+              <p className={warningTextClass}>
+                A previous session with {pendingRestoreCount} product{pendingRestoreCount === 1 ? '' : 's'} was found.
+              </p>
+              <div className="flex gap-2 shrink-0">
+                <button onClick={handleRestoreSession} className={buttonSecondaryClass}>
+                  Restore
+                </button>
+                <button onClick={handleDiscardSession} className={buttonSecondaryClass}>
+                  Discard
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {activeTab === 'image' ? (
+              <ImageOnlyPanel
+                brandName={brandName}
+                onBrandNameChange={handleBrandNameChange}
+                category={category}
+                onCategoryChange={handleCategoryChange}
+                imageFile={imageFile}
+                onImageFileChange={setImageFile}
+                formPreviewUrl={formPreviewUrl}
+                fileInputRef={fileInputRef}
+                formError={formError}
+                guestLimitReached={guestLimitReached}
+                onSubmit={handleAddImageOnlyProduct}
+                uploadingImage={uploadingImage}
+                editingId={editingId}
+              />
+            ) : (
+              <LeftPanel
+                activeTab={activeTab}
+                brandName={brandName}
+                onBrandNameChange={handleBrandNameChange}
+                category={category}
+                onCategoryChange={handleCategoryChange}
+                description={description}
+                onDescriptionChange={handleDescriptionChange}
+                imageFile={imageFile}
+                onImageFileChange={setImageFile}
+                formPreviewUrl={formPreviewUrl}
+                fileInputRef={fileInputRef}
+                formError={formError}
+                guestLimitReached={guestLimitReached}
+                brandMismatchPending={brandMismatchPending}
+                selectedClient={selectedClient}
+                pendingImageUrl={pendingImageUrl}
+                onCommitAddProduct={commitAddProduct}
+                onCancelBrandMismatch={handleCancelBrandMismatch}
+                onAddProduct={handleAddProduct}
+                onClearForm={handleClearForm}
+                uploadingImage={uploadingImage}
+                editingId={editingId}
+                csvFile={csvFile}
+                onCsvFileChange={handleCsvFileChange}
+                csvSummary={csvSummary}
+                isDragging={isDragging}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                pendingCsvUpload={pendingCsvUpload}
+                onUploadCsv={handleUploadCsv}
+                onCsvAddWithoutBrandVoice={handleCsvAddWithoutBrandVoice}
+                onCsvAddOnlyMatching={handleCsvAddOnlyMatching}
+                onCsvAddAllWithBrandVoice={handleCsvAddAllWithBrandVoice}
+                onCsvCancelMismatch={handleCsvCancelMismatch}
+              />
+            )}
+
+            <QueueTable
+              draftProducts={draftProducts}
+              currentlyGeneratingId={currentlyGeneratingId}
+              targetMarketplace={targetMarketplace}
+              generating={generating}
+              hasApproved={hasApproved}
+              loading={!sessionReady}
+              hasSession={hasSession}
+              pendingCount={pendingCount}
+              bulkStoppedMessage={bulkStoppedMessage}
+              onGenerateAll={handleGenerateAll}
+              onBulkApprove={handleBulkApprove}
+              onDownloadApproved={handleDownloadApproved}
+              onView={setViewingId}
+              onEdit={handleEditProduct}
+              onDelete={handleDeleteProduct}
+              onRetry={handleRetryProduct}
+            />
+          </div>
+
+          {downloadMessage && <p className="mt-2 text-sm text-[var(--success-text)]">{downloadMessage}</p>}
+        </div>
+        </div>
       </div>
 
       {viewingProduct && (

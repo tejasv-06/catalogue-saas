@@ -10,6 +10,8 @@ import {
   isDerivedFromComplement
 } from '@/lib/formatAccountStats'
 import type { AccountInsights } from '@/lib/accountInsights'
+import { createClient as createAuthClient } from '@/lib/supabase/server'
+import { CREDIT_COSTS, InsufficientCreditsError, assertSufficientCredits, deductCredits } from '@/lib/credits'
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY })
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
@@ -135,6 +137,31 @@ function computeVerificationWarnings(insights: AccountInsights, allowedTokens: S
 }
 
 export async function POST(request: Request) {
+  // Previously missing entirely — this route was reachable unauthenticated,
+  // bypassing the login gate that /audit/page.tsx enforces at the page
+  // level. Needs the real user id anyway to check/deduct credits, so this
+  // closes that gap as a side effect of wiring credits in.
+  const authClient = await createAuthClient()
+  const { data: authData } = await authClient.auth.getClaims()
+  const userId = authData?.claims?.sub as string | undefined
+
+  if (!userId) {
+    return NextResponse.json({ error: 'Sign in required.' }, { status: 401 })
+  }
+
+  try {
+    await assertSufficientCredits(userId, CREDIT_COSTS.accountAudit)
+  } catch (err: any) {
+    if (err instanceof InsufficientCreditsError) {
+      return NextResponse.json(
+        { error: err.message, creditsRemaining: err.available, creditsRequired: err.required },
+        { status: 403 }
+      )
+    }
+    console.error('Credit check failed:', err.message)
+    return NextResponse.json({ error: 'Could not verify credit balance. Please try again.' }, { status: 500 })
+  }
+
   const provider: Provider = new URL(request.url).searchParams.get('provider') === 'claude' ? 'claude' : 'groq'
 
   let body: unknown
@@ -193,6 +220,15 @@ export async function POST(request: Request) {
       // Retry itself failed (network/parse) — fall back to the original,
       // already-flagged result rather than losing the response entirely.
     }
+  }
+
+  try {
+    await deductCredits(userId, CREDIT_COSTS.accountAudit)
+  } catch (err: any) {
+    // Same reasoning as generate-single: the audit already succeeded and
+    // shipped to the client — a bookkeeping write failing afterward
+    // shouldn't turn that into an error response.
+    console.error('Failed to deduct credits:', err.message)
   }
 
   return NextResponse.json({ provider, insights, verificationWarnings })

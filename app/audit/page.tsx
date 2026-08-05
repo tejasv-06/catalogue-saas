@@ -1,10 +1,16 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import TopHeader from '@/components/TopHeader'
+import AppSidebar from '@/components/AppSidebar'
+import CreditsBalance from '@/components/CreditsBalance'
 import AuditHeader from '@/components/reports/AuditHeader'
 import AccountAuditPanel from '@/components/reports/AccountAuditPanel'
 
 // Unlike /workspace (deliberately guest-accessible), this touches a seller's
-// real revenue data — signed in only, no guest preview.
+// real revenue data — signed in only, no guest preview. This check runs
+// first, before anything else renders, exactly as before — a direct visit
+// while logged out still redirects server-side with no page flash,
+// regardless of how TopHeader/AppSidebar below are laid out.
 export default async function AuditPage() {
   const supabase = await createClient()
   const { data } = await supabase.auth.getClaims()
@@ -15,9 +21,19 @@ export default async function AuditPage() {
 
   return (
     <div className="min-h-screen bg-[var(--page-bg)] text-[var(--body-text)]">
-      <div className="max-w-7xl mx-auto px-4 py-6">
-        <AuditHeader />
-        <AccountAuditPanel />
+      {/* Always signed in past the check above, so the usage slot is always
+          the real credit balance — no guest-preview branch needed here. */}
+      <TopHeader usageSlot={<CreditsBalance />} />
+
+      <div className="pt-16">
+        <AppSidebar />
+
+        <div className="lg:pl-14">
+          <div className="max-w-7xl mx-auto px-4 py-6">
+            <AuditHeader />
+            <AccountAuditPanel />
+          </div>
+        </div>
       </div>
     </div>
   )
