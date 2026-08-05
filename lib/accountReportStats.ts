@@ -4,6 +4,7 @@ export type AccountReportRow = Record<string, string>
 
 export type ParsedAsinRow = {
   asin: string
+  title: string | null
   sku: string | null
   sessions: number | null
   pageViews: number | null
@@ -24,6 +25,7 @@ export type RevenueConcentration = {
 
 export type HighTrafficZeroSalesAsin = {
   asin: string
+  title: string | null
   sku: string | null
   sessions: number
   pageViews: number | null
@@ -63,6 +65,7 @@ export function parseAccountReportRow(row: AccountReportRow): ParsedAsinRow | nu
 
   return {
     asin,
+    title: pick(row, 'Title', 'Product Title'),
     sku: pick(row, 'SKU'),
     sessions: parseAmazonNumber(pick(row, 'Sessions - Total', 'Sessions')),
     pageViews: parseAmazonNumber(pick(row, 'Page Views - Total', 'Page Views')),
@@ -146,6 +149,7 @@ export function computeAccountReportStats(rows: AccountReportRow[]): AccountRepo
     .sort((a, b) => (b.sessions ?? 0) - (a.sessions ?? 0))
     .map((row) => ({
       asin: row.asin,
+      title: row.title,
       sku: row.sku,
       sessions: row.sessions ?? 0,
       pageViews: row.pageViews,
@@ -165,4 +169,20 @@ export function computeAccountReportStats(rows: AccountReportRow[]): AccountRepo
     highTrafficZeroSales,
     asinRows: parsedRows
   }
+}
+
+// Shared shape check for any endpoint that must only ever accept the
+// verified output of computeAccountReportStats — never raw CSV rows (which
+// arrive as an array and fail immediately) or another shape.
+export function isAccountReportStats(body: unknown): body is AccountReportStats {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return false
+  const b = body as Record<string, unknown>
+  return (
+    typeof b.totalActiveAsinCount === 'number' &&
+    typeof b.totalRevenue === 'number' &&
+    typeof b.revenueConcentration === 'object' &&
+    b.revenueConcentration !== null &&
+    Array.isArray(b.asinRows) &&
+    Array.isArray(b.highTrafficZeroSales)
+  )
 }
