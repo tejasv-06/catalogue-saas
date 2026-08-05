@@ -110,7 +110,7 @@ export default function QueueTable({
   const downloadIsPrimary = !hasDraft && !hasGenerated && hasApproved
 
   return (
-    <div className={`w-[65%] min-w-0 p-6 ${cardClass}`}>
+    <div className={`w-full min-w-0 p-6 ${cardClass}`}>
       <div className="flex flex-row flex-wrap items-center justify-between gap-3 mb-4">
         <div className="flex flex-row flex-wrap items-center gap-3">
           <button

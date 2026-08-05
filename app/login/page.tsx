@@ -4,6 +4,7 @@ import { Suspense, useState, type SubmitEvent } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { inputClass, buttonPrimaryClass, buttonSecondaryClass, cardClass } from '@/lib/uiClasses'
+import OtpPinInput from '@/components/OtpPinInput'
 
 function LoginForm() {
   const router = useRouter()
@@ -27,6 +28,9 @@ function LoginForm() {
     setSending(true)
     setError(null)
 
+    // No emailRedirectTo — that option is what pushes Supabase toward a
+    // magic-link email. Omitting it keeps this a 6-digit OTP code sign-in,
+    // verified below via verifyOtp rather than a link-click redirect.
     const supabase = createClient()
     const { error } = await supabase.auth.signInWithOtp({ email })
 
@@ -103,19 +107,9 @@ function LoginForm() {
         </form>
       ) : (
         <form onSubmit={handleVerifyCode} className="flex flex-col gap-3">
-          <p className="text-sm text-[var(--body-text)]">Enter the code we sent to {email}.</p>
-          <input
-            type="text"
-            inputMode="numeric"
-            pattern="[0-9]*"
-            required
-            placeholder="Enter code"
-            value={code}
-            onChange={(e) => setCode(e.target.value)}
-            className={inputClass}
-            autoFocus
-          />
-          <button type="submit" disabled={verifying} className={buttonPrimaryClass}>
+          <p className="text-sm text-[var(--body-text)]">Enter the 6-digit code we sent to {email}.</p>
+          <OtpPinInput value={code} onChange={setCode} autoFocus disabled={verifying} />
+          <button type="submit" disabled={verifying || code.replace(/\D/g, '').length !== 6} className={buttonPrimaryClass}>
             {verifying ? 'Verifying...' : 'Verify Code'}
           </button>
           <button

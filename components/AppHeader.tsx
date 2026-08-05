@@ -62,7 +62,7 @@ export default function AppHeader({
   onSelectClient: (client: Client | null) => void
 }) {
   return (
-    <div className="mb-6 flex items-center justify-between gap-4">
+    <div className="mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
       <div className="flex items-center gap-4">
         <Link
           href="/"
@@ -72,12 +72,12 @@ export default function AppHeader({
         </Link>
         <div className="flex items-center gap-3">
           <Image src="/logo.png" alt="" width={40} height={40} priority />
-          <span className="text-2xl font-bold text-[var(--heading-text)]">Tesolute Workspace</span>
+          <span className="text-lg sm:text-2xl font-bold text-[var(--heading-text)]">Tesolute Workspace</span>
         </div>
       </div>
 
-      <div className="flex items-center gap-3">
-        <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2">
           <div className="flex flex-col gap-1">
             <div className="flex items-center gap-2">
               <select
@@ -106,7 +106,7 @@ export default function AppHeader({
           {hasSession && <ClientSelector selectedClientId={selectedClientId} onSelectClient={onSelectClient} />}
         </div>
 
-        <div className={dividerClass} />
+        <div className={`hidden sm:block ${dividerClass}`} />
 
         <div className="flex items-center gap-2">
           <ThemeToggle />

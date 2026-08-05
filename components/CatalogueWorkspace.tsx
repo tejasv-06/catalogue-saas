@@ -878,7 +878,7 @@ export default function CatalogueWorkspace() {
 
   return (
     <div className="min-h-screen bg-[var(--page-bg)] text-[var(--body-text)]">
-      <div className="max-w-7xl mx-auto px-4 py-6">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
         <AppHeader
           hasSession={hasSession}
           targetMarketplace={targetMarketplace}
@@ -893,7 +893,7 @@ export default function CatalogueWorkspace() {
         />
 
         {pendingRestoreCount !== null && (
-          <div className={`mb-4 flex items-center justify-between gap-4 ${warningBannerClass}`}>
+          <div className={`mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 ${warningBannerClass}`}>
             <p className={warningTextClass}>
               A previous session with {pendingRestoreCount} product{pendingRestoreCount === 1 ? '' : 's'} was found.
             </p>
@@ -908,7 +908,7 @@ export default function CatalogueWorkspace() {
           </div>
         )}
 
-        <div className="flex gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <LeftPanel
             activeTab={activeTab}
             onTabChange={setActiveTab}

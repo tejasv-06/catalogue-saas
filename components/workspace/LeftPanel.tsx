@@ -92,7 +92,7 @@ export default function LeftPanel({
   onCsvCancelMismatch: () => void
 }) {
   return (
-    <div className={`w-[35%] flex flex-col gap-2 p-6 h-fit ${cardClass}`}>
+    <div className={`w-full min-w-0 flex flex-col gap-2 p-6 h-fit ${cardClass}`}>
       <div className="flex gap-1 p-1 rounded-xl mb-2 w-fit bg-[var(--tab-track-bg)]">
         <button
           onClick={() => onTabChange('manual')}

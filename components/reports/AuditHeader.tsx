@@ -8,8 +8,8 @@ import ThemeToggle from '@/components/ThemeToggle'
 // of that applies to an account audit.
 export default function AuditHeader() {
   return (
-    <div className="mb-6 flex items-center justify-between gap-4">
-      <div className="flex items-center gap-4">
+    <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="flex flex-wrap items-center gap-3 sm:gap-4">
         <Link
           href="/"
           className="text-sm text-[var(--muted-text)] hover:text-[var(--heading-text)] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[var(--page-bg)] focus:ring-blue-500/40 rounded transition-colors"
@@ -18,11 +18,11 @@ export default function AuditHeader() {
         </Link>
         <div className="flex items-center gap-3">
           <Image src="/logo.png" alt="" width={40} height={40} priority />
-          <span className="text-2xl font-bold text-[var(--heading-text)]">Account Audit & Insights</span>
+          <span className="text-lg sm:text-2xl font-bold text-[var(--heading-text)]">Account Audit & Insights</span>
         </div>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 shrink-0">
         <ThemeToggle />
         <LogoutButton />
       </div>

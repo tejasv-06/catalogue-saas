@@ -36,8 +36,8 @@ export default function AccountAuditPanel() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className={`p-6 flex items-center gap-4 ${cardClass}`}>
-        <label className={`inline-flex items-center cursor-pointer ${buttonPrimaryClass}`}>
+      <div className={`p-6 flex flex-col sm:flex-row sm:items-center gap-4 ${cardClass}`}>
+        <label className={`inline-flex items-center justify-center shrink-0 cursor-pointer ${buttonPrimaryClass}`}>
           Upload CSV
           <input type="file" accept=".csv" onChange={handleFileChange} className="hidden" />
         </label>
