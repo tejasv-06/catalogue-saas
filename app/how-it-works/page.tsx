@@ -1,14 +1,15 @@
 import Link from 'next/link'
 import Navbar from '@/components/Navbar'
+import { GUEST_GENERATION_LIMIT } from '@/lib/limits'
 
 const steps = [
   {
     title: '1. Upload',
-    body: "Start by getting your products into Tesolute — either upload a CSV with all your products at once, or add them one at a time through the manual entry form. Before you begin, you can also set up a brand voice: a short profile of brand guidelines that Tesolute will follow when writing copy, so every listing sounds consistently on-brand rather than generic."
+    body: "Start by getting your products into Tesolute: either upload a CSV with all your products at once, or add them one at a time through the manual entry form. Before you begin, you can also set up a brand voice, a short profile of brand guidelines that Tesolute will follow when writing copy, so every listing sounds consistently on-brand rather than generic."
   },
   {
     title: '2. Generate',
-    body: "Once your products are in the queue, Tesolute's AI generates marketplace-ready content for each one — titles, bullet points, and search keywords tailored to the specific marketplace you're listing on. It doesn't just read your raw description: if you've attached a product photo, the AI analyzes the image itself, picking up on color, pattern, material, and other visual details that get folded directly into the generated copy."
+    body: "Once your products are in the queue, Tesolute's AI generates marketplace-ready content for each one: titles, bullet points, and search keywords tailored to the specific marketplace you're listing on. It doesn't just read your raw description. If you've attached a product photo, the AI analyzes the image itself, picking up on color, pattern, material, and other visual details that get folded directly into the generated copy."
   },
   {
     title: '3. Review',
@@ -16,7 +17,7 @@ const steps = [
   },
   {
     title: '4. Export',
-    body: "Once you've approved a batch of listings, export them as a single marketplace-ready CSV file, formatted to match the exact columns and structure that platform expects — ready to upload directly into your marketplace seller dashboard."
+    body: "Once you've approved a batch of listings, export them as a single marketplace-ready CSV file, formatted to match the exact columns and structure that platform expects, ready to upload directly into your marketplace seller dashboard."
   }
 ]
 
@@ -42,7 +43,7 @@ export default function HowItWorksPage() {
             href="/workspace"
             className="inline-block bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl shadow-lg shadow-blue-500/20 transition-colors"
           >
-            Try Workspace
+            Start Generating Listings ({GUEST_GENERATION_LIMIT} Free Credits)
           </Link>
         </div>
       </main>

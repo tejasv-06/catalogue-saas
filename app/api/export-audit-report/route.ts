@@ -150,7 +150,7 @@ function buildDocument(accountName: string, insights: AccountInsights, verificat
             bold: true,
             color: '92400E',
             size: 18,
-            text: `Note: ${verificationWarnings.length} figure${verificationWarnings.length === 1 ? '' : 's'} in this narrative couldn't be automatically matched against the verified stats (${verificationWarnings.join(', ')}) — review before sharing.`
+            text: `Note: ${verificationWarnings.length} figure${verificationWarnings.length === 1 ? '' : 's'} in this narrative couldn't be automatically matched against the verified stats (${verificationWarnings.join(', ')}). Review before sharing.`
           })
         ]
       })

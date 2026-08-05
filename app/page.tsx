@@ -1,15 +1,17 @@
 import Link from 'next/link'
 import Navbar from '@/components/Navbar'
+import VideoPlaceholder from '@/components/VideoPlaceholder'
 import { cardClass } from '@/lib/uiClasses'
+import { GUEST_GENERATION_LIMIT } from '@/lib/limits'
 
 const features = [
   {
     title: 'Bulk CSV & Manual Upload',
-    description: "Upload hundreds of products at once via CSV, or add them one at a time through a guided form."
+    description: 'Upload hundreds of products at once via CSV, or add them one at a time through a guided form.'
   },
   {
     title: 'Marketplace-Specific AI Content',
-    description: "Generate titles, bullets, and keywords tailored to each marketplace's own rules — Amazon, Flipkart, Myntra, Etsy, and more."
+    description: "Generate titles, bullets, and keywords tailored to each marketplace's own rules: Amazon, Flipkart, Myntra, Etsy, and more."
   },
   {
     title: 'Vision-Based Image Analysis',
@@ -17,7 +19,7 @@ const features = [
   },
   {
     title: 'Review & Approve Workflow',
-    description: 'Every generated listing is reviewed before it ships — approve, edit, or regenerate with one click.'
+    description: 'Every generated listing is reviewed before it ships: approve, edit, or regenerate with one click.'
   },
   {
     title: 'One-Click Export',
@@ -39,7 +41,7 @@ const testimonials = [
     role: 'Founder, boutique e-commerce agency'
   },
   {
-    quote: 'The marketplace-specific formatting alone was worth switching for — no more manually reformatting the same product for four different platforms.',
+    quote: 'The marketplace-specific formatting alone was worth switching for: no more manually reformatting the same product for four different platforms.',
     name: 'Marcus T.',
     role: 'Seller operations lead'
   },
@@ -50,25 +52,89 @@ const testimonials = [
   }
 ]
 
+const primaryCtaClass =
+  'inline-block bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl text-base font-semibold shadow-lg shadow-blue-500/20 transition-colors'
+
+const eyebrowClass = 'inline-block text-xs font-semibold uppercase tracking-wide text-blue-600 mb-2'
+
+function BenefitItem({ children }: { children: React.ReactNode }) {
+  return (
+    <li className="flex gap-2.5 text-[var(--body-text)]">
+      <span className="text-blue-600 mt-0.5">✓</span>
+      <span>{children}</span>
+    </li>
+  )
+}
+
 export default function Home() {
   return (
     <div className="flex flex-col min-h-screen bg-[var(--page-bg)] text-[var(--body-text)]">
       <Navbar />
 
       <main className="flex-1">
-        <section className="max-w-5xl mx-auto px-6 py-20 text-center">
-          <h1 className="text-4xl font-bold text-[var(--heading-text)] mb-4">List products everywhere, in minutes, not hours.</h1>
-          <p className="text-lg text-[var(--body-text)] max-w-2xl mx-auto mb-8">
-            Tesolute is an AI-powered catalogue listing tool for e-commerce sellers and agencies — upload your
-            products once, and get marketplace-ready titles, bullets, and keywords for Amazon, Flipkart, Myntra,
-            Etsy, and more.
-          </p>
-          <Link
-            href="/workspace"
-            className="inline-block bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl text-lg font-medium shadow-lg shadow-blue-500/20 transition-colors"
-          >
-            Try Workspace
-          </Link>
+        <section className="max-w-5xl mx-auto px-6 pt-16 pb-8">
+          <div className={`p-8 grid grid-cols-1 lg:grid-cols-2 gap-8 items-center ${cardClass}`}>
+            <div>
+              <span className={eyebrowClass}>Listing Generation</span>
+              <h1 className="text-3xl font-bold text-[var(--heading-text)] mb-4">
+                List Products Everywhere. In Minutes, Not Hours.
+              </h1>
+              <ul className="flex flex-col gap-2.5 mb-6">
+                <BenefitItem>
+                  <strong className="text-[var(--heading-text)]">Bulk CSV or manual entry</strong>, for any catalog
+                  size.
+                </BenefitItem>
+                <BenefitItem>
+                  <strong className="text-[var(--heading-text)]">Marketplace-tailored copy</strong> for Amazon,
+                  Flipkart, Myntra, Etsy, and more.
+                </BenefitItem>
+                <BenefitItem>
+                  <strong className="text-[var(--heading-text)]">AI reads your product photos</strong> to catch
+                  details you'd otherwise type by hand.
+                </BenefitItem>
+              </ul>
+              <div className="flex flex-wrap items-center gap-3">
+                <Link href="/workspace" className={primaryCtaClass}>
+                  Start Generating Listings ({GUEST_GENERATION_LIMIT} Free Credits)
+                </Link>
+              </div>
+            </div>
+            <VideoPlaceholder />
+          </div>
+        </section>
+
+        <section className="max-w-5xl mx-auto px-6 pb-16">
+          <div className={`p-8 grid grid-cols-1 lg:grid-cols-2 gap-8 items-center ${cardClass}`}>
+            <div>
+              <span className={eyebrowClass}>Account Audit</span>
+              <h2 className="text-3xl font-bold text-[var(--heading-text)] mb-4">
+                Find Out What's Actually Costing You Sales.
+              </h2>
+              <ul className="flex flex-col gap-2.5 mb-6">
+                <BenefitItem>
+                  <strong className="text-[var(--heading-text)]">Upload your Amazon sales &amp; traffic report</strong>{' '}
+                  and get a verified, AI-written diagnosis.
+                </BenefitItem>
+                <BenefitItem>
+                  <strong className="text-[var(--heading-text)]">See exactly which products drive revenue</strong>{' '}
+                  and which ones are burning traffic for nothing.
+                </BenefitItem>
+                <BenefitItem>
+                  <strong className="text-[var(--heading-text)]">Get a prioritized 30-day action plan</strong>, not
+                  just a pile of numbers.
+                </BenefitItem>
+              </ul>
+              <div className="flex flex-wrap items-center gap-3">
+                <Link href="/audit" className={primaryCtaClass}>
+                  Audit Your Amazon Account Now
+                </Link>
+                <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-[var(--success-bg)] text-[var(--success-text)] border border-[var(--success-border)]">
+                  1 Free Audit Included
+                </span>
+              </div>
+            </div>
+            <VideoPlaceholder />
+          </div>
         </section>
 
         <section className="max-w-5xl mx-auto px-6 py-16">
@@ -83,24 +149,6 @@ export default function Home() {
                 <p className="text-sm text-[var(--body-text)]">{feature.description}</p>
               </div>
             ))}
-          </div>
-        </section>
-
-        <section className="max-w-5xl mx-auto px-6 pb-16">
-          <div className={`p-8 flex flex-col sm:flex-row items-center justify-between gap-6 ${cardClass}`}>
-            <div>
-              <h2 className="text-xl font-bold text-[var(--heading-text)] mb-2">AI Account Audit &amp; Revenue Insights</h2>
-              <p className="text-sm text-[var(--body-text)] max-w-xl">
-                Upload your Amazon sales &amp; traffic report and get a verified, AI-written diagnosis of what&apos;s
-                working, what isn&apos;t, and what to fix next.
-              </p>
-            </div>
-            <Link
-              href="/audit"
-              className="shrink-0 inline-block bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl text-sm font-medium shadow-lg shadow-blue-500/20 transition-colors"
-            >
-              Run an Audit
-            </Link>
           </div>
         </section>
 
@@ -129,7 +177,7 @@ export default function Home() {
         <section className="max-w-5xl mx-auto px-6 py-16">
           <h2 className="text-2xl font-bold text-[var(--heading-text)] text-center mb-2">What sellers are saying</h2>
           <p className="text-center text-xs text-[var(--muted-text)] mb-10">
-            (Placeholder quotes — will be replaced with real customer testimonials)
+            (Placeholder quotes, will be replaced with real customer testimonials)
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
             {testimonials.map((t) => (

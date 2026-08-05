@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Tesolute — AI Catalogue Listings",
+  title: "Tesolute | AI Product Listings & E-Commerce Insights",
   description: "AI-powered catalogue listing tool for e-commerce sellers and agencies.",
   manifest: "/site.webmanifest",
   icons: {

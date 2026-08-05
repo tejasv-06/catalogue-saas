@@ -220,7 +220,7 @@ function AccountNarrative({ insights, verificationWarnings }: { insights: Accoun
       {verificationWarnings.length > 0 && (
         <div className={warningBannerClass}>
           <p className={`${warningTextClass} font-medium`}>
-            {`${verificationWarnings.length} figure${verificationWarnings.length === 1 ? '' : 's'} in this narrative couldn't be matched against the verified stats — review before sharing:`}
+            {`${verificationWarnings.length} figure${verificationWarnings.length === 1 ? '' : 's'} in this narrative couldn't be matched against the verified stats. Review before sharing:`}
           </p>
           <p className={`${warningTextClass} mt-1`}>{verificationWarnings.join(', ')}</p>
         </div>
@@ -404,7 +404,7 @@ export default function AccountReportDashboard({ stats }: { stats: AccountReport
           {generating ? 'Generating...' : insights ? 'Regenerate AI Insights' : 'Generate AI Insights'}
         </button>
         <p className={bodyTextClass}>
-          Written by AI from the verified numbers below — every figure it uses is copied from this report, not
+          Written by AI from the verified numbers below: every figure it uses is copied from this report, not
           recalculated.
         </p>
 
@@ -513,7 +513,7 @@ export default function AccountReportDashboard({ stats }: { stats: AccountReport
       <div className={`p-6 ${cardClass}`}>
         <h3 className={sectionHeadingClass}>Traffic &amp; Conversion Leakage</h3>
         <p className={`${bodyTextClass} mt-1 mb-4`}>
-          Products ranked by sessions, colored by conversion — red means visits with zero sales.
+          Products ranked by sessions, colored by conversion: red means visits with zero sales.
         </p>
         <ResponsiveContainer width="100%" height={Math.max(leakageData.length * 32, 200)}>
           <BarChart data={leakageData} layout="vertical" margin={{ top: 8, right: 24, left: 8, bottom: 8 }}>
@@ -546,7 +546,7 @@ export default function AccountReportDashboard({ stats }: { stats: AccountReport
       <div className={`p-6 ${cardClass}`}>
         <h3 className={sectionHeadingClass}>Top Traffic Leaks</h3>
         <p className={`${bodyTextClass} mt-1 mb-4`}>
-          High-traffic products with zero sales — the clearest wasted ad spend or listing problems.
+          High-traffic products with zero sales: the clearest wasted ad spend or listing problems.
         </p>
         {stats.highTrafficZeroSales.length === 0 ? (
           <p className={bodyTextClass}>No high-traffic, zero-sales products found.</p>

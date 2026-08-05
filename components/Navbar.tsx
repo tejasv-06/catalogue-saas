@@ -2,6 +2,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { createClient } from '@/lib/supabase/server'
 import ThemeToggle from '@/components/ThemeToggle'
+import ServicesDropdown from '@/components/ServicesDropdown'
 
 export default async function Navbar() {
   const supabase = await createClient()
@@ -19,6 +20,7 @@ export default async function Navbar() {
           <Link href="/" className="text-sm text-[var(--muted-text)] hover:text-[var(--heading-text)] transition-colors">
             Home
           </Link>
+          <ServicesDropdown />
           <Link href="/how-it-works" className="text-sm text-[var(--muted-text)] hover:text-[var(--heading-text)] transition-colors">
             How It Works
           </Link>
@@ -28,9 +30,9 @@ export default async function Navbar() {
           <ThemeToggle />
           <Link
             href={isLoggedIn ? '/workspace' : '/login'}
-            className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2.5 rounded-xl text-sm font-medium shadow-lg shadow-blue-500/20 ring-1 ring-white/15 transition-colors"
+            className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2.5 rounded-xl text-sm font-medium shadow-lg shadow-blue-500/20 ring-1 ring-white/15 transition-colors whitespace-nowrap"
           >
-            {isLoggedIn ? 'Go to Workspace' : 'Login'}
+            {isLoggedIn ? 'Start Generating Listings' : 'Login'}
           </Link>
         </div>
       </div>

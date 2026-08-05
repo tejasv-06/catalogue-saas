@@ -4,9 +4,9 @@ import { createClient as createSupabaseAdminClient } from '@supabase/supabase-js
 import { createClient as createAuthClient } from '@/lib/supabase/server'
 import { getOrCreateAnonId } from '@/lib/guestId'
 import { shapeForPlatform } from '@/lib/platformShapers'
+import { GUEST_GENERATION_LIMIT } from '@/lib/limits'
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY })
-const GUEST_GENERATION_LIMIT = 10
 
 function formatDirectImageUrl(url: string): string {
   const driveFileMatch = url.match(/\/file\/d\/([^/]+)/)
