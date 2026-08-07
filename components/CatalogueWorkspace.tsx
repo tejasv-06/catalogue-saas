@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type DragEvent } from 'react'
 import Papa from 'papaparse'
+import JSZip from 'jszip'
 import { pick } from '@/lib/csvMapping'
 import { exportColumns, flattenRow } from '@/lib/exportShapers'
 import { type Client } from '@/components/ClientSelector'
@@ -17,7 +18,16 @@ import { createClient } from '@/lib/supabase/client'
 import CreditsBalance, { notifyCreditsChanged } from '@/components/CreditsBalance'
 import { CREDIT_COSTS } from '@/lib/creditCosts'
 import { useFocusTrap } from '@/lib/useFocusTrap'
-import type { DraftProduct, CsvSummary, PendingCsvUpload } from '@/lib/types'
+import { SUPPORTED_MARKETPLACES, MARKETPLACE_LABELS } from '@/lib/platformShapers'
+import {
+  type DraftProduct,
+  type Marketplace,
+  type CsvSummary,
+  type PendingCsvUpload,
+  emptyGeneratedContent,
+  emptyApproved,
+  emptyGenerationError
+} from '@/lib/types'
 import {
   buttonPrimaryClass,
   buttonSecondaryClass,
@@ -36,6 +46,14 @@ import Link from 'next/link'
 
 const SESSION_STORAGE_KEY = 'catalogue-draft-session'
 const SESSION_MAX_AGE_MS = 4 * 60 * 60 * 1000
+// Bumped whenever the saved-session payload's shape changes in a way a
+// straight JSON restore can't safely absorb — e.g. this refactor, which
+// replaced generatedContent/status/approved's flat shape with a nested
+// per-marketplace one. A session saved under a different version is
+// discarded rather than restored (see the mount-time read effect below):
+// this is exactly the kind of shape drift that broke crash-recovery once
+// before, so no attempt is made to guess a migration.
+const SESSION_SCHEMA_VERSION = 2
 
 // Above this, a picked-but-not-yet-submitted form image is simply not persisted
 // (falls back to today's behavior: lost on refresh) rather than risking a
@@ -95,22 +113,27 @@ function getDisplayFields(marketplace: string, gc: any): { label: string; value:
   }
 }
 
+// One product can now hold a distinct result (content, error, approval) per
+// marketplace, so the drawer shows one section per marketplace that's
+// actually been attempted (has content or an error) rather than a single
+// flat listing. A marketplace never attempted for this product (both null)
+// doesn't get a section at all.
 function GeneratedListingDrawer({
   product,
   onClose,
-  onApprove,
-  onUnapprove,
-  onRetry
+  onApproveMarketplace,
+  onUnapproveMarketplace,
+  onRetryMarketplace
 }: {
   product: DraftProduct
   onClose: () => void
-  onApprove: (id: string) => void
-  onUnapprove: (id: string) => void
-  onRetry: (id: string) => void
+  onApproveMarketplace: (id: string, marketplace: Marketplace) => void
+  onUnapproveMarketplace: (id: string, marketplace: Marketplace) => void
+  onRetryMarketplace: (id: string, marketplace: Marketplace) => void
 }) {
-  const displayFields = product.generatedContent
-    ? getDisplayFields(product.targetMarketplace, product.generatedContent)
-    : []
+  const attemptedMarketplaces = SUPPORTED_MARKETPLACES.filter(
+    (m) => product.generatedContent[m] !== null || product.generationError[m] !== null
+  )
 
   const containerRef = useRef<HTMLDivElement>(null)
   useFocusTrap(containerRef, onClose)
@@ -123,13 +146,11 @@ function GeneratedListingDrawer({
         tabIndex={-1}
         role="dialog"
         aria-modal="true"
-        aria-label={product.generatedContent ? 'View Generated Listing' : 'Generation Error'}
+        aria-label="Generated Listings"
         className="relative w-full max-w-md border-l h-full p-6 overflow-y-auto shadow-xl focus:outline-none bg-[var(--card-bg)] border-[var(--card-border)]"
       >
         <div className="mb-4 flex items-center gap-2">
-          <h2 className={sectionHeadingClass}>
-            {product.generatedContent ? 'View Generated Listing' : 'Generation Error'}
-          </h2>
+          <h2 className={sectionHeadingClass}>Generated Listings</h2>
           <StatusBadge status={product.status} />
         </div>
 
@@ -137,45 +158,64 @@ function GeneratedListingDrawer({
           <ProductThumbnail imageFile={product.imageFile} imageUrl={product.imageUrl} alt={product.brandName} size={60} />
           <div>
             <p className="font-medium text-[var(--heading-text)]">{product.brandName}</p>
-            <p className="text-sm text-[var(--muted-text)]">
-              {product.category} · {product.targetMarketplace}
-            </p>
+            <p className="text-sm text-[var(--muted-text)]">{product.category}</p>
           </div>
         </div>
 
-        {product.generationError && (
-          <div className={`mb-4 ${dangerBannerClass}`}>
-            <p className={dangerTextClass}>{product.generationError}</p>
-          </div>
-        )}
+        <div className="flex flex-col gap-4">
+          {attemptedMarketplaces.map((marketplace) => {
+            const content = product.generatedContent[marketplace]
+            const error = product.generationError[marketplace]
+            const isApproved = product.approved[marketplace]
+            const displayFields = content ? getDisplayFields(marketplace, content) : []
 
-        <div className="space-y-2">
-          {displayFields.map((field) => (
-            <div key={field.label}>
-              <p className={labelClass}>{field.label}</p>
-              <p className="text-sm text-[var(--body-text)]">{field.value}</p>
-            </div>
-          ))}
+            return (
+              <div key={marketplace} className="pt-4 border-t border-[var(--card-border)] first:pt-0 first:border-t-0">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-sm font-semibold text-[var(--heading-text)]">{MARKETPLACE_LABELS[marketplace]}</h3>
+                  {isApproved && <StatusBadge status="approved" />}
+                </div>
+
+                {error && (
+                  <div className={`mb-3 ${dangerBannerClass}`}>
+                    <p className={dangerTextClass}>{error}</p>
+                  </div>
+                )}
+
+                {content && (
+                  <div className="space-y-2 mb-3">
+                    {displayFields.map((field) => (
+                      <div key={field.label}>
+                        <p className={labelClass}>{field.label}</p>
+                        <p className="text-sm text-[var(--body-text)]">{field.value}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="flex gap-2">
+                  {content && !isApproved && (
+                    <button onClick={() => onApproveMarketplace(product.id, marketplace)} className={buttonPrimaryClass}>
+                      Approve
+                    </button>
+                  )}
+                  {content && isApproved && (
+                    <button onClick={() => onUnapproveMarketplace(product.id, marketplace)} className={buttonWarningClass}>
+                      Unapprove
+                    </button>
+                  )}
+                  {error && (
+                    <button onClick={() => onRetryMarketplace(product.id, marketplace)} className={buttonDestructiveClass}>
+                      Retry {MARKETPLACE_LABELS[marketplace]}
+                    </button>
+                  )}
+                </div>
+              </div>
+            )
+          })}
         </div>
 
-        <div className="mt-6 flex justify-between items-center">
-          <div className="flex gap-2">
-            {product.status === 'generated' && (
-              <button onClick={() => onApprove(product.id)} className={buttonSecondaryClass}>
-                Approve
-              </button>
-            )}
-            {product.status === 'approved' && (
-              <button onClick={() => onUnapprove(product.id)} className={buttonWarningClass}>
-                Unapprove
-              </button>
-            )}
-            {product.generationError && (
-              <button onClick={() => onRetry(product.id)} className={buttonDestructiveClass}>
-                Retry
-              </button>
-            )}
-          </div>
+        <div className="mt-6 flex justify-end">
           <button onClick={onClose} className={buttonSecondaryClass}>
             Close
           </button>
@@ -215,7 +255,11 @@ function ExportGateModal({ onClose, onSignIn }: { onClose: () => void; onSignIn:
 }
 
 export default function CatalogueWorkspace() {
-  const [targetMarketplace, setTargetMarketplace] = useState('')
+  // Global/session-scoped, same as the old single-value dropdown — not
+  // frozen onto individual products at add time. The generation loop always
+  // reads whatever's currently selected here, applied to every product it
+  // touches in that run (see handleGenerateAll).
+  const [selectedMarketplaces, setSelectedMarketplaces] = useState<Marketplace[]>([])
   const [draftProducts, setDraftProducts] = useState<DraftProduct[]>([])
   const [activeTab, setActiveTab] = useState<WorkspaceDestination>('manual')
   const [viewingId, setViewingId] = useState<string | null>(null)
@@ -236,6 +280,13 @@ export default function CatalogueWorkspace() {
   // a raw File object can't be JSON-serialized.
   const [imageFileDataUrl, setImageFileDataUrl] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  // A native <input type="file"> is uncontrolled — resetting csvFile (React
+  // state) to null after a successful upload does NOT clear the input's own
+  // internal .value, so re-selecting the same filename (or in some browsers,
+  // any file, depending on how the picker dialog resolves) silently fails
+  // to fire another change event. Same fix already applied to the image
+  // upload input via fileInputRef above; this mirrors it for CSV.
+  const csvFileInputRef = useRef<HTMLInputElement>(null)
 
   const [csvFile, setCsvFile] = useState<File | null>(null)
   const [csvSummary, setCsvSummary] = useState<CsvSummary | null>(null)
@@ -244,10 +295,15 @@ export default function CatalogueWorkspace() {
   const [generating, setGenerating] = useState(false)
   const [generationProgress, setGenerationProgress] = useState<{ current: number; total: number } | null>(null)
   const [currentlyGeneratingId, setCurrentlyGeneratingId] = useState<string | null>(null)
-  const [bulkStoppedMessage, setBulkStoppedMessage] = useState<string | null>(null)
+  // Structured rather than a pre-formatted string — rendered as a top-level,
+  // impossible-to-miss banner (see the JSX below), not the per-row "One or
+  // more marketplaces failed" text, so it needs a heading, a body, and a
+  // "Buy more credits" CTA built from these numbers, not just interpolated
+  // into one sentence.
+  const [creditsStoppedInfo, setCreditsStoppedInfo] = useState<{ completedPairs: number; totalPairs: number } | null>(null)
   const [formError, setFormError] = useState<string | null>(null)
   const [downloadMessage, setDownloadMessage] = useState<string | null>(null)
-  const marketplaceSelectRef = useRef<HTMLSelectElement>(null)
+  const marketplaceSelectRef = useRef<HTMLDivElement>(null)
   const [marketplaceError, setMarketplaceError] = useState<string | null>(null)
   const [marketplaceFlash, setMarketplaceFlash] = useState(false)
   const [brandMismatchPending, setBrandMismatchPending] = useState(false)
@@ -260,6 +316,11 @@ export default function CatalogueWorkspace() {
   const [hasCheckedSession, setHasCheckedSession] = useState(false)
   const [showExportGateModal, setShowExportGateModal] = useState(false)
   const [autoDownloadPending, setAutoDownloadPending] = useState(false)
+  // Set when a saved session is found but its schema version doesn't match
+  // — see SESSION_SCHEMA_VERSION below. Old-shape sessions are discarded
+  // rather than restored, since the nested generatedContent/approved shape
+  // changed and a straight restore would silently produce broken products.
+  const [outdatedSessionDiscarded, setOutdatedSessionDiscarded] = useState(false)
 
   // Client-side only, purely for UI: /workspace is public, so this never gates
   // access — it just decides whether to show the Brand/Clients dropdown at all,
@@ -296,6 +357,21 @@ export default function CatalogueWorkspace() {
       const saved = localStorage.getItem(SESSION_STORAGE_KEY)
       if (saved) {
         const parsed = JSON.parse(saved)
+
+        // A session saved under a different schema version — most likely
+        // pre-refactor, back when generatedContent/status/approved had a
+        // flat, single-marketplace shape. Restoring it as-is would produce
+        // products whose generatedContent isn't a per-marketplace record at
+        // all, breaking every marketplace-keyed read downstream. Discarded
+        // outright rather than restored, with a one-time notice instead of
+        // failing silently or crashing on the shape mismatch.
+        if (parsed.version !== SESSION_SCHEMA_VERSION) {
+          localStorage.removeItem(SESSION_STORAGE_KEY)
+          setOutdatedSessionDiscarded(true)
+          setSessionReady(true)
+          return
+        }
+
         const isExpired = typeof parsed.savedAt !== 'number' || Date.now() - parsed.savedAt > SESSION_MAX_AGE_MS
 
         if (isExpired) {
@@ -378,9 +454,10 @@ export default function CatalogueWorkspace() {
       localStorage.setItem(
         SESSION_STORAGE_KEY,
         JSON.stringify({
+          version: SESSION_SCHEMA_VERSION,
           savedAt: Date.now(),
           draftProducts: serializable,
-          targetMarketplace,
+          selectedMarketplaces,
           selectedClient,
           formDraft: { brandName, category, description, imageDataUrl: imageFileDataUrl }
         })
@@ -389,13 +466,20 @@ export default function CatalogueWorkspace() {
       // most likely a localStorage quota error from an embedded image — this
       // change just won't survive a refresh, nothing else breaks
     }
-  }, [draftProducts, sessionReady, targetMarketplace, selectedClient, brandName, category, description, imageFileDataUrl])
+  }, [draftProducts, sessionReady, selectedMarketplaces, selectedClient, brandName, category, description, imageFileDataUrl])
 
+  // Only ever called with a payload that already passed the version check
+  // above, so draftProducts here is guaranteed to already be in the current
+  // nested-per-marketplace shape — no per-product migration needed.
   async function applyRestoredState(parsed: any) {
     const products = Array.isArray(parsed.draftProducts) ? parsed.draftProducts : []
     setDraftProducts(products.map((p: any) => ({ ...p, imageFile: null })))
-    if (typeof parsed.targetMarketplace === 'string') {
-      setTargetMarketplace(parsed.targetMarketplace)
+    if (Array.isArray(parsed.selectedMarketplaces)) {
+      setSelectedMarketplaces(
+        parsed.selectedMarketplaces.filter((m: unknown): m is Marketplace =>
+          (SUPPORTED_MARKETPLACES as readonly string[]).includes(m as string)
+        )
+      )
     }
     if (parsed.selectedClient) {
       setSelectedClient(parsed.selectedClient)
@@ -437,23 +521,25 @@ export default function CatalogueWorkspace() {
   }
 
   function requireMarketplace(): boolean {
-    if (!targetMarketplace) {
-      alert('Please select a target marketplace first.')
+    if (selectedMarketplaces.length === 0) {
+      alert('Please select at least one target marketplace first.')
       return false
     }
     return true
   }
 
   function flagMissingMarketplace() {
-    setMarketplaceError('Please select a target marketplace before proceeding.')
+    setMarketplaceError('Please select at least one target marketplace before proceeding.')
     setMarketplaceFlash(true)
     marketplaceSelectRef.current?.focus()
     marketplaceSelectRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
     setTimeout(() => setMarketplaceFlash(false), 1200)
   }
 
-  function handleMarketplaceChange(value: string) {
-    setTargetMarketplace(value)
+  function handleToggleMarketplace(marketplace: Marketplace) {
+    setSelectedMarketplaces((prev) =>
+      prev.includes(marketplace) ? prev.filter((m) => m !== marketplace) : [...prev, marketplace]
+    )
     setMarketplaceError(null)
     setMarketplaceFlash(false)
   }
@@ -520,7 +606,7 @@ export default function CatalogueWorkspace() {
   }
 
   async function handleAddProduct() {
-    if (!targetMarketplace) {
+    if (selectedMarketplaces.length === 0) {
       flagMissingMarketplace()
       return
     }
@@ -559,7 +645,7 @@ export default function CatalogueWorkspace() {
   // typed brand name that doesn't match the selected client, and there's
   // nothing to mismatch-check when the field was deliberately left blank.
   async function handleAddImageOnlyProduct() {
-    if (!targetMarketplace) {
+    if (selectedMarketplaces.length === 0) {
       flagMissingMarketplace()
       return
     }
@@ -628,10 +714,10 @@ export default function CatalogueWorkspace() {
       category,
       imageFile: null,
       imageUrl: uploadedImageUrl,
-      targetMarketplace,
-      generatedContent: null,
+      generatedContent: emptyGeneratedContent(),
+      approved: emptyApproved(),
       status: 'draft',
-      generationError: null,
+      generationError: emptyGenerationError(),
       skipBrandVoice
     }
 
@@ -670,7 +756,7 @@ export default function CatalogueWorkspace() {
   }
 
   async function handleUploadCsv() {
-    if (!targetMarketplace) {
+    if (selectedMarketplaces.length === 0) {
       flagMissingMarketplace()
       return
     }
@@ -711,10 +797,10 @@ export default function CatalogueWorkspace() {
         category: pick(row, 'category') || '',
         imageFile: null,
         imageUrl: pick(row, 'image url', 'image_url'),
-        targetMarketplace,
-        generatedContent: null,
+        generatedContent: emptyGeneratedContent(),
+        approved: emptyApproved(),
         status: 'draft',
-        generationError: null,
+        generationError: emptyGenerationError(),
         skipBrandVoice: false
       })
     }
@@ -747,6 +833,14 @@ export default function CatalogueWorkspace() {
     })
     setCsvFile(null)
     setPendingCsvUpload(null)
+    // Resetting csvFile (state) alone doesn't clear the underlying <input>'s
+    // own .value — without this, selecting another CSV right after a
+    // successful upload can silently fail to fire change (see
+    // csvFileInputRef above), and only a full page refresh actually clears
+    // the stuck input.
+    if (csvFileInputRef.current) {
+      csvFileInputRef.current.value = ''
+    }
   }
 
   function handleCsvAddWithoutBrandVoice() {
@@ -789,38 +883,74 @@ export default function CatalogueWorkspace() {
     if (file) {
       setCsvFile(file)
       setPendingCsvUpload(null)
-      if (!targetMarketplace) {
+      if (selectedMarketplaces.length === 0) {
         flagMissingMarketplace()
       }
     }
   }
 
+  // A product's status only ever reflects the marketplaces attempted in a
+  // given run (`runMarketplaces`) — a fixed snapshot taken once at the start
+  // of that run, not re-read live. Otherwise an already-'generated' product
+  // could silently flip to 'partial' later just because the global
+  // selection changed after the fact, with nothing new actually failing.
+  function computeProductStatus(
+    generatedContent: DraftProduct['generatedContent'],
+    runMarketplaces: Marketplace[]
+  ): DraftProduct['status'] {
+    const succeededCount = runMarketplaces.filter((m) => generatedContent[m] !== null).length
+    if (succeededCount === 0) return 'draft'
+    if (succeededCount === runMarketplaces.length) return 'generated'
+    return 'partial'
+  }
+
+  // Product-major, marketplace-minor: every marketplace for one product
+  // before moving to the next (not all-products-for-marketplace-1 then
+  // all-products-for-marketplace-2). Each (product, marketplace) pair is one
+  // full-price generate-single call — total cost for a batch is simply the
+  // count of successful calls, not a separate bulk formula.
   async function handleGenerateAll() {
     if (!requireMarketplace()) return
     const pending = draftProducts.filter((p) => p.status === 'draft')
     if (pending.length === 0) return
 
-    setGenerating(true)
-    setBulkStoppedMessage(null)
+    // Snapshot now — see computeProductStatus above for why this must stay
+    // fixed for the whole run rather than re-reading live state.
+    const runMarketplaces = selectedMarketplaces
 
-    for (let i = 0; i < pending.length; i++) {
-      const product = pending[i]
-      setGenerationProgress({ current: i + 1, total: pending.length })
+    setGenerating(true)
+    setCreditsStoppedInfo(null)
+
+    const totalPairs = pending.length * runMarketplaces.length
+    // completedPairs = attempts made so far, for the "attempt N of totalPairs"
+    // progress indicator. succeededPairs = attempts that actually generated
+    // content — a distinct count, since the one that trips
+    // 'insufficient_credits' increments completedPairs but produced nothing,
+    // and the stopped-banner needs to report real completions, not attempts.
+    let completedPairs = 0
+    let succeededPairs = 0
+
+    outer: for (const product of pending) {
       setCurrentlyGeneratingId(product.id)
 
-      const outcome = await generateForProduct(product)
+      for (const marketplace of runMarketplaces) {
+        setGenerationProgress({ current: completedPairs + 1, total: totalPairs })
 
-      // Insufficient credits: every remaining pending item would fail the
-      // identical way (the balance doesn't change between attempts), so stop
-      // the batch here rather than burning a failed request per remaining
-      // item. Any other per-item error (bad image, transient network issue)
-      // keeps going — that failure is specific to one item, not the batch.
-      if (outcome === 'insufficient_credits') {
-        const remaining = pending.length - (i + 1)
-        setBulkStoppedMessage(
-          `Stopped after ${i + 1} of ${pending.length} — out of credits. ${remaining} item${remaining === 1 ? '' : 's'} still in the queue; retry once you have more credits.`
-        )
-        break
+        const outcome = await generateForProductMarketplace(product, marketplace, runMarketplaces)
+        completedPairs++
+        if (outcome === 'success') succeededPairs++
+
+        // Insufficient credits: every remaining (product, marketplace) pair
+        // — whether the rest of this product's marketplaces or any later
+        // product entirely — would fail the identical way, since the
+        // balance doesn't change between attempts. Stop the whole batch
+        // here rather than burning a failed request per remaining pair.
+        // Any other per-pair error (bad image, transient network issue)
+        // keeps going — that failure is specific to one pair, not the batch.
+        if (outcome === 'insufficient_credits') {
+          setCreditsStoppedInfo({ completedPairs: succeededPairs, totalPairs })
+          break outer
+        }
       }
     }
 
@@ -829,16 +959,36 @@ export default function CatalogueWorkspace() {
     setGenerating(false)
   }
 
+  // Marketplace-gap-aware: only attempts marketplaces this product doesn't
+  // already have successful content for, so retrying never re-charges a
+  // credit for a marketplace that already succeeded.
   async function handleRetryProduct(id: string) {
+    const product = draftProducts.find((p) => p.id === id)
+    if (!product || selectedMarketplaces.length === 0) return
+
+    setCurrentlyGeneratingId(id)
+    for (const marketplace of selectedMarketplaces) {
+      if (product.generatedContent[marketplace] !== null) continue
+      const outcome = await generateForProductMarketplace(product, marketplace, selectedMarketplaces)
+      if (outcome === 'insufficient_credits') break
+    }
+    setCurrentlyGeneratingId(null)
+  }
+
+  async function handleRetryProductMarketplace(id: string, marketplace: Marketplace) {
     const product = draftProducts.find((p) => p.id === id)
     if (!product) return
 
     setCurrentlyGeneratingId(id)
-    await generateForProduct(product)
+    await generateForProductMarketplace(product, marketplace, selectedMarketplaces)
     setCurrentlyGeneratingId(null)
   }
 
-  async function generateForProduct(product: DraftProduct): Promise<'success' | 'insufficient_credits' | 'error'> {
+  async function generateForProductMarketplace(
+    product: DraftProduct,
+    marketplace: Marketplace,
+    runMarketplaces: Marketplace[]
+  ): Promise<'success' | 'insufficient_credits' | 'error'> {
     try {
       const imageBase64 = product.imageFile ? await fileToBase64(product.imageFile) : null
 
@@ -849,7 +999,7 @@ export default function CatalogueWorkspace() {
           brandName: product.brandName,
           description: product.description,
           category: product.category,
-          targetMarketplace: product.targetMarketplace,
+          targetMarketplace: marketplace,
           imageBase64,
           imageUrl: product.imageFile ? null : product.imageUrl,
           brandGuidelines: product.skipBrandVoice ? null : selectedClient?.brand_guidelines || null
@@ -859,39 +1009,65 @@ export default function CatalogueWorkspace() {
 
       if (res.ok) {
         setDraftProducts((prev) =>
-          prev.map((p) =>
-            p.id === product.id
-              ? { ...p, generatedContent: data.generatedContent, status: 'generated', generationError: null }
-              : p
-          )
+          prev.map((p) => {
+            if (p.id !== product.id) return p
+            const generatedContent = { ...p.generatedContent, [marketplace]: data.generatedContent }
+            const generationError = { ...p.generationError, [marketplace]: null }
+            return { ...p, generatedContent, generationError, status: computeProductStatus(generatedContent, runMarketplaces) }
+          })
         )
         if (hasSession) notifyCreditsChanged()
         return 'success'
       }
 
       setDraftProducts((prev) =>
-        prev.map((p) => (p.id === product.id ? { ...p, generationError: data.error || 'Generation failed' } : p))
+        prev.map((p) => {
+          if (p.id !== product.id) return p
+          const generationError = { ...p.generationError, [marketplace]: data.error || 'Generation failed' }
+          return { ...p, generationError, status: computeProductStatus(p.generatedContent, runMarketplaces) }
+        })
       )
       return res.status === 403 && typeof data.creditsRemaining === 'number' ? 'insufficient_credits' : 'error'
     } catch {
       setDraftProducts((prev) =>
-        prev.map((p) => (p.id === product.id ? { ...p, generationError: 'Network error - request failed' } : p))
+        prev.map((p) => {
+          if (p.id !== product.id) return p
+          const generationError = { ...p.generationError, [marketplace]: 'Network error - request failed' }
+          return { ...p, generationError, status: computeProductStatus(p.generatedContent, runMarketplaces) }
+        })
       )
       return 'error'
     }
   }
 
-  function handleApprove(id: string) {
-    setDraftProducts((prev) => prev.map((p) => (p.id === id ? { ...p, status: 'approved' } : p)))
+  function handleApproveMarketplace(id: string, marketplace: Marketplace) {
+    setDraftProducts((prev) =>
+      prev.map((p) => (p.id === id ? { ...p, approved: { ...p.approved, [marketplace]: true } } : p))
+    )
   }
 
-  function handleUnapprove(id: string) {
-    setDraftProducts((prev) => prev.map((p) => (p.id === id ? { ...p, status: 'generated' } : p)))
+  function handleUnapproveMarketplace(id: string, marketplace: Marketplace) {
+    setDraftProducts((prev) =>
+      prev.map((p) => (p.id === id ? { ...p, approved: { ...p.approved, [marketplace]: false } } : p))
+    )
   }
 
+  // Approves every marketplace that actually has content, for every product
+  // that has at least one — including 'partial' products, so a product that
+  // only half-finished (see computeProductStatus) still gets its successful
+  // marketplaces approved rather than being held back by the ones that failed.
   function handleBulkApprove() {
     if (!requireMarketplace()) return
-    setDraftProducts((prev) => prev.map((p) => (p.status === 'generated' ? { ...p, status: 'approved' } : p)))
+    setDraftProducts((prev) =>
+      prev.map((p) => {
+        if (p.status !== 'generated' && p.status !== 'partial') return p
+        const approved = { ...p.approved }
+        for (const marketplace of SUPPORTED_MARKETPLACES) {
+          if (p.generatedContent[marketplace] !== null) approved[marketplace] = true
+        }
+        return { ...p, approved }
+      })
+    )
   }
 
   function handleSignInFromExportGate() {
@@ -900,7 +1076,7 @@ export default function CatalogueWorkspace() {
       const parsed = saved ? JSON.parse(saved) : {}
       localStorage.setItem(
         SESSION_STORAGE_KEY,
-        JSON.stringify({ ...parsed, savedAt: Date.now(), pendingDownload: true })
+        JSON.stringify({ ...parsed, version: SESSION_SCHEMA_VERSION, savedAt: Date.now(), pendingDownload: true })
       )
     } catch {
       // worst case the auto-download just doesn't fire after login — not fatal,
@@ -908,17 +1084,30 @@ export default function CatalogueWorkspace() {
     }
   }
 
-  function handleDownloadApproved() {
+  // One CSV row per (product, approved marketplace) pair — a product
+  // approved for both Amazon and Flipkart produces two rows. Only the
+  // marketplaces actually included in this export get cleared afterward
+  // (generatedContent/approved/generationError reset to blank for just
+  // those keys) — a product is dropped from the queue only once that leaves
+  // it with nothing left at all. An approved-but-not-yet-exported
+  // marketplace, or a 'partial' product's still-pending retry, keeps the
+  // product in the queue: generated content (and the credit it cost) is
+  // never silently discarded just because a different marketplace shipped.
+  async function handleDownloadApproved() {
     if (!hasSession) {
       setShowExportGateModal(true)
       return
     }
     if (!requireMarketplace()) return
-    const approved = draftProducts.filter((p) => p.status === 'approved')
 
-    const flattenedRows = approved
-      .map((p) => ({ id: p.id, marketplace: p.targetMarketplace, row: flattenRow(p.targetMarketplace, p.generatedContent) }))
-      .filter((r): r is { id: string; marketplace: string; row: Record<string, string> } => r.row !== null)
+    const flattenedRows: { id: string; marketplace: Marketplace; row: Record<string, string> }[] = []
+    for (const p of draftProducts) {
+      for (const marketplace of SUPPORTED_MARKETPLACES) {
+        if (!p.approved[marketplace]) continue
+        const row = flattenRow(marketplace, p.generatedContent[marketplace])
+        if (row) flattenedRows.push({ id: p.id, marketplace, row })
+      }
+    }
 
     if (flattenedRows.length === 0) {
       alert('No approved products have a supported export shape for their marketplace.')
@@ -926,29 +1115,147 @@ export default function CatalogueWorkspace() {
     }
 
     try {
-      const columns = Array.from(new Set(flattenedRows.flatMap((r) => exportColumns[r.marketplace])))
-      const csv = Papa.unparse(
-        flattenedRows.map((r) => r.row),
-        { columns }
+      // One CSV per marketplace present, each built only from that
+      // marketplace's own rows and its own column shape (exportColumns) —
+      // never a single file with a unioned column set, which is what
+      // produced the flattened, unlabeled mess this replaces (different
+      // marketplaces don't share a row shape: Amazon's bullets vs
+      // Flipkart's key features are different fields entirely). A single
+      // marketplace still downloads directly as one .csv, exactly as
+      // before; more than one bundles into a .zip so each stays cleanly
+      // separated and correctly labeled.
+      const rowsByMarketplace = new Map<Marketplace, Record<string, string>[]>()
+      for (const r of flattenedRows) {
+        const list = rowsByMarketplace.get(r.marketplace) ?? []
+        list.push(r.row)
+        rowsByMarketplace.set(r.marketplace, list)
+      }
+
+      // Every generated listing routinely contains characters outside plain
+      // ASCII — em dashes, curly quotes, ® — and a bare .csv has no
+      // self-describing encoding the way JSON or .docx's XML does. Without
+      // a UTF-8 BOM, Excel falls back to guessing the system codepage
+      // (typically Windows-1252) and silently re-decodes valid UTF-8 bytes
+      // as the wrong characters — the em dash's 3-byte UTF-8 sequence reads
+      // back as "â€"", exactly the corruption reported. Prepending
+      // here (once, at the source) means every consumer downstream —
+      // single-file and each file inside the zip alike — gets it for free.
+      const UTF8_BOM = String.fromCharCode(0xfeff)
+      const csvByMarketplace = new Map<Marketplace, string>(
+        Array.from(rowsByMarketplace.entries()).map(([marketplace, rows]) => [
+          marketplace,
+          UTF8_BOM + Papa.unparse(rows, { columns: exportColumns[marketplace] })
+        ])
       )
 
-      const blob = new Blob([csv], { type: 'text/csv' })
-      const url = window.URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = 'approved-products-export.csv'
-      a.click()
-      window.URL.revokeObjectURL(url)
+      if (csvByMarketplace.size === 1) {
+        const [marketplace, csv] = Array.from(csvByMarketplace.entries())[0]
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+        const url = window.URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `${marketplace}-listings.csv`
+        a.click()
+        window.URL.revokeObjectURL(url)
+      } else {
+        const zip = new JSZip()
+        for (const [marketplace, csv] of csvByMarketplace) {
+          zip.file(`${marketplace}-listings.csv`, csv)
+        }
+        const zipBlob = await zip.generateAsync({ type: 'blob' })
+        const url = window.URL.createObjectURL(zipBlob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = 'approved-listings-export.zip'
+        a.click()
+        window.URL.revokeObjectURL(url)
+      }
 
-      const includedIds = new Set(flattenedRows.map((r) => r.id))
-      setDraftProducts((prev) => prev.filter((p) => !includedIds.has(p.id)))
-      setDownloadMessage(`Downloaded and cleared ${flattenedRows.length} approved products`)
+      const exportedByProduct = new Map<string, Marketplace[]>()
+      for (const r of flattenedRows) {
+        const list = exportedByProduct.get(r.id) ?? []
+        list.push(r.marketplace)
+        exportedByProduct.set(r.id, list)
+      }
+
+      // Computed from a plain snapshot (draftProducts, read directly) rather
+      // than inside the setDraftProducts updater — an updater can run twice
+      // under React StrictMode's dev double-invoke, which would double-count
+      // these if they lived in there instead.
+      let fullyClearedCount = 0
+      let partiallyClearedCount = 0
+      const remainingMarketplaces = new Set<Marketplace>()
+
+      const nextDraftProducts = draftProducts.flatMap((p) => {
+        const exportedMarketplaces = exportedByProduct.get(p.id)
+        if (!exportedMarketplaces) return [p]
+
+        const generatedContent = { ...p.generatedContent }
+        const approved = { ...p.approved }
+        const generationError = { ...p.generationError }
+        for (const marketplace of exportedMarketplaces) {
+          generatedContent[marketplace] = null
+          approved[marketplace] = false
+          generationError[marketplace] = null
+        }
+
+        const stillHasWork = SUPPORTED_MARKETPLACES.filter(
+          (m) => generatedContent[m] !== null || generationError[m] !== null
+        )
+
+        if (stillHasWork.length === 0) {
+          fullyClearedCount++
+          return []
+        }
+
+        partiallyClearedCount++
+        stillHasWork.forEach((m) => remainingMarketplaces.add(m))
+
+        return [
+          {
+            ...p,
+            generatedContent,
+            approved,
+            generationError,
+            status: computeProductStatus(generatedContent, selectedMarketplaces)
+          }
+        ]
+      })
+
+      setDraftProducts(nextDraftProducts)
+
+      const exportedMarketplaceSet = new Set(flattenedRows.map((r) => r.marketplace))
+      const exportedLabel =
+        exportedMarketplaceSet.size === 1
+          ? `${MARKETPLACE_LABELS[flattenedRows[0].marketplace]} listing${flattenedRows.length === 1 ? '' : 's'}`
+          : `listing${flattenedRows.length === 1 ? '' : 's'}`
+
+      const detailParts: string[] = []
+
+      if (fullyClearedCount > 0) {
+        detailParts.push(`cleared ${fullyClearedCount} product${fullyClearedCount === 1 ? '' : 's'}`)
+      }
+      if (partiallyClearedCount > 0) {
+        const marketplaceNames = Array.from(remainingMarketplaces).map((m) => MARKETPLACE_LABELS[m])
+        const variantLabel =
+          marketplaceNames.length <= 2
+            ? `pending ${marketplaceNames.join(' / ')} variant${partiallyClearedCount === 1 ? '' : 's'}`
+            : 'other marketplace variants pending'
+        detailParts.push(
+          `${partiallyClearedCount} product${partiallyClearedCount === 1 ? '' : 's'} still ${
+            partiallyClearedCount === 1 ? 'has' : 'have'
+          } ${variantLabel}`
+        )
+      }
+
+      const summary = `Exported ${flattenedRows.length} ${exportedLabel}`
+      setDownloadMessage(detailParts.length > 0 ? `${summary} — ${detailParts.join('; ')}` : summary)
     } catch {
       alert('Download failed - approved products were not cleared. Please try again.')
     }
   }
 
-  const hasApproved = draftProducts.some((p) => p.status === 'approved')
+  const hasApproved = draftProducts.some((p) => SUPPORTED_MARKETPLACES.some((m) => p.approved[m]))
   const pendingCount = draftProducts.filter((p) => p.status === 'draft').length
   const viewingProduct = draftProducts.find((p) => p.id === viewingId) || null
   const editingProduct = editingId ? draftProducts.find((p) => p.id === editingId) || null : null
@@ -981,14 +1288,23 @@ export default function CatalogueWorkspace() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
           <AppHeader
             hasSession={hasSession}
-            targetMarketplace={targetMarketplace}
-            onMarketplaceChange={handleMarketplaceChange}
+            selectedMarketplaces={selectedMarketplaces}
+            onToggleMarketplace={handleToggleMarketplace}
             marketplaceError={marketplaceError}
             marketplaceFlash={marketplaceFlash}
-            marketplaceSelectRef={marketplaceSelectRef}
+            marketplaceGroupRef={marketplaceSelectRef}
             selectedClientId={selectedClient?.id || ''}
             onSelectClient={setSelectedClient}
           />
+
+          {outdatedSessionDiscarded && (
+            <div className={`mb-4 flex items-center justify-between gap-4 ${warningBannerClass}`}>
+              <p className={warningTextClass}>Previous session format outdated, please start fresh.</p>
+              <button onClick={() => setOutdatedSessionDiscarded(false)} className={buttonSecondaryClass}>
+                Dismiss
+              </button>
+            </div>
+          )}
 
           {pendingRestoreCount !== null && (
             <div className={`mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 ${warningBannerClass}`}>
@@ -1003,6 +1319,29 @@ export default function CatalogueWorkspace() {
                   Discard
                 </button>
               </div>
+            </div>
+          )}
+
+          {/* Top-level and impossible to miss, deliberately — distinct from
+              the per-row "One or more marketplaces failed" text in
+              QueueTable, which is a different, per-item concern (a bad
+              image, a transient error). Running out of credits mid-batch is
+              an account-level stop, not a per-row one, so it gets the same
+              prominent placement as the session banners above rather than
+              being buried inside the queue card. No purchase flow exists
+              yet, so "Buy more credits" goes to /contact (real, existing)
+              rather than a fabricated /billing route. */}
+          {creditsStoppedInfo && (
+            <div className={`mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 ${dangerBannerClass}`}>
+              <div>
+                <p className={`font-semibold ${dangerTextClass}`}>Generation stopped: you're out of credits.</p>
+                <p className={dangerTextClass}>
+                  {creditsStoppedInfo.completedPairs} of {creditsStoppedInfo.totalPairs} items completed.
+                </p>
+              </div>
+              <Link href="/contact" className={`${buttonPrimaryClass} shrink-0 text-center`}>
+                Buy more credits
+              </Link>
             </div>
           )}
 
@@ -1049,6 +1388,7 @@ export default function CatalogueWorkspace() {
                 editingId={editingId}
                 csvFile={csvFile}
                 onCsvFileChange={handleCsvFileChange}
+                csvFileInputRef={csvFileInputRef}
                 csvSummary={csvSummary}
                 isDragging={isDragging}
                 onDragOver={handleDragOver}
@@ -1066,13 +1406,12 @@ export default function CatalogueWorkspace() {
             <QueueTable
               draftProducts={draftProducts}
               currentlyGeneratingId={currentlyGeneratingId}
-              targetMarketplace={targetMarketplace}
+              selectedMarketplaces={selectedMarketplaces}
               generating={generating}
               hasApproved={hasApproved}
               loading={!sessionReady}
               hasSession={hasSession}
               pendingCount={pendingCount}
-              bulkStoppedMessage={bulkStoppedMessage}
               onGenerateAll={handleGenerateAll}
               onBulkApprove={handleBulkApprove}
               onDownloadApproved={handleDownloadApproved}
@@ -1092,9 +1431,9 @@ export default function CatalogueWorkspace() {
         <GeneratedListingDrawer
           product={viewingProduct}
           onClose={() => setViewingId(null)}
-          onApprove={handleApprove}
-          onUnapprove={handleUnapprove}
-          onRetry={handleRetryProduct}
+          onApproveMarketplace={handleApproveMarketplace}
+          onUnapproveMarketplace={handleUnapproveMarketplace}
+          onRetryMarketplace={handleRetryProductMarketplace}
         />
       )}
 

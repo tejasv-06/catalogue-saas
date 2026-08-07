@@ -3,52 +3,64 @@
 import type { RefObject } from 'react'
 import ClientSelector, { type Client } from '@/components/ClientSelector'
 import { SUPPORTED_MARKETPLACES, MARKETPLACE_LABELS } from '@/lib/platformShapers'
-import { selectClass } from '@/lib/uiClasses'
+import type { Marketplace } from '@/lib/types'
 
 // Slim top bar for the right panel — logo, usage/credits, theme, and logout
 // all live in AppSidebar now (shared with /audit). This keeps only what's
-// actually specific to generating listings: which marketplace to shape
-// output for, and which saved brand voice (if any) to apply. Sits directly
-// on the page background, not inside a card.
+// actually specific to generating listings: which marketplace(s) to shape
+// output for (now multi-select — a product can be generated for several at
+// once), and which saved brand voice (if any) to apply. Sits directly on
+// the page background, not inside a card.
 export default function AppHeader({
   hasSession,
-  targetMarketplace,
-  onMarketplaceChange,
+  selectedMarketplaces,
+  onToggleMarketplace,
   marketplaceError,
   marketplaceFlash,
-  marketplaceSelectRef,
+  marketplaceGroupRef,
   selectedClientId,
   onSelectClient
 }: {
   hasSession: boolean
-  targetMarketplace: string
-  onMarketplaceChange: (value: string) => void
+  selectedMarketplaces: Marketplace[]
+  onToggleMarketplace: (marketplace: Marketplace) => void
   marketplaceError: string | null
   marketplaceFlash: boolean
-  marketplaceSelectRef: RefObject<HTMLSelectElement | null>
+  marketplaceGroupRef: RefObject<HTMLDivElement | null>
   selectedClientId: string
   onSelectClient: (client: Client | null) => void
 }) {
   return (
     <div className="mb-6 flex flex-wrap items-center gap-3">
       <div className="flex flex-col gap-1">
-        <select
-          ref={marketplaceSelectRef}
-          value={targetMarketplace}
-          onChange={(e) => onMarketplaceChange(e.target.value)}
-          className={`${selectClass} ${
-            marketplaceError ? `border-red-500 ring-2 ring-red-500 ${marketplaceFlash ? 'animate-pulse' : ''}` : ''
+        <div
+          ref={marketplaceGroupRef}
+          tabIndex={-1}
+          role="group"
+          aria-label="Target marketplaces"
+          className={`flex flex-wrap gap-2 rounded-xl focus:outline-none ${
+            marketplaceError ? `ring-2 ring-red-500 ${marketplaceFlash ? 'animate-pulse' : ''}` : ''
           }`}
         >
-          <option value="" disabled>
-            Select a marketplace
-          </option>
-          {SUPPORTED_MARKETPLACES.map((marketplace) => (
-            <option key={marketplace} value={marketplace}>
-              {MARKETPLACE_LABELS[marketplace]}
-            </option>
-          ))}
-        </select>
+          {SUPPORTED_MARKETPLACES.map((marketplace) => {
+            const isSelected = selectedMarketplaces.includes(marketplace)
+            return (
+              <button
+                key={marketplace}
+                type="button"
+                onClick={() => onToggleMarketplace(marketplace)}
+                aria-pressed={isSelected}
+                className={`px-3 py-2 rounded-lg text-sm font-medium border transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[var(--page-bg)] focus:ring-blue-500 ${
+                  isSelected
+                    ? 'bg-blue-600 border-blue-600 text-white'
+                    : 'bg-[var(--input-bg)] border-[var(--input-border)] text-[var(--heading-text)] hover:bg-[var(--secondary-btn-bg-hover)]'
+                }`}
+              >
+                {MARKETPLACE_LABELS[marketplace]}
+              </button>
+            )
+          })}
+        </div>
         {marketplaceError && <p className="text-xs font-medium text-[var(--danger-link-text)]">{marketplaceError}</p>}
       </div>
       {hasSession && <ClientSelector selectedClientId={selectedClientId} onSelectClient={onSelectClient} />}

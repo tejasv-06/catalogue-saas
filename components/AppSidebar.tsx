@@ -1,11 +1,14 @@
 "use client"
 
+import { useEffect, useState } from 'react'
 import { usePathname } from 'next/navigation'
 import Link from 'next/link'
 import type { ReactNode } from 'react'
 
 export type WorkspaceDestination = 'csv' | 'manual' | 'image'
 type Destination = WorkspaceDestination | 'audit'
+
+const COLLAPSE_STORAGE_KEY = 'workspace-sidebar-collapsed'
 
 function UploadIcon() {
   return (
@@ -40,6 +43,26 @@ function AuditIcon() {
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
       <path d="M9 11l3 3L22 4" />
       <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+    </svg>
+  )
+}
+
+// Points at the panel edge it collapses toward — left-facing chevron means
+// "collapse" (content retreats left), right-facing means "expand."
+function ChevronIcon({ pointingRight }: { pointingRight: boolean }) {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={`shrink-0 transition-transform ${pointingRight ? 'rotate-180' : ''}`}
+    >
+      <path d="m15 18-6-6 6-6" />
     </svg>
   )
 }
@@ -80,20 +103,38 @@ export default function AppSidebar({
   const isWorkspacePage = pathname === '/workspace'
   const isAuditPage = pathname === '/audit'
 
+  // Expanded by default on a first visit (no stored preference yet) — nav
+  // should be immediately visible and discoverable without relying on the
+  // user finding a hover trigger. Collapsing is an explicit, persisted
+  // choice via the toggle button below, not the default.
+  const [collapsed, setCollapsed] = useState(false)
+
+  useEffect(() => {
+    if (localStorage.getItem(COLLAPSE_STORAGE_KEY) === 'true') {
+      setCollapsed(true)
+    }
+  }, [])
+
+  function toggleCollapsed() {
+    setCollapsed((prev) => {
+      const next = !prev
+      localStorage.setItem(COLLAPSE_STORAGE_KEY, String(next))
+      return next
+    })
+  }
+
   function renderItem(destination: (typeof DESTINATIONS)[number], compactLabel: boolean) {
     const isActive = destination.id === 'audit' ? isAuditPage : isWorkspacePage && activeDestination === destination.id
-    // Centered while actually collapsed; reverts to normal left-alignment
-    // once the rail expands (hover or focus-within) and the label reappears
-    // — without the group-hover override this would stay centered even at
-    // full width, since it doesn't otherwise know the rail has expanded.
-    const className = `${itemBaseClass} ${isActive ? itemActiveClass : itemInactiveClass} ${
-      compactLabel ? 'lg:justify-center lg:group-hover:justify-start lg:group-focus-within:justify-start' : ''
-    }`
+    // Only the desktop rail (compactLabel=true) ever collapses — the mobile
+    // bar (compactLabel=false) always shows full labels regardless of this
+    // state, since collapse is a desktop-only concept here.
+    const isIconOnly = compactLabel && collapsed
+    const className = `${itemBaseClass} ${isActive ? itemActiveClass : itemInactiveClass} ${isIconOnly ? 'justify-center' : ''}`
 
     const content = (
       <>
         {destination.icon}
-        <span className={compactLabel ? 'hidden group-hover:inline group-focus-within:inline' : ''}>{destination.label}</span>
+        {!isIconOnly && <span>{destination.label}</span>}
       </>
     )
 
@@ -104,7 +145,7 @@ export default function AppSidebar({
           type="button"
           onClick={() => onDestinationChange?.(destination.id as WorkspaceDestination)}
           aria-current={isActive ? 'page' : undefined}
-          title={compactLabel ? destination.label : undefined}
+          title={isIconOnly ? destination.label : undefined}
           className={className}
         >
           {content}
@@ -114,7 +155,7 @@ export default function AppSidebar({
 
     const href = destination.id === 'audit' ? '/audit' : `/workspace?tab=${destination.id}`
     return (
-      <Link key={destination.id} href={href} aria-current={isActive ? 'page' : undefined} title={compactLabel ? destination.label : undefined} className={className}>
+      <Link key={destination.id} href={href} aria-current={isActive ? 'page' : undefined} title={isIconOnly ? destination.label : undefined} className={className}>
         {content}
       </Link>
     )
@@ -123,20 +164,35 @@ export default function AppSidebar({
   return (
     <>
       {/* Desktop: fixed-left icon rail anchored below TopHeader (top-16, not
-          top-0), stretching to the bottom of the screen. Collapsed 56px by
-          default, expands to 256px on hover/focus (pure CSS — no JS state,
-          no persisted "pinned" preference). Overlays the content area rather
-          than pushing it, so hovering never reflows the page underneath. */}
+          top-0), stretching to the bottom of the screen. Expanded (256px) by
+          default; the toggle button below collapses it to 56px icon-only,
+          click-driven and persisted via localStorage — no hover behavior.
+          Overlays the content area rather than pushing it (the content's own
+          lg:pl-14 offset stays constant regardless of this state), so
+          toggling never reflows the page underneath. */}
       <nav
         aria-label="Main navigation"
-        className="group hidden lg:flex fixed left-0 top-16 h-[calc(100vh-4rem)] w-14 hover:w-64 focus-within:w-64 z-40 flex-col bg-[var(--card-bg)] border-r border-[var(--card-border)] overflow-hidden hover:overflow-visible focus-within:overflow-visible hover:shadow-2xl transition-[width] duration-200"
+        className={`hidden lg:flex fixed left-0 top-16 h-[calc(100vh-4rem)] z-40 flex-col bg-[var(--card-bg)] border-r border-[var(--card-border)] overflow-hidden transition-[width] duration-200 ${
+          collapsed ? 'w-14' : 'w-64'
+        }`}
       >
+        <button
+          type="button"
+          onClick={toggleCollapsed}
+          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          className={`flex items-center shrink-0 px-3 py-2 mt-2 mx-2 rounded-lg text-[var(--muted-text)] hover:text-[var(--heading-text)] hover:bg-[var(--secondary-btn-bg-hover)] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[var(--card-bg)] focus:ring-blue-500 transition-colors ${
+            collapsed ? 'justify-center' : 'justify-end'
+          }`}
+        >
+          <ChevronIcon pointingRight={collapsed} />
+        </button>
+
         <div className="flex-1 flex flex-col gap-1 px-2 py-2 overflow-y-auto">{DESTINATIONS.map((d) => renderItem(d, true))}</div>
       </nav>
 
-      {/* Mobile / tablet: normal-flow horizontal bar — hover has no
-          equivalent on touch, so this is a plain always-visible bar rather
-          than a collapsed/expand-on-interact rail. */}
+      {/* Mobile / tablet: normal-flow horizontal bar — no collapse concept
+          here, always shows full labels. */}
       <nav aria-label="Main navigation" className="flex lg:hidden items-center gap-1 p-2 overflow-x-auto bg-[var(--card-bg)] border-b border-[var(--card-border)]">
         {DESTINATIONS.map((d) => renderItem(d, false))}
       </nav>

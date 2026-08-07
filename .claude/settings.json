@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node \"C:\\\\Users\\\\tejas\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-tejas-Documents-catalogue-saas\\\\4b78df2d-7ae3-41f8-bb71-f549a0002b99\\\\scratchpad\\\\verify-download-clear-live.js\")",
+      "Bash(node \"C:\\\\Users\\\\tejas\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-tejas-Documents-catalogue-saas\\\\4b78df2d-7ae3-41f8-bb71-f549a0002b99\\\\scratchpad\\\\repro-button-bug.js\")",
+      "Bash(node \"C:\\\\Users\\\\tejas\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-tejas-Documents-catalogue-saas\\\\4b78df2d-7ae3-41f8-bb71-f549a0002b99\\\\scratchpad\\\\verify-button-fix.js\")",
+      "Bash(node \"C:\\\\Users\\\\tejas\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-tejas-Documents-catalogue-saas\\\\4b78df2d-7ae3-41f8-bb71-f549a0002b99\\\\scratchpad\\\\verify-export-logic.js\")",
+      "Bash(node \"C:\\\\Users\\\\tejas\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-tejas-Documents-catalogue-saas\\\\4b78df2d-7ae3-41f8-bb71-f549a0002b99\\\\scratchpad\\\\verify-encoding-bug.js\")",
+      "Bash(node \"C:\\\\Users\\\\tejas\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-tejas-Documents-catalogue-saas\\\\4b78df2d-7ae3-41f8-bb71-f549a0002b99\\\\scratchpad\\\\verify-docx-encoding.js\")",
+      "Bash(node \"C:\\\\Users\\\\tejas\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-tejas-Documents-catalogue-saas\\\\4b78df2d-7ae3-41f8-bb71-f549a0002b99\\\\scratchpad\\\\verify-three-fixes.js\")",
+      "Bash(node \"C:\\\\Users\\\\tejas\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-tejas-Documents-catalogue-saas\\\\4b78df2d-7ae3-41f8-bb71-f549a0002b99\\\\scratchpad\\\\trace-raw-api-bytes.js\")",
+      "Bash(node \"C:\\\\Users\\\\tejas\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-tejas-Documents-catalogue-saas\\\\4b78df2d-7ae3-41f8-bb71-f549a0002b99\\\\scratchpad\\\\trace-sportster.js\")",
+      "Bash(node \"C:\\\\Users\\\\tejas\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-tejas-Documents-catalogue-saas\\\\4b78df2d-7ae3-41f8-bb71-f549a0002b99\\\\scratchpad\\\\trace-browser-blob.js\")",
+      "Bash(node \"C:\\\\Users\\\\tejas\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-tejas-Documents-catalogue-saas\\\\4b78df2d-7ae3-41f8-bb71-f549a0002b99\\\\scratchpad\\\\trace-onscreen.js\")",
+      "Bash(node \"C:\\\\Users\\\\tejas\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-tejas-Documents-catalogue-saas\\\\4b78df2d-7ae3-41f8-bb71-f549a0002b99\\\\scratchpad\\\\trace-real-download.js\")",
+      "Bash(node \"C:\\\\Users\\\\tejas\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-tejas-Documents-catalogue-saas\\\\4b78df2d-7ae3-41f8-bb71-f549a0002b99\\\\scratchpad\\\\setup-test-user.js\")",
+      "Bash(taskkill //PID 6632 //F)"
+    ]
+  }
+}

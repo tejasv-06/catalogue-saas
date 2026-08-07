@@ -41,6 +41,7 @@ export default function LeftPanel({
   editingId,
   csvFile,
   onCsvFileChange,
+  csvFileInputRef,
   csvSummary,
   isDragging,
   onDragOver,
@@ -77,6 +78,7 @@ export default function LeftPanel({
   editingId: string | null
   csvFile: File | null
   onCsvFileChange: (file: File | null) => void
+  csvFileInputRef: RefObject<HTMLInputElement | null>
   csvSummary: CsvSummary | null
   isDragging: boolean
   onDragOver: (e: DragEvent<HTMLDivElement>) => void
@@ -193,6 +195,7 @@ export default function LeftPanel({
                 <input
                   type="file"
                   accept=".csv"
+                  ref={csvFileInputRef}
                   onChange={(e) => onCsvFileChange(e.target.files?.[0] ?? null)}
                   className="hidden"
                 />

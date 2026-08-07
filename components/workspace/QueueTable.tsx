@@ -1,6 +1,7 @@
 "use client"
 
-import type { DraftProduct } from '@/lib/types'
+import type { DraftProduct, Marketplace } from '@/lib/types'
+import { SUPPORTED_MARKETPLACES } from '@/lib/platformShapers'
 import ProductThumbnail from '@/components/ProductThumbnail'
 import StatusBadge from '@/components/StatusBadge'
 import EmptyQueueState from '@/components/workspace/EmptyQueueState'
@@ -12,9 +13,7 @@ import {
   buttonDestructiveSmallClass,
   linkButtonClass,
   linkButtonDestructiveClass,
-  cardClass,
-  warningBannerClass,
-  warningTextClass
+  cardClass
 } from '@/lib/uiClasses'
 
 function truncate(text: string, length: number) {
@@ -36,6 +35,13 @@ function QueueRow({
   onDelete: (id: string) => void
   onRetry: (id: string) => void
 }) {
+  // generatedContent/generationError are now full per-marketplace records
+  // (always an object, every key present) — checking the record itself for
+  // truthiness would always be true, so "has anything" has to look at the
+  // actual values.
+  const hasAnyContent = SUPPORTED_MARKETPLACES.some((m) => product.generatedContent[m] !== null)
+  const hasAnyError = SUPPORTED_MARKETPLACES.some((m) => product.generationError[m] !== null)
+
   return (
     <tr className="border-b border-[var(--row-border)]">
       <td className="py-3 px-4">
@@ -48,15 +54,15 @@ function QueueRow({
       <td className="py-3 px-4 text-sm text-[var(--body-text)] max-w-xs">{truncate(product.description, 80)}</td>
       <td className="py-3 px-4">
         <StatusBadge status={isGenerating ? 'generating' : product.status} />
-        {product.generationError && <p className="text-xs text-[var(--danger-link-text)] mt-1">{product.generationError}</p>}
+        {hasAnyError && <p className="text-xs text-[var(--danger-link-text)] mt-1">One or more marketplaces failed</p>}
       </td>
       <td className="py-3 px-4 whitespace-nowrap space-x-2">
-        {(product.generatedContent || product.generationError) && (
+        {(hasAnyContent || hasAnyError) && (
           <button onClick={() => onView(product.id)} className={linkButtonClass}>
-            {product.generatedContent ? 'View Generated Listing' : 'View Error'}
+            {hasAnyContent ? 'View Content' : 'View Error'}
           </button>
         )}
-        {product.generationError && (
+        {hasAnyError && (
           <button onClick={() => onRetry(product.id)} disabled={isGenerating} className={buttonDestructiveSmallClass}>
             Retry
           </button>
@@ -75,13 +81,12 @@ function QueueRow({
 export default function QueueTable({
   draftProducts,
   currentlyGeneratingId,
-  targetMarketplace,
+  selectedMarketplaces,
   generating,
   hasApproved,
   loading,
   hasSession,
   pendingCount,
-  bulkStoppedMessage,
   onGenerateAll,
   onBulkApprove,
   onDownloadApproved,
@@ -92,13 +97,12 @@ export default function QueueTable({
 }: {
   draftProducts: DraftProduct[]
   currentlyGeneratingId: string | null
-  targetMarketplace: string
+  selectedMarketplaces: Marketplace[]
   generating: boolean
   hasApproved: boolean
   loading: boolean
   hasSession: boolean
   pendingCount: number
-  bulkStoppedMessage: string | null
   onGenerateAll: () => void
   onBulkApprove: () => void
   onDownloadApproved: () => void
@@ -107,48 +111,65 @@ export default function QueueTable({
   onDelete: (id: string) => void
   onRetry: (id: string) => void
 }) {
+  const hasSelectedMarketplaces = selectedMarketplaces.length > 0
+
   // Sequential "what's next" highlight: exactly one of the three actions is
   // primary blue at a time, based on where the queue actually is — not the
-  // active tab or any manual toggle. Mutually exclusive by construction:
-  // hasDraft implies neither of the other two can be true yet, and so on.
+  // active tab or any manual toggle.
+  //
+  // Two things `status` alone can no longer answer, now that a product can
+  // span several marketplaces generated independently:
+  //   1. "hasGenerated" (status 'generated'/'partial' existing anywhere) can
+  //      go true mid-batch — a product flips to 'partial' the instant its
+  //      FIRST marketplace lands, while its others are still in flight in
+  //      the very same run. Gating on `generating` fixes Bulk Approve
+  //      lighting up before the batch actually finishes.
+  //   2. Approving a marketplace never changes `status` (approval is fully
+  //      independent of it) — so "no generated-status product exists" is
+  //      never true again once anything has ever been generated, which
+  //      made Download practically unreachable. What actually matters is
+  //      whether any generated marketplace is still *unapproved* anywhere,
+  //      not whether `status` ever resets.
   const hasDraft = draftProducts.some((p) => p.status === 'draft')
-  const hasGenerated = draftProducts.some((p) => p.status === 'generated')
+  const hasUnapprovedContent = draftProducts.some((p) =>
+    SUPPORTED_MARKETPLACES.some((m) => p.generatedContent[m] !== null && !p.approved[m])
+  )
 
   const generateIsPrimary = hasDraft
-  const bulkApproveIsPrimary = !hasDraft && hasGenerated
-  const downloadIsPrimary = !hasDraft && !hasGenerated && hasApproved
+  const bulkApproveIsPrimary = !generating && !hasDraft && hasUnapprovedContent
+  const downloadIsPrimary = !generating && !hasDraft && !hasUnapprovedContent && hasApproved
 
   // Guests aren't credit-metered (they have the separate free-preview count
   // shown in the header), so the cost preview only applies once signed in —
-  // computed from the actual pending count, not hardcoded, so it can't drift
-  // from what generating will actually cost.
+  // computed from the actual pending count and selected marketplaces, not
+  // hardcoded, so it can't drift from what generating will actually cost.
+  // Total cost is simply products × marketplaces (one credit per pair), the
+  // same sum the generation loop actually charges, not a separate formula.
+  const totalGenerations = pendingCount * selectedMarketplaces.length
   const generateLabel = generating
     ? 'Generating...'
-    : hasSession && pendingCount > 0
-      ? `Generate ${pendingCount} listing${pendingCount === 1 ? '' : 's'} (${pendingCount * CREDIT_COSTS.listingGeneration} credit${
-          pendingCount * CREDIT_COSTS.listingGeneration === 1 ? '' : 's'
+    : hasSession && pendingCount > 0 && hasSelectedMarketplaces
+      ? `Generate ${pendingCount} product${pendingCount === 1 ? '' : 's'} × ${selectedMarketplaces.length} marketplace${
+          selectedMarketplaces.length === 1 ? '' : 's'
+        } (${totalGenerations * CREDIT_COSTS.listingGeneration} credit${
+          totalGenerations * CREDIT_COSTS.listingGeneration === 1 ? '' : 's'
         })`
       : 'Generate Content'
 
   return (
     <div className={`w-full min-w-0 p-6 ${cardClass}`}>
-      {bulkStoppedMessage && (
-        <div className={`mb-4 ${warningBannerClass}`}>
-          <p className={warningTextClass}>{bulkStoppedMessage}</p>
-        </div>
-      )}
       <div className="flex flex-row flex-wrap items-center justify-between gap-3 mb-4">
         <div className="flex flex-row flex-wrap items-center gap-3">
           <button
             onClick={onGenerateAll}
-            disabled={!targetMarketplace || !hasDraft || generating}
+            disabled={!hasSelectedMarketplaces || !hasDraft || generating}
             className={generateIsPrimary ? buttonPrimaryClass : buttonSecondaryClass}
           >
             {generateLabel}
           </button>
           <button
             onClick={onBulkApprove}
-            disabled={!targetMarketplace || !hasGenerated}
+            disabled={!hasSelectedMarketplaces || !hasUnapprovedContent}
             className={bulkApproveIsPrimary ? buttonPrimaryClass : buttonSecondaryClass}
           >
             Bulk Approve
@@ -156,7 +177,7 @@ export default function QueueTable({
         </div>
         <button
           onClick={onDownloadApproved}
-          disabled={!targetMarketplace || !hasApproved}
+          disabled={!hasSelectedMarketplaces || !hasApproved}
           className={downloadIsPrimary ? buttonPrimaryClass : buttonSecondaryClass}
         >
           Download CSV
