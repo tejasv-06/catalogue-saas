@@ -1,5 +1,17 @@
 import Link from 'next/link'
-import { Upload, Search, ScanEye, ClipboardCheck, Download, Tags, Zap, Lock, ShieldCheck, type LucideIcon } from 'lucide-react'
+import {
+  Upload,
+  Search,
+  ScanEye,
+  ClipboardCheck,
+  Download,
+  Tags,
+  Zap,
+  Lock,
+  ShieldCheck,
+  CheckCircle2,
+  type LucideIcon
+} from 'lucide-react'
 import Navbar from '@/components/Navbar'
 import HeroMockup from '@/components/HeroMockup'
 import AuditPreview from '@/components/AuditPreview'
@@ -7,25 +19,47 @@ import { cardClass } from '@/lib/uiClasses'
 import { GUEST_GENERATION_LIMIT } from '@/lib/limits'
 import { SUPPORTED_MARKETPLACES, MARKETPLACE_LABELS } from '@/lib/platformShapers'
 
-const valueProps: { title: string; description: string; icon: LucideIcon }[] = [
+// stat is split out from title (rather than embedded, e.g. "90% Faster
+// Catalog Launch") so it can be rendered as its own larger, colored
+// leading element — the number is what a scanning eye should catch first,
+// which a plain inline string can't do. Card 3 has no leading stat, hence
+// the null.
+const valueProps: { stat: string | null; title: string; description: string; icon: LucideIcon }[] = [
   {
-    title: '90% Faster Catalog Launch',
+    stat: '90%',
+    title: 'Faster Catalog Launch',
     description:
       'Eliminate spreadsheet chaos and manual copy-pasting. Go from raw CSV or photo uploads to multi-channel launch-ready files in minutes.',
     icon: Zap
   },
   {
-    title: '100% Locked Brand Voice',
+    stat: '100%',
+    title: 'Locked Brand Voice',
     description:
       'Never sound like generic AI. Teach the system your tone once — whether premium, technical, or playful — and keep every single SKU strictly on-brand.',
     icon: Lock
   },
   {
+    stat: null,
     title: 'Channel-Compliant SEO',
     description:
       'Built-in character validation, bullet point limits, and A9/search-indexed backend keywords for Amazon, Flipkart, Etsy, and Myntra.',
     icon: ShieldCheck
   }
+]
+
+// Below the subtitle, right before the stat-card grid — this section has
+// no CTA button of its own (that lives one section down, in the hero) to
+// anchor "below the CTA" against, so this is the closest real analog:
+// the last thing a visitor reads before the proof grid, working as a
+// friction-removal bridge between the pitch and the evidence. Tested the
+// alternative (directly under the eyebrow, above the headline) too — it
+// crowded the eyebrow->headline flow and delayed the headline's impact,
+// so this placement won.
+const trustSignals: { icon: LucideIcon; label: string }[] = [
+  { icon: Zap, label: '10 Free Credits' },
+  { icon: Lock, label: 'No Credit Card Required' },
+  { icon: CheckCircle2, label: 'Works with Amazon, Flipkart, Myntra, Etsy' }
 ]
 
 // Sky/cyan highlight for feature-card titles (replaced an earlier amber
@@ -141,6 +175,14 @@ const freeIncludedBadgeClass =
 const marketplaceChipClass =
   'px-3 py-1 rounded-full text-xs font-medium border border-[var(--card-border)] bg-[var(--secondary-btn-bg)] text-[var(--secondary-btn-text)]'
 
+// Muted/neutral, not colored — deliberately quieter than the orange
+// eyebrow tag next to it ("distinct... but visually related" per the
+// request): the icon carries the one small orange accent tying it back to
+// the eyebrow, while the pill itself reuses the same neutral chip shell as
+// marketplaceChipClass so it doesn't compete for attention.
+const trustChipClass =
+  'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border border-[var(--card-border)] bg-[var(--secondary-btn-bg)] text-[var(--secondary-btn-text)]'
+
 // Border-only hover glow, matching the icon/title sky accent — simpler
 // than the shadow-based glow this replaced, just a brighter border tint on
 // hover instead of the plain opacity dim used elsewhere on the page.
@@ -175,28 +217,41 @@ export default function Home() {
         {/* Value-prop section, now the first thing below the nav header,
             directly above the Listing Generation hero — moved up per an
             explicit re-order request. Colors still deviate from a literal
-            slate-900/text-white/text-sky-400 spec for the same reason as
-            when this section was first added: this page has a real light
-            theme (ThemeToggle in Navbar), and every other section uses the
-            --heading-text/--body-text/--card-bg/--accent-sky-text CSS vars
-            specifically so it doesn't break there — see those vars'
-            definitions in app/globals.css for the measured contrast
-            ratios. bg/border opacity utilities (sky-500/10, sky-500/20)
-            are literal Tailwind classes as specified, since alpha-blended
-            fills don't have that same contrast-failure mode. */}
+            slate-900/text-white/text-sky-400/text-orange-400 spec for the
+            same reason as when this section was first added: this page has
+            a real light theme (ThemeToggle in Navbar), and every other
+            section uses the --heading-text/--body-text/--card-bg/
+            --accent-sky-text/--accent-orange-text CSS vars specifically so
+            it doesn't break there — see those vars' definitions in
+            app/globals.css for the measured contrast ratios. bg/border
+            opacity utilities (orange-500/10, orange-500/30) are literal
+            Tailwind classes as specified, since alpha-blended fills don't
+            have that same contrast-failure mode. */}
         <section className="max-w-6xl mx-auto px-6 py-16 text-center">
-          <span className="inline-block px-4 py-1.5 rounded-full text-xs font-semibold tracking-wider text-[var(--accent-sky-text)] bg-sky-500/10 border border-sky-500/20 mb-4">
+          {/* Orange, not the page's dominant blue/sky — the eyebrow's job
+              is to be the first thing a scanning eye catches, which it
+              can't do blending into the same color already used for nav,
+              CTAs, and icons everywhere else on the page. */}
+          <span className="inline-block px-4 py-1.5 rounded-full text-xs font-semibold tracking-wider text-[var(--accent-orange-text)] bg-orange-500/10 border border-orange-500/30 mb-4">
             PURPOSE-BUILT FOR E-COMMERCE BRANDS &amp; AGENCIES
           </span>
           <h2 className="text-3xl md:text-4xl font-extrabold text-[var(--heading-text)] mb-4">
             Stop Wasting Days on Manual Cataloging &amp; Generic AI Copy
           </h2>
-          <p className="max-w-3xl mx-auto text-[var(--body-text)] text-base md:text-lg leading-relaxed mb-12">
+          <p className="max-w-3xl mx-auto text-[var(--body-text)] text-base md:text-lg leading-relaxed mb-6">
             Most AI tools spit out generic ChatGPT text that fails marketplace character limits, ignores backend
             search algorithms, and strips away your brand's unique identity. Tesolute is engineered specifically for
             e-commerce operators — combining computer vision with platform-tailored SEO to transform raw assets into
             high-converting, brand-aligned listings instantly.
           </p>
+          <div className="flex flex-wrap justify-center gap-2 mb-12">
+            {trustSignals.map((signal) => (
+              <span key={signal.label} className={trustChipClass}>
+                <signal.icon size={13} strokeWidth={2} className="text-[var(--accent-orange-text)]" />
+                {signal.label}
+              </span>
+            ))}
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-left">
             {valueProps.map((prop) => (
               <div
@@ -204,6 +259,11 @@ export default function Home() {
                 className="bg-[var(--card-bg)]/60 backdrop-blur-xl border border-[var(--card-border)] p-6 rounded-2xl"
               >
                 <prop.icon size={22} strokeWidth={2} className="text-[var(--accent-sky-text)] mb-3" />
+                {prop.stat && (
+                  <div className="text-3xl font-extrabold text-[var(--accent-orange-text)] leading-none mb-1">
+                    {prop.stat}
+                  </div>
+                )}
                 <h3 className="font-semibold text-[var(--heading-text)] mb-2">{prop.title}</h3>
                 <p className="text-sm text-[var(--body-text)]">{prop.description}</p>
               </div>
