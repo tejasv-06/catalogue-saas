@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import Navbar from '@/components/Navbar'
-import VideoPlaceholder from '@/components/VideoPlaceholder'
 import HeroMockup from '@/components/HeroMockup'
+import AuditPreview from '@/components/AuditPreview'
 import { cardClass } from '@/lib/uiClasses'
 import { GUEST_GENERATION_LIMIT } from '@/lib/limits'
 import { SUPPORTED_MARKETPLACES, MARKETPLACE_LABELS } from '@/lib/platformShapers'
@@ -99,16 +99,18 @@ export default function Home() {
               </h1>
               <ul className="flex flex-col gap-2.5 mb-6">
                 <BenefitItem>
-                  <strong className="text-[var(--heading-text)]">Bulk CSV or manual entry</strong>, for any catalog
-                  size.
+                  <strong className="text-[var(--heading-text)]">Platform-Tailored &amp; Brand-Voice Aware</strong> —
+                  not generic ChatGPT output, copy engineered specifically for each platform's algorithm and your
+                  brand's tone.
                 </BenefitItem>
                 <BenefitItem>
-                  <strong className="text-[var(--heading-text)]">Marketplace-tailored copy</strong> for Amazon,
-                  Flipkart, Myntra, Etsy, and more.
+                  <strong className="text-[var(--heading-text)]">SEO Optimized with Top 10 High-Intent Keywords</strong>{' '}
+                  — automatically extracts and embeds high-converting search keywords into titles, bullet points, and
+                  backend search terms.
                 </BenefitItem>
                 <BenefitItem>
-                  <strong className="text-[var(--heading-text)]">AI reads your product photos</strong> to catch
-                  details you'd otherwise type by hand.
+                  <strong className="text-[var(--heading-text)]">Zero Hallucination Vision AI</strong> — reads
+                  product attributes, colors, materials, and features directly from your uploaded images.
                 </BenefitItem>
               </ul>
               <div className="flex flex-wrap gap-2 mb-6">
@@ -129,7 +131,11 @@ export default function Home() {
           </div>
         </section>
 
-        <section className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pb-16">
+        {/* Same container width/padding as the Listing Generation hero
+            above, and the same two-column shape (bullets + CTA left, a
+            hero-style preview card right) — the two service cards are meant
+            to read as one consistent pattern, not two different layouts. */}
+        <section className="max-w-7xl mx-auto px-6 py-12">
           <div className={`p-8 grid grid-cols-1 lg:grid-cols-2 gap-8 items-center ${cardClass}`}>
             <div>
               <span className={eyebrowClass}>Account Audit</span>
@@ -150,14 +156,14 @@ export default function Home() {
                   just a pile of numbers.
                 </BenefitItem>
               </ul>
-              <div className="flex flex-wrap items-center gap-3">
+              <div className="flex flex-col items-start gap-2">
                 <Link href="/audit" className={primaryCtaClass}>
                   Audit Your Amazon Account Now
                 </Link>
                 <span className={freeIncludedBadgeClass}>1 Free Audit Included</span>
               </div>
             </div>
-            <VideoPlaceholder />
+            <AuditPreview />
           </div>
         </section>
 

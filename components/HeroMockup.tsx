@@ -1,3 +1,5 @@
+import { Shirt, Coffee, Headphones, type LucideIcon } from 'lucide-react'
+
 // Code-built stand-in for a product screenshot — the app's real UI changes
 // too often for a static screenshot to stay accurate, and there's no demo
 // video yet (see VideoPlaceholder, used elsewhere on this page). This reads
@@ -7,21 +9,24 @@
 // Every color here is a theme CSS variable (see app/globals.css), not a
 // hardcoded white/black, so the glass effect holds up in both the dark
 // ("Night") and light ("Day") themes instead of just one.
-const sampleListings: { marketplace: string; title: string; bullet: string }[] = [
+const sampleListings: { marketplace: string; title: string; bullet: string; icon: LucideIcon }[] = [
   {
     marketplace: 'Amazon',
     title: 'Organic Cotton Crew Neck T-Shirt — Soft, Breathable Everyday Fit',
-    bullet: 'Premium combed cotton · pre-shrunk · true to size'
+    bullet: 'Premium combed cotton · pre-shrunk · true to size',
+    icon: Shirt
   },
   {
     marketplace: 'Etsy',
     title: 'Handwoven Ceramic Mug Set, 3-Piece, Dishwasher Safe',
-    bullet: 'Hand-glazed finish · gift-ready packaging'
+    bullet: 'Hand-glazed finish · gift-ready packaging',
+    icon: Coffee
   },
   {
     marketplace: 'Flipkart',
     title: 'Wireless Earbuds with Active Noise Cancellation',
-    bullet: '30-hour battery · IPX5 water resistant'
+    bullet: '30-hour battery · IPX5 water resistant',
+    icon: Headphones
   }
 ]
 
@@ -47,11 +52,7 @@ export default function HeroMockup() {
               className="flex gap-3 rounded-xl border border-[var(--card-border)] bg-[var(--input-bg)]/40 p-3"
             >
               <div className="w-10 h-10 rounded-lg bg-[var(--placeholder-bg)] shrink-0 flex items-center justify-center text-[var(--muted-text)]">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="3" y="3" width="18" height="18" rx="2" />
-                  <circle cx="8.5" cy="8.5" r="1.5" />
-                  <path d="m21 15-5-5L5 21" />
-                </svg>
+                <listing.icon size={16} strokeWidth={2} />
               </div>
               <div className="min-w-0">
                 <span className="inline-block text-[10px] font-semibold uppercase tracking-wide text-blue-500 mb-1">

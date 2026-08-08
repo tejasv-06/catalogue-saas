@@ -87,13 +87,15 @@ export default function MobileMenu({ isLoggedIn }: { isLoggedIn: boolean }) {
 
           <div className="my-1 border-t border-[var(--card-border)]" />
 
+          {/* Mobile equivalent of the desktop nav's session-aware CTA in
+              Navbar.tsx — same label/destination pairing, kept in sync. */}
           <Link
             href={isLoggedIn ? '/workspace' : '/login'}
             onClick={() => setOpen(false)}
             role="menuitem"
             className="block mt-1 text-center bg-blue-600 hover:bg-blue-500 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-colors"
           >
-            {isLoggedIn ? 'Start Generating Listings' : 'Login'}
+            {isLoggedIn ? 'Go to Workspace' : 'Sign In'}
           </Link>
         </div>
       )}

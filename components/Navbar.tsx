@@ -31,14 +31,16 @@ export default async function Navbar() {
             Contact
           </Link>
           <ThemeToggle />
-          {/* "Start Generating Listings" duplicated the hero CTA directly
-              below it — this just needs to get a signed-in user back into
-              the app (or a guest to /login), not sell the product again. */}
+          {/* Session-aware in both label and destination: a signed-in user
+              gets routed straight back into the app ("Go to Workspace"), a
+              guest gets the actual login page ("Sign In") — neither state
+              should ever say "Sign In" while linking to /workspace, or vice
+              versa. */}
           <Link
             href={isLoggedIn ? '/workspace' : '/login'}
             className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2.5 rounded-xl text-sm font-medium shadow-lg shadow-blue-500/20 ring-1 ring-white/15 transition-colors whitespace-nowrap"
           >
-            Sign In
+            {isLoggedIn ? 'Go to Workspace' : 'Sign In'}
           </Link>
         </div>
 
