@@ -2,10 +2,20 @@
 
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { SERVICES } from '@/components/ServicesDropdown'
+import { TOOLS } from '@/components/ToolsDropdown'
 
 const menuLinkClass =
   'block px-3 py-2.5 rounded-lg text-sm font-medium text-[var(--heading-text)] hover:bg-[var(--secondary-btn-bg-hover)] transition-colors'
+
+// Mirrors the desktop nav's navLinks in Navbar.tsx — same five anchors/
+// routes, same order.
+const navLinks = [
+  { href: '/#product', label: 'Product' },
+  { href: '/how-it-works', label: 'How It Works' },
+  { href: '/#for-brands', label: 'For Brands' },
+  { href: '/#for-agencies', label: 'For Agencies' },
+  { href: '/contact', label: 'Pricing' }
+]
 
 export default function MobileMenu({ isLoggedIn }: { isLoggedIn: boolean }) {
   const [open, setOpen] = useState(false)
@@ -32,7 +42,7 @@ export default function MobileMenu({ isLoggedIn }: { isLoggedIn: boolean }) {
   }, [open])
 
   return (
-    <div ref={containerRef} className="relative md:hidden">
+    <div ref={containerRef} className="relative lg:hidden">
       <button
         type="button"
         onClick={() => setOpen((prev) => !prev)}
@@ -55,47 +65,46 @@ export default function MobileMenu({ isLoggedIn }: { isLoggedIn: boolean }) {
       {open && (
         <div
           role="menu"
-          className="absolute right-0 top-full mt-2 w-[calc(100vw-2rem)] max-w-sm rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)] shadow-xl p-2 z-50"
+          className="absolute right-0 top-full mt-2 w-[calc(100vw-2rem)] max-w-sm max-h-[calc(100vh-5rem)] overflow-y-auto rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)] shadow-xl p-2 z-50"
         >
-          <Link href="/" onClick={() => setOpen(false)} role="menuitem" className={menuLinkClass}>
-            Home
-          </Link>
-
-          <div className="my-1 border-t border-[var(--card-border)]" />
-
-          {SERVICES.map((service) => (
-            <Link
-              key={service.href}
-              href={service.href}
-              onClick={() => setOpen(false)}
-              role="menuitem"
-              className="block px-3 py-2.5 rounded-lg hover:bg-[var(--secondary-btn-bg-hover)] transition-colors"
-            >
-              <div className="text-sm font-semibold text-[var(--heading-text)]">{service.title}</div>
-              <div className="text-xs text-[var(--muted-text)] mt-0.5">{service.subtext}</div>
+          {navLinks.map((link) => (
+            <Link key={link.href} href={link.href} onClick={() => setOpen(false)} role="menuitem" className={menuLinkClass}>
+              {link.label}
             </Link>
           ))}
 
           <div className="my-1 border-t border-[var(--card-border)]" />
 
-          <Link href="/how-it-works" onClick={() => setOpen(false)} role="menuitem" className={menuLinkClass}>
-            How It Works
-          </Link>
-          <Link href="/contact" onClick={() => setOpen(false)} role="menuitem" className={menuLinkClass}>
-            Contact
-          </Link>
+          {TOOLS.map((tool) => (
+            <Link
+              key={tool.href}
+              href={tool.href}
+              onClick={() => setOpen(false)}
+              role="menuitem"
+              className="block px-3 py-2.5 rounded-lg hover:bg-[var(--secondary-btn-bg-hover)] transition-colors"
+            >
+              <div className="text-sm font-semibold text-[var(--heading-text)]">{tool.title}</div>
+              <div className="text-xs text-[var(--muted-text)] mt-0.5">{tool.subtext}</div>
+            </Link>
+          ))}
 
           <div className="my-1 border-t border-[var(--card-border)]" />
 
-          {/* Mobile equivalent of the desktop nav's session-aware CTA in
-              Navbar.tsx — same label/destination pairing, kept in sync. */}
+          {/* Mirrors the desktop nav's session-aware CTA in Navbar.tsx — see
+              that file for why guests get "Try Tesolute Free" pointed at
+              /workspace instead of "Go to Workspace" or a /login wall. */}
+          {!isLoggedIn && (
+            <Link href="/login" onClick={() => setOpen(false)} role="menuitem" className={menuLinkClass}>
+              Sign In
+            </Link>
+          )}
           <Link
-            href={isLoggedIn ? '/workspace' : '/login'}
+            href="/workspace"
             onClick={() => setOpen(false)}
             role="menuitem"
             className="block mt-1 text-center bg-blue-600 hover:bg-blue-500 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-colors"
           >
-            {isLoggedIn ? 'Go to Workspace' : 'Sign In'}
+            {isLoggedIn ? 'Go to Workspace' : 'Try Tesolute Free →'}
           </Link>
         </div>
       )}

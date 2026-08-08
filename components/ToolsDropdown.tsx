@@ -3,23 +3,24 @@
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 
-// Exported so MobileMenu can render the same two services as a flat list
+// Exported so MobileMenu can render the same two tools as a flat list
 // instead of nesting a hover-dropdown inside a drawer, which doesn't
-// translate well to touch.
-export const SERVICES = [
+// translate well to touch. Copy matches the footer's "Tools" list (section
+// 22 of the redesign spec): Listing Generator, Amazon Account Audit.
+export const TOOLS = [
   {
     href: '/workspace',
-    title: 'AI Listing Generator',
-    subtext: 'Generate marketplace-optimized titles, bullets, and descriptions instantly. 10 free generations included.'
+    title: 'Listing Generator',
+    subtext: 'Turn product photos and data into marketplace-ready listings for Amazon, Flipkart, Myntra, and Etsy.'
   },
   {
     href: '/audit',
-    title: 'Amazon Account Audit & Revenue Insights',
-    subtext: 'Upload your seller traffic CSV to unlock a 30-day sales growth plan and revenue-leakage fixes.'
+    title: 'Amazon Account Audit',
+    subtext: 'Upload your seller traffic report to unlock a 30-day sales growth plan and revenue-leakage fixes.'
   }
 ]
 
-export default function ServicesDropdown() {
+export default function ToolsDropdown() {
   const [open, setOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -61,7 +62,7 @@ export default function ServicesDropdown() {
         aria-expanded={open}
         className="flex items-center gap-1 text-sm text-[var(--muted-text)] hover:text-[var(--heading-text)] transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/40 rounded"
       >
-        Services
+        Tools
         <svg
           width="12"
           height="12"
@@ -89,18 +90,18 @@ export default function ServicesDropdown() {
         // as padding-top instead, so the wrapper's own box is flush against
         // the trigger with zero dead space, and the visible bordered menu
         // (the nested div) just renders lower inside it.
-        <div className="absolute left-0 top-full w-80 pt-2 z-50">
+        <div className="absolute right-0 top-full w-80 pt-2 z-50">
           <div role="menu" className="rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)] shadow-xl p-2">
-            {SERVICES.map((service) => (
+            {TOOLS.map((tool) => (
               <Link
-                key={service.href}
-                href={service.href}
+                key={tool.href}
+                href={tool.href}
                 role="menuitem"
                 onClick={() => setOpen(false)}
                 className="block px-3 py-2.5 rounded-lg hover:bg-[var(--secondary-btn-bg-hover)] transition-colors"
               >
-                <div className="text-sm font-semibold text-[var(--heading-text)]">{service.title}</div>
-                <div className="text-xs text-[var(--muted-text)] mt-0.5">{service.subtext}</div>
+                <div className="text-sm font-semibold text-[var(--heading-text)]">{tool.title}</div>
+                <div className="text-xs text-[var(--muted-text)] mt-0.5">{tool.subtext}</div>
               </Link>
             ))}
           </div>

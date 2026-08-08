@@ -1,212 +1,113 @@
 import Link from 'next/link'
 import {
+  ArrowRight,
+  Check,
+  X,
+  CheckCircle2,
+  Building2,
+  Users,
   Upload,
-  Search,
-  ScanEye,
+  Sparkles,
   ClipboardCheck,
   Download,
-  Tags,
-  Zap,
-  Lock,
-  ShieldCheck,
-  CheckCircle2,
   type LucideIcon
 } from 'lucide-react'
 import Navbar from '@/components/Navbar'
-import HeroMockup from '@/components/HeroMockup'
-import AuditPreview from '@/components/AuditPreview'
+import HeroTransformDemo from '@/components/landing/HeroTransformDemo'
+import AttributeExtractionDemo from '@/components/landing/AttributeExtractionDemo'
 import { cardClass } from '@/lib/uiClasses'
-import { GUEST_GENERATION_LIMIT } from '@/lib/limits'
 import { SUPPORTED_MARKETPLACES, MARKETPLACE_LABELS } from '@/lib/platformShapers'
 
-// stat is split out from title (rather than embedded, e.g. "90% Faster
-// Catalog Launch") so it can be rendered as its own larger, colored
-// leading element — the number is what a scanning eye should catch first,
-// which a plain inline string can't do. Card 3 has no leading stat, hence
-// the null.
-const valueProps: { stat: string | null; title: string; description: string; icon: LucideIcon }[] = [
+// ---------------------------------------------------------------------------
+// Data
+// ---------------------------------------------------------------------------
+
+const problemFlow = ['Photos', 'Attributes', 'Keywords', 'Copy', 'Marketplace Fields', 'Validation', 'Export']
+
+const solutionSteps = [
+  { number: '01', title: 'Understand', description: 'Upload product images, CSVs or existing product data.' },
   {
-    stat: '90%',
-    title: 'Faster Catalog Launch',
-    description:
-      'Eliminate spreadsheet chaos and manual copy-pasting. Go from raw CSV or photo uploads to multi-channel launch-ready files in minutes.',
-    icon: Zap
+    number: '02',
+    title: 'Enrich',
+    description: 'Tesolute extracts product attributes and fills the information needed for marketplace listings.'
   },
   {
-    stat: '100%',
-    title: 'Locked Brand Voice',
-    description:
-      'Never sound like generic AI. Teach the system your tone once — whether premium, technical, or playful — and keep every single SKU strictly on-brand.',
-    icon: Lock
+    number: '03',
+    title: 'Generate',
+    description: 'Create titles, bullet points, descriptions, attributes and search terms tailored to the marketplace.'
   },
   {
-    stat: null,
-    title: 'Channel-Compliant SEO',
-    description:
-      'Built-in character validation, bullet point limits, and A9/search-indexed backend keywords for Amazon, Flipkart, Etsy, and Myntra.',
-    icon: ShieldCheck
+    number: '04',
+    title: 'Export',
+    description: 'Review your catalog, make changes inline and download marketplace-ready files.'
   }
 ]
 
-// Below the subtitle, right before the stat-card grid — this section has
-// no CTA button of its own (that lives one section down, in the hero) to
-// anchor "below the CTA" against, so this is the closest real analog:
-// the last thing a visitor reads before the proof grid, working as a
-// friction-removal bridge between the pitch and the evidence. Tested the
-// alternative (directly under the eyebrow, above the headline) too — it
-// crowded the eyebrow->headline flow and delayed the headline's impact,
-// so this placement won.
-const trustSignals: { icon: LucideIcon; label: string }[] = [
-  { icon: Zap, label: '10 Free Credits' },
-  { icon: Lock, label: 'No Credit Card Required' },
-  { icon: CheckCircle2, label: 'Works with Amazon, Flipkart, Myntra, Etsy' }
+const genericAiPoints = [
+  'Generates text',
+  'Requires manually supplied attributes',
+  'Generic output',
+  'No marketplace-specific structure',
+  'Manual validation',
+  'Inconsistent brand tone',
+  'Copy/paste workflow'
 ]
 
-// Sky/cyan highlight for feature-card titles (replaced an earlier amber
-// version). Reuses the --accent-sky-text CSS var rather than a literal
-// text-sky-400 class because that solid color measures 7.51:1 on the dark
-// card background but only 2.14:1 in the light theme — see the var's
-// definition in app/globals.css for the full comparison.
-const skyTitleClass = 'text-[var(--accent-sky-text)]'
-
-// title is JSX rather than a plain string so the "high-intent" phrase in
-// each one can be wrapped in skyTitleClass inline, at the exact word
-// boundaries given — simpler and less fragile than storing a substring and
-// splitting the title string at render time.
-const features: { title: React.ReactNode; description: string; icon: LucideIcon }[] = [
-  {
-    title: (
-      <>
-        Upload Your <span className={skyTitleClass}>Whole Catalog</span>
-      </>
-    ),
-    description: "Got 10 products or 10,000? Upload a CSV or your product photos, and we'll handle the rest.",
-    icon: Upload
-  },
-  {
-    title: (
-      <>
-        Listings That <span className={skyTitleClass}>Actually Get Found</span>
-      </>
-    ),
-    description:
-      "We write titles and descriptions the way each marketplace's search really works, so more shoppers find your products.",
-    icon: Search
-  },
-  {
-    title: (
-      <>
-        AI Reads Your <span className={skyTitleClass}>Product Photos</span>
-      </>
-    ),
-    description:
-      "Just upload a photo. Our AI notices the color, material, and style, so you don't have to type it all in.",
-    icon: ScanEye
-  },
-  {
-    title: (
-      <>
-        <span className={skyTitleClass}>Review</span> Before You Publish
-      </>
-    ),
-    description:
-      "Check every listing, tweak the wording, or regenerate it. Approve a whole batch in one click when you're happy.",
-    icon: ClipboardCheck
-  },
-  {
-    title: (
-      <>
-        Download, <span className={skyTitleClass}>Ready to Upload</span>
-      </>
-    ),
-    description: "Get a file that's already in the right format for each marketplace. No fixing spreadsheets by hand.",
-    icon: Download
-  },
-  {
-    title: (
-      <>
-        The <span className={skyTitleClass}>Right Keywords</span>, Automatically
-      </>
-    ),
-    description: 'Every listing includes the search terms shoppers actually type, built in from day one.',
-    icon: Tags
-  }
+const tesolutePoints = [
+  'Builds complete listings',
+  'Extracts attributes from product images',
+  'Marketplace-specific output',
+  'SEO-aware content',
+  'Built-in validation',
+  'Locked brand voice',
+  'Bulk generation and export'
 ]
 
-const steps = [
-  { title: 'Ingest Assets', description: 'Drop raw CSVs, product URLs, or photo folders.' },
-  { title: 'Automated SEO Copywriting', description: 'AI generates channel-compliant titles, specs, and search terms.' },
-  { title: 'Review & Refine', description: 'Tweak messaging, adjust keyword density, or approve in batch view.' },
-  { title: 'Scale & Export', description: 'Download ready-to-upload catalog flat files and boost marketplace reach.' }
+const marketplaceFields: { name: string; fields: string[] }[] = [
+  { name: 'Amazon', fields: ['Title', 'Bullets', 'Search Terms', 'Attributes'] },
+  { name: 'Flipkart', fields: ['Product Title', 'Description', 'Attributes', 'Category Fields'] },
+  { name: 'Myntra', fields: ['Product Name', 'Description', 'Colour', 'Fabric', 'Pattern', 'Style'] },
+  { name: 'Etsy', fields: ['Title', 'Description', 'Tags', 'Materials'] }
 ]
 
-const testimonials = [
-  {
-    quote:
-      'We scaled from handling 5 brand catalogs to 25 brands without adding copywriters. Our client product pages now rank organically 4x faster across Amazon and Flipkart.',
-    name: 'Priya N.',
-    role: 'Founder, E-commerce Operations Agency'
-  },
-  {
-    quote:
-      'Eliminating channel listing rejections saved us hundreds of operational hours. The marketplace-specific keyword formatting alone bumped our search impressions by 35% in week one.',
-    name: 'Marcus T.',
-    role: 'Head of Cataloging, D2C Brand'
-  },
-  {
-    quote:
-      'I used to spend full weekends reformatting bullet points for Etsy and Amazon. Now I auto-generate visual-based attributes and localized keywords in one click.',
-    name: 'Dana R.',
-    role: 'Multi-Channel Seller'
-  }
+const brandVoiceTones = ['Premium', 'Minimal', 'Elegant', 'Confident']
+
+const brandVoiceExamples: { product: string; copy: string }[] = [
+  { product: 'Jacquard Saree', copy: 'A quietly confident weave — traditional pattern, modern restraint.' },
+  { product: 'Leather Tote', copy: 'Considered materials, minimal hardware. Built for everyday use.' },
+  { product: 'Ceramic Vase', copy: 'Understated form, deliberate proportions. Elegant on any shelf.' }
 ]
 
+const bulkChecklist = ['Bulk CSV upload', 'Bulk image processing', 'Inline editing', 'Bulk approval', 'Marketplace-ready export']
+
+const proofPoints: { problem: string; solution: string }[] = [
+  { problem: 'Manual attribute entry', solution: 'Automated extraction' },
+  { problem: 'Generic AI copy', solution: 'Brand-specific content' },
+  { problem: 'Marketplace formatting', solution: 'Channel-specific generation' },
+  { problem: 'Spreadsheet cleanup', solution: 'Ready-to-upload exports' }
+]
+
+const howItWorksSteps: { title: string; description: string; icon: LucideIcon }[] = [
+  { title: 'Upload', description: 'Drop in your product images and CSV.', icon: Upload },
+  { title: 'Generate', description: 'Tesolute analyzes your products and creates channel-specific listings.', icon: Sparkles },
+  { title: 'Review', description: "Edit anything you want. Regenerate anything you don't.", icon: ClipboardCheck },
+  { title: 'Export', description: 'Download your marketplace-ready catalog.', icon: Download }
+]
+
+// ---------------------------------------------------------------------------
+// Shared style tokens (reused throughout — see lib/uiClasses.ts for the
+// app-wide ones like cardClass; these are landing-page-specific)
+// ---------------------------------------------------------------------------
+
+const eyebrowClass = 'inline-block text-xs font-semibold uppercase tracking-wide text-blue-600 mb-3'
+const sectionHeadingClass = 'text-3xl md:text-4xl font-bold text-[var(--heading-text)] mb-4'
 const primaryCtaClass =
-  'inline-block bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl text-base font-semibold shadow-lg shadow-blue-500/20 transition-colors'
-
-const eyebrowClass = 'inline-block text-xs font-semibold uppercase tracking-wide text-blue-600 mb-2'
-
-// Same pill treatment on both service cards (Listing Generation, Account
-// Audit), so the two "free trial" callouts read as one consistent pattern
-// rather than each card inventing its own badge style.
-const freeIncludedBadgeClass =
-  'inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-[var(--success-bg)] text-[var(--success-text)] border border-[var(--success-border)]'
-
+  'inline-flex items-center gap-1.5 bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl text-base font-semibold shadow-lg shadow-blue-500/20 transition-colors'
+const secondaryCtaClass =
+  'inline-flex items-center gap-1.5 bg-[var(--secondary-btn-bg)] hover:bg-[var(--secondary-btn-bg-hover)] text-[var(--secondary-btn-text)] border border-[var(--secondary-btn-border)] px-6 py-3 rounded-xl text-base font-semibold transition-colors'
 const marketplaceChipClass =
   'px-3 py-1 rounded-full text-xs font-medium border border-[var(--card-border)] bg-[var(--secondary-btn-bg)] text-[var(--secondary-btn-text)]'
-
-// Muted/neutral, not colored — deliberately quieter than the sky eyebrow
-// tag above it: the icon carries the one small sky accent tying it back to
-// the eyebrow and the rest of the page's highlight color, while the pill
-// itself reuses the same neutral chip shell as marketplaceChipClass so it
-// doesn't compete for attention.
-const trustChipClass =
-  'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border border-[var(--card-border)] bg-[var(--secondary-btn-bg)] text-[var(--secondary-btn-text)]'
-
-// Border-only hover glow, matching the icon/title sky accent — simpler
-// than the shadow-based glow this replaced, just a brighter border tint on
-// hover instead of the plain opacity dim used elsewhere on the page.
-const featureCardHoverClass = 'hover:border-sky-500/40 transition-colors duration-200'
-
-// Sky icon badge to match the sky heading highlight next to it — bg and
-// border are plain Tailwind sky-500 opacity utilities (as asked for) since
-// alpha-blended backgrounds/borders don't have a WCAG text-contrast failure
-// mode the way solid foreground color does; only the icon's own stroke
-// color (which the badge's text-* class drives via currentColor) is
-// swapped for the theme-aware --accent-sky-text var used everywhere else
-// on this page, since literal text-sky-400 drops to 2.14:1 in the light
-// theme (see skyTitleClass above).
-const featureIconClass =
-  'bg-sky-500/10 text-[var(--accent-sky-text)] border border-sky-500/20 p-2.5 rounded-lg shrink-0 flex items-center justify-center'
-
-function BenefitItem({ children }: { children: React.ReactNode }) {
-  return (
-    <li className="flex gap-2.5 text-[var(--body-text)]">
-      <span className="text-blue-600 mt-0.5">✓</span>
-      <span>{children}</span>
-    </li>
-  )
-}
+const glassCardClass = 'rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)]/60 backdrop-blur-xl shadow-xl'
 
 export default function Home() {
   return (
@@ -214,170 +115,278 @@ export default function Home() {
       <Navbar />
 
       <main className="flex-1">
-        {/* Value-prop section, now the first thing below the nav header,
-            directly above the Listing Generation hero — moved up per an
-            explicit re-order request. Colors still deviate from a literal
-            slate-900/text-white/text-sky-400 spec for the same reason as
-            when this section was first added: this page has a real light
-            theme (ThemeToggle in Navbar), and every other section uses the
-            --heading-text/--body-text/--card-bg/--accent-sky-text CSS vars
-            specifically so it doesn't break there — see that var's
-            definition in app/globals.css for the measured contrast ratios.
-            bg/border opacity utilities (sky-500/10, sky-500/20) are literal
-            Tailwind classes as specified, since alpha-blended fills don't
-            have that same contrast-failure mode. Orange/amber, previously
-            used here, has been fully purged in favor of this one sky/cyan
-            accent across the whole page. */}
-        <section className="max-w-6xl mx-auto px-6 py-16 text-center">
-          <span className="inline-block px-4 py-1.5 rounded-full text-xs font-semibold tracking-wider text-[var(--accent-sky-text)] bg-sky-500/10 border border-sky-500/20 mb-4">
-            PURPOSE-BUILT FOR E-COMMERCE BRANDS &amp; AGENCIES
-          </span>
-          <h2 className="text-3xl md:text-4xl font-extrabold text-[var(--heading-text)] mb-4">
-            Stop Wasting Days on Manual Cataloging &amp; Generic AI Copy
-          </h2>
-          <p className="max-w-3xl mx-auto text-[var(--body-text)] text-base md:text-lg leading-relaxed mb-6">
-            Most AI tools spit out generic ChatGPT text that fails marketplace character limits, ignores backend
-            search algorithms, and strips away your brand's unique identity. Tesolute is engineered specifically for
-            e-commerce operators — combining computer vision with platform-tailored SEO to transform raw assets into
-            high-converting, brand-aligned listings instantly.
+        {/* -------------------------------------------------------------
+            HERO + PRODUCT TRANSFORMATION DEMO (spec sections 7-8)
+            Combined into one section/anchor — the demo is the direct
+            visual continuation of the hero's promise, not a separate
+            topic. id="product" is the nav's "Product" anchor target. */}
+        <section id="product" className="max-w-7xl mx-auto px-6 pt-16 pb-20 text-center">
+          <span className={eyebrowClass}>AI Cataloging for E-Commerce</span>
+          <h1 className="text-4xl md:text-5xl font-extrabold text-[var(--heading-text)] mb-5 max-w-3xl mx-auto leading-tight">
+            Stop Writing Listings. Start Launching Products.
+          </h1>
+          <p className="max-w-2xl mx-auto text-[var(--body-text)] text-base md:text-lg leading-relaxed mb-8">
+            Turn product photos and product data into marketplace-ready listings for Amazon, Flipkart, Myntra and
+            Etsy — optimized for each channel and consistent with your brand.
           </p>
-          <div className="flex flex-wrap justify-center gap-2 mb-12">
-            {trustSignals.map((signal) => (
-              <span key={signal.label} className={trustChipClass}>
-                <signal.icon size={13} strokeWidth={2} className="text-[var(--accent-sky-text)]" />
-                {signal.label}
+          <div className="flex flex-wrap items-center justify-center gap-3 mb-4">
+            <Link href="/workspace" className={primaryCtaClass}>
+              Create Your First Listing
+              <ArrowRight size={16} />
+            </Link>
+            <Link href="/how-it-works" className={secondaryCtaClass}>
+              See How It Works
+            </Link>
+          </div>
+          <p className="text-xs text-[var(--muted-text)] mb-3">10 free credits · No credit card required</p>
+          <p className="text-xs text-[var(--muted-text)] mb-12">
+            {SUPPORTED_MARKETPLACES.map((m) => MARKETPLACE_LABELS[m]).join(' · ')}
+          </p>
+
+          <HeroTransformDemo />
+        </section>
+
+        {/* -------------------------------------------------------------
+            PROBLEM (spec section 9) */}
+        <section className="max-w-5xl mx-auto px-6 py-16 text-center">
+          <span className={eyebrowClass}>The Cataloging Problem</span>
+          <h2 className={sectionHeadingClass}>One product isn't the problem. 500 products are.</h2>
+          <p className="max-w-2xl mx-auto text-[var(--body-text)] leading-relaxed mb-2">
+            Every new SKU means another round of photos, attributes, keywords, titles, bullet points, descriptions,
+            marketplace fields, character limits and spreadsheet cleanup.
+          </p>
+          <p className="max-w-2xl mx-auto text-[var(--body-text)] leading-relaxed mb-8">Then you do it again for the next SKU.</p>
+
+          <div className="flex flex-wrap items-center justify-center gap-2 mb-8">
+            {problemFlow.map((step, i) => (
+              <div key={step} className="flex items-center gap-2">
+                <span className="text-xs font-medium text-[var(--muted-text)] bg-[var(--secondary-btn-bg)] border border-[var(--card-border)] rounded-full px-3 py-1.5">
+                  {step}
+                </span>
+                {i < problemFlow.length - 1 && (
+                  <ArrowRight size={14} className="text-[var(--muted-text)]" aria-hidden="true" />
+                )}
+              </div>
+            ))}
+          </div>
+
+          <p className="text-lg font-semibold text-[var(--heading-text)]">
+            Tesolute turns that entire workflow into one process.
+          </p>
+        </section>
+
+        {/* -------------------------------------------------------------
+            SOLUTION (spec section 10) */}
+        <section className="max-w-6xl mx-auto px-6 py-16">
+          <div className="text-center mb-12">
+            <span className={eyebrowClass}>From Raw Assets to Ready-to-Upload</span>
+            <h2 className={sectionHeadingClass}>You bring the product. Tesolute builds the listing.</h2>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {solutionSteps.map((step) => (
+              <div key={step.number}>
+                <p className="text-3xl font-extrabold text-[var(--accent-sky-text)] leading-none mb-3">{step.number}</p>
+                <h3 className="font-semibold text-[var(--heading-text)] mb-1.5">{step.title}</h3>
+                <p className="text-sm text-[var(--body-text)]">{step.description}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* -------------------------------------------------------------
+            KEY DIFFERENTIATION — "ChatGPT vs Tesolute" (spec section 11) */}
+        <section className="max-w-6xl mx-auto px-6 py-16">
+          <div className="text-center mb-12">
+            <span className={eyebrowClass}>Why Tesolute?</span>
+            <h2 className={sectionHeadingClass}>
+              ChatGPT can write a product description. Tesolute builds the listing.
+            </h2>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            <div className={`p-6 ${cardClass}`}>
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-[var(--muted-text)] mb-4">Generic AI</h3>
+              <ul className="flex flex-col gap-3">
+                {genericAiPoints.map((point) => (
+                  <li key={point} className="flex items-start gap-2.5 text-sm text-[var(--body-text)]">
+                    <X size={16} className="text-[var(--danger-link-text)] shrink-0 mt-0.5" />
+                    {point}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className={`p-6 border-sky-500/30 ${cardClass}`}>
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-[var(--accent-sky-text)] mb-4">Tesolute</h3>
+              <ul className="flex flex-col gap-3">
+                {tesolutePoints.map((point) => (
+                  <li key={point} className="flex items-start gap-2.5 text-sm text-[var(--body-text)]">
+                    <Check size={16} className="text-[var(--accent-sky-text)] shrink-0 mt-0.5" />
+                    {point}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+          <p className="text-center text-lg font-semibold text-[var(--heading-text)] max-w-2xl mx-auto">
+            The difference isn't better AI writing. It's understanding the job you're actually trying to get done.
+          </p>
+        </section>
+
+        {/* -------------------------------------------------------------
+            MARKETPLACE INTELLIGENCE (spec section 12) */}
+        <section className="max-w-6xl mx-auto px-6 py-16">
+          <div className="text-center mb-12">
+            <span className={eyebrowClass}>Built for the Channel</span>
+            <h2 className={sectionHeadingClass}>One product. Different marketplace. Different listing.</h2>
+            <p className="max-w-2xl mx-auto text-[var(--body-text)] leading-relaxed">
+              Amazon, Flipkart, Myntra and Etsy don't use the same catalog structure, content requirements or search
+              behavior. Tesolute adapts your product listing to the marketplace you're selling on.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+            {marketplaceFields.map((mp) => (
+              <div key={mp.name} className={`p-5 ${cardClass}`}>
+                <h3 className="font-semibold text-[var(--heading-text)] mb-3">{mp.name}</h3>
+                <ul className="flex flex-col gap-1.5">
+                  {mp.fields.map((field) => (
+                    <li key={field} className="text-sm text-[var(--body-text)]">
+                      {field}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+          <p className="text-center text-lg font-semibold text-[var(--heading-text)]">Create once. Adapt everywhere.</p>
+        </section>
+
+        {/* -------------------------------------------------------------
+            COMPUTER VISION / ATTRIBUTE EXTRACTION (spec section 13) */}
+        <section className="max-w-5xl mx-auto px-6 py-16">
+          <div className="text-center mb-10">
+            <span className={eyebrowClass}>Your Photos Already Contain the Data</span>
+            <h2 className={sectionHeadingClass}>Stop typing what your product photos already show.</h2>
+            <p className="max-w-2xl mx-auto text-[var(--body-text)] leading-relaxed mb-4">
+              Upload your product images and Tesolute identifies relevant visual attributes automatically.
+            </p>
+            <p className="text-sm text-[var(--muted-text)]">Colour · Pattern · Material · Style · Design · Features</p>
+          </div>
+          <AttributeExtractionDemo />
+        </section>
+
+        {/* -------------------------------------------------------------
+            BRAND VOICE (spec section 14) */}
+        <section className="max-w-5xl mx-auto px-6 py-16 text-center">
+          <span className={eyebrowClass}>Your Brand Should Sound Like Your Brand</span>
+          <h2 className={sectionHeadingClass}>Teach Tesolute your voice once. Keep it across every SKU.</h2>
+          <p className="max-w-2xl mx-auto text-[var(--body-text)] leading-relaxed mb-8">
+            Define your brand's tone, vocabulary, style and content rules once. Tesolute applies them consistently
+            across your entire catalog.
+          </p>
+
+          <div className="flex flex-wrap items-center justify-center gap-2 mb-8">
+            {brandVoiceTones.map((tone) => (
+              <span key={tone} className={marketplaceChipClass}>
+                {tone}
               </span>
             ))}
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-left">
-            {valueProps.map((prop) => (
-              <div
-                key={prop.title}
-                className="bg-[var(--card-bg)]/60 backdrop-blur-xl border border-[var(--card-border)] p-6 rounded-2xl"
-              >
-                <prop.icon size={22} strokeWidth={2} className="text-[var(--accent-sky-text)] mb-3" />
-                {prop.stat && (
-                  <div className="text-3xl font-extrabold text-[var(--accent-sky-text)] leading-none mb-1">
-                    {prop.stat}
-                  </div>
-                )}
-                <h3 className="font-semibold text-[var(--heading-text)] mb-2">{prop.title}</h3>
-                <p className="text-sm text-[var(--body-text)]">{prop.description}</p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8 text-left">
+            {brandVoiceExamples.map((example) => (
+              <div key={example.product} className={`p-4 ${cardClass}`}>
+                <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted-text)] mb-1.5">
+                  {example.product}
+                </p>
+                <p className="text-sm text-[var(--body-text)] italic">&ldquo;{example.copy}&rdquo;</p>
               </div>
             ))}
           </div>
+
+          <p className="text-lg font-semibold text-[var(--heading-text)]">
+            Your catalog grows. Your brand voice stays consistent.
+          </p>
         </section>
 
-        <section className="max-w-7xl mx-auto px-6 py-12">
-          <div className={`p-8 grid grid-cols-1 lg:grid-cols-2 gap-8 items-center ${cardClass}`}>
-            <div>
-              <span className={eyebrowClass}>Listing Generation</span>
-              <h1 className="text-3xl font-bold text-[var(--heading-text)] mb-4">
-                List Products Everywhere. In Minutes, Not Hours.
-              </h1>
-              <ul className="flex flex-col gap-2.5 mb-6">
-                <BenefitItem>
-                  <strong className="text-[var(--heading-text)]">Platform-Tailored &amp; Brand-Voice Aware</strong> —
-                  not generic ChatGPT output, copy engineered specifically for each platform's algorithm and your
-                  brand's tone.
-                </BenefitItem>
-                <BenefitItem>
-                  <strong className="text-[var(--heading-text)]">SEO Optimized with Top 10 High-Intent Keywords</strong>{' '}
-                  — automatically extracts and embeds high-converting search keywords into titles, bullet points, and
-                  backend search terms.
-                </BenefitItem>
-                <BenefitItem>
-                  <strong className="text-[var(--heading-text)]">Zero Hallucination Vision AI</strong> — reads
-                  product attributes, colors, materials, and features directly from your uploaded images.
-                </BenefitItem>
-              </ul>
-              <div className="flex flex-wrap gap-2 mb-6">
-                {SUPPORTED_MARKETPLACES.map((marketplace) => (
-                  <span key={marketplace} className={marketplaceChipClass}>
-                    {MARKETPLACE_LABELS[marketplace]}
-                  </span>
-                ))}
-              </div>
-              <div className="flex flex-col items-start gap-2">
-                <Link href="/workspace" className={primaryCtaClass}>
-                  Start Generating Listings
-                </Link>
-                <span className={freeIncludedBadgeClass}>{GUEST_GENERATION_LIMIT} Free Credits Included</span>
-              </div>
+        {/* -------------------------------------------------------------
+            BULK CATALOGING (spec section 15) */}
+        <section className="max-w-4xl mx-auto px-6 py-16 text-center">
+          <span className={eyebrowClass}>Built for Catalogs, Not Just Products</span>
+          <h2 className={sectionHeadingClass}>10 SKUs or 10,000. The workflow stays the same.</h2>
+          <p className="max-w-2xl mx-auto text-[var(--body-text)] leading-relaxed mb-8">
+            Upload your catalog once. Generate listings in bulk. Review everything in one workspace. Make changes
+            inline. Export when you're ready.
+          </p>
+          <ul className="flex flex-col sm:flex-row flex-wrap items-center justify-center gap-x-6 gap-y-3 mb-8">
+            {bulkChecklist.map((item) => (
+              <li key={item} className="flex items-center gap-2 text-sm text-[var(--body-text)]">
+                <CheckCircle2 size={15} className="text-[var(--accent-sky-text)] shrink-0" />
+                {item}
+              </li>
+            ))}
+          </ul>
+          <p className="text-sm text-[var(--muted-text)] max-w-xl mx-auto">
+            No opening hundreds of spreadsheets. No copy-pasting between tabs. No repeating the same work SKU by SKU.
+          </p>
+        </section>
+
+        {/* -------------------------------------------------------------
+            BRANDS + AGENCIES (spec section 16) */}
+        <section className="max-w-6xl mx-auto px-6 py-16">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div id="for-brands" className={`p-8 scroll-mt-20 ${cardClass}`}>
+              <Building2 size={24} className="text-[var(--accent-sky-text)] mb-4" />
+              <span className={eyebrowClass}>For E-Commerce Brands</span>
+              <h3 className="text-2xl font-bold text-[var(--heading-text)] mb-3">Launch products faster.</h3>
+              <p className="text-[var(--body-text)] mb-6">
+                Turn your product assets into marketplace-ready listings without building a larger cataloging team.
+              </p>
+              <Link href="/workspace" className={secondaryCtaClass}>
+                For Brands
+                <ArrowRight size={16} />
+              </Link>
             </div>
-            <HeroMockup />
+
+            <div id="for-agencies" className={`p-8 scroll-mt-20 border-sky-500/30 ${cardClass}`}>
+              <Users size={24} className="text-[var(--accent-sky-text)] mb-4" />
+              <span className={eyebrowClass}>For E-Commerce Agencies</span>
+              <h3 className="text-2xl font-bold text-[var(--heading-text)] mb-3">
+                Handle more catalogs without adding more people.
+              </h3>
+              <p className="text-[var(--body-text)] mb-6">
+                Process multiple client catalogs while keeping each brand's content, voice and marketplace
+                requirements separate.
+              </p>
+              <Link href="/workspace" className={secondaryCtaClass}>
+                For Agencies
+                <ArrowRight size={16} />
+              </Link>
+            </div>
           </div>
         </section>
 
-        {/* Same container width/padding as the Listing Generation hero
-            above, and the same two-column shape (bullets + CTA left, a
-            hero-style preview card right) — the two service cards are meant
-            to read as one consistent pattern, not two different layouts. */}
-        <section className="max-w-7xl mx-auto px-6 py-12">
-          <div className={`p-8 grid grid-cols-1 lg:grid-cols-2 gap-8 items-center ${cardClass}`}>
-            <div>
-              <span className={eyebrowClass}>Account Audit</span>
-              <h2 className="text-3xl font-bold text-[var(--heading-text)] mb-4">
-                Find Out What's Actually Costing You Sales.
-              </h2>
-              <ul className="flex flex-col gap-2.5 mb-6">
-                <BenefitItem>
-                  <strong className="text-[var(--heading-text)]">Upload your Amazon sales &amp; traffic report</strong>{' '}
-                  and get a verified, AI-written diagnosis.
-                </BenefitItem>
-                <BenefitItem>
-                  <strong className="text-[var(--heading-text)]">See exactly which products drive revenue</strong>{' '}
-                  and which ones are burning traffic for nothing.
-                </BenefitItem>
-                <BenefitItem>
-                  <strong className="text-[var(--heading-text)]">Get a prioritized 30-day action plan</strong>, not
-                  just a pile of numbers.
-                </BenefitItem>
-              </ul>
-              <div className="flex flex-col items-start gap-2">
-                <Link href="/audit" className={primaryCtaClass}>
-                  Audit Your Amazon Account Now
-                </Link>
-                <span className={freeIncludedBadgeClass}>1 Free Audit Included</span>
-              </div>
-            </div>
-            <AuditPreview />
-          </div>
-        </section>
-
-        <section className="max-w-7xl mx-auto px-6 py-16">
-          <h2 className="text-2xl font-bold text-[var(--heading-text)] text-center mb-10">
-            Everything You Need to List &amp; Scale Faster
-          </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {features.map((feature, i) => (
-              <div
-                key={i}
-                className={`p-6 ${featureCardHoverClass} ${cardClass}`}
-              >
-                <div className="flex items-center gap-3 mb-3">
-                  <div className={featureIconClass}>
-                    <feature.icon size={20} strokeWidth={2} />
-                  </div>
-                  <h3 className="font-semibold text-[var(--heading-text)] leading-snug">{feature.title}</h3>
-                </div>
-                <p className="text-sm text-[var(--body-text)]">{feature.description}</p>
-              </div>
+        {/* -------------------------------------------------------------
+            SUPPORTED MARKETPLACES (spec section 17) */}
+        <section className="max-w-4xl mx-auto px-6 py-16 text-center">
+          <span className={eyebrowClass}>Sell Where Your Customers Shop</span>
+          <h2 className={sectionHeadingClass}>One catalog. Multiple marketplaces.</h2>
+          <div className="flex flex-wrap items-center justify-center gap-3 mb-4">
+            {SUPPORTED_MARKETPLACES.map((m) => (
+              <span key={m} className={`${marketplaceChipClass} text-sm px-4 py-2`}>
+                {MARKETPLACE_LABELS[m]}
+              </span>
             ))}
           </div>
+          <p className="text-sm text-[var(--muted-text)]">More marketplaces coming soon.</p>
         </section>
 
+        {/* -------------------------------------------------------------
+            HOW IT WORKS (spec section 18) */}
         <section className="py-16 bg-[var(--table-head-bg)]">
-          <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-            <h2 className="text-2xl font-bold text-[var(--heading-text)] text-center mb-10">How it works</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
-              {steps.map((step, i) => (
-                <div key={step.title} className="text-center">
-                  {/* blue-600 -> sky-600, not sky-400 as literally named —
-                      white text on blue-600/sky-400 only measures 2.14:1 at
-                      the sky-400 end (fails even the 3:1 large-text
-                      minimum); sky-600 holds the same blue-to-cyan identity
-                      and passes at 4.10:1 at its lightest point. */}
+          <div className="max-w-5xl mx-auto px-6 text-center">
+            <h2 className={sectionHeadingClass}>From product folder to marketplace catalog.</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 my-10">
+              {howItWorksSteps.map((step, i) => (
+                <div key={step.title}>
                   <div className="w-10 h-10 rounded-full bg-gradient-to-r from-blue-600 to-sky-600 text-white shadow-md shadow-sky-500/20 flex items-center justify-center mx-auto mb-3 font-bold">
                     {i + 1}
                   </div>
@@ -386,48 +395,117 @@ export default function Home() {
                 </div>
               ))}
             </div>
-            <div className="text-center mt-8">
-              <Link href="/how-it-works" className="text-sm text-blue-600 hover:opacity-80 underline transition-colors">
-                See the full walkthrough
-              </Link>
-            </div>
+            <Link href="/workspace" className={primaryCtaClass}>
+              Try It With Your Catalog
+              <ArrowRight size={16} />
+            </Link>
           </div>
         </section>
 
-        <section className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-          <h2 className="text-2xl font-bold text-[var(--heading-text)] text-center mb-2">What sellers are saying</h2>
-          <p className="text-center text-xs text-[var(--muted-text)] mb-10">
-            (Placeholder quotes, will be replaced with real customer testimonials)
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {testimonials.map((t) => (
-              <div
-                key={t.name}
-                className={`p-6 hover:opacity-90 transition ${cardClass}`}
-              >
-                <p className="text-sm text-[var(--body-text)] mb-4">&ldquo;{t.quote}&rdquo;</p>
-                <p className="text-sm font-semibold text-[var(--heading-text)]">{t.name}</p>
-                <p className="text-xs text-[var(--muted-text)]">{t.role}</p>
+        {/* -------------------------------------------------------------
+            PROOF (spec section 20) — placeholder testimonials removed
+            entirely, replaced with the four problem->solution pairs the
+            spec calls for instead of fabricated names/quotes/results. */}
+        <section className="max-w-5xl mx-auto px-6 py-16 text-center">
+          <span className={eyebrowClass}>Built for Real Catalog Operations</span>
+          <h2 className={sectionHeadingClass}>Less cataloging. More selling.</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-10 text-left">
+            {proofPoints.map((point) => (
+              <div key={point.problem} className={`flex items-center gap-4 p-5 ${cardClass}`}>
+                <span className="text-sm text-[var(--muted-text)] line-through decoration-[var(--muted-text)]/50 shrink-0">
+                  {point.problem}
+                </span>
+                <ArrowRight size={16} className="text-[var(--accent-sky-text)] shrink-0" />
+                <span className="text-sm font-semibold text-[var(--heading-text)]">{point.solution}</span>
               </div>
             ))}
           </div>
         </section>
+
+        {/* -------------------------------------------------------------
+            FINAL CTA (spec section 21) */}
+        <section className="max-w-3xl mx-auto px-6 py-16 text-center">
+          <span className={eyebrowClass}>Ready to Build Your Next Catalog?</span>
+          <h2 className={sectionHeadingClass}>Your next 100 listings shouldn't take 100 hours.</h2>
+          <p className="text-[var(--body-text)] mb-8">Upload your product data. Let Tesolute do the cataloging.</p>
+          <Link href="/workspace" className={primaryCtaClass}>
+            Create Your First Listing
+            <ArrowRight size={16} />
+          </Link>
+          <p className="text-xs text-[var(--muted-text)] mt-3">10 free credits · No credit card required</p>
+        </section>
       </main>
 
-      <footer className="border-t py-8 border-[var(--card-border)]">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-[var(--muted-text)]">
-          <p>&copy; {new Date().getFullYear()} Tesolute. All rights reserved.</p>
-          <div className="flex gap-6">
-            <Link href="/" className="hover:text-[var(--heading-text)] transition-colors">
-              Home
-            </Link>
-            <Link href="/how-it-works" className="hover:text-[var(--heading-text)] transition-colors">
-              How It Works
-            </Link>
-            <Link href="/contact" className="hover:text-[var(--heading-text)] transition-colors">
-              Contact
-            </Link>
+      {/* -----------------------------------------------------------------
+          FOOTER (spec section 22) */}
+      <footer className="border-t py-12 border-[var(--card-border)]">
+        <div className="max-w-6xl mx-auto px-6 grid grid-cols-2 sm:grid-cols-4 gap-8">
+          <div className="col-span-2 sm:col-span-1">
+            <p className="font-bold text-[var(--heading-text)] mb-2">Tesolute</p>
+            <p className="text-sm text-[var(--muted-text)]">AI cataloging for e-commerce brands and agencies.</p>
           </div>
+
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted-text)] mb-3">Navigation</p>
+            <ul className="flex flex-col gap-2 text-sm">
+              <li>
+                <Link href="/#product" className="text-[var(--body-text)] hover:text-[var(--heading-text)] transition-colors">
+                  Product
+                </Link>
+              </li>
+              <li>
+                <Link href="/how-it-works" className="text-[var(--body-text)] hover:text-[var(--heading-text)] transition-colors">
+                  How It Works
+                </Link>
+              </li>
+              <li>
+                <Link href="/#for-brands" className="text-[var(--body-text)] hover:text-[var(--heading-text)] transition-colors">
+                  For Brands
+                </Link>
+              </li>
+              <li>
+                <Link href="/#for-agencies" className="text-[var(--body-text)] hover:text-[var(--heading-text)] transition-colors">
+                  For Agencies
+                </Link>
+              </li>
+              <li>
+                <Link href="/contact" className="text-[var(--body-text)] hover:text-[var(--heading-text)] transition-colors">
+                  Pricing
+                </Link>
+              </li>
+            </ul>
+          </div>
+
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted-text)] mb-3">Tools</p>
+            <ul className="flex flex-col gap-2 text-sm">
+              <li>
+                <Link href="/workspace" className="text-[var(--body-text)] hover:text-[var(--heading-text)] transition-colors">
+                  Listing Generator
+                </Link>
+              </li>
+              <li>
+                <Link href="/audit" className="text-[var(--body-text)] hover:text-[var(--heading-text)] transition-colors">
+                  Amazon Account Audit
+                </Link>
+              </li>
+            </ul>
+          </div>
+
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted-text)] mb-3">Legal</p>
+            {/* Plain text, not links — no privacy/terms pages exist yet in
+                this app, and linking to a route that 404s is worse than a
+                clearly-inert label. */}
+            <ul className="flex flex-col gap-2 text-sm text-[var(--muted-text)]">
+              <li>Privacy Policy</li>
+              <li>Terms of Service</li>
+            </ul>
+          </div>
+        </div>
+
+        <div className="max-w-6xl mx-auto px-6 mt-10 pt-6 border-t border-[var(--card-border)] text-sm text-[var(--muted-text)]">
+          &copy; {new Date().getFullYear()} Tesolute. All rights reserved.
         </div>
       </footer>
     </div>
