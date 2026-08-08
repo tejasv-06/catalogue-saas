@@ -47,6 +47,18 @@
   --success-border: rgba(4, 120, 87, 0.6);
   --success-text: #6ee7b7;
 
+  /* Sky/cyan accent for the landing page's feature-grid icons and title
+     highlights (replaced an earlier amber version) — bg/border are
+     semi-transparent so the same rgba works unchanged in both themes;
+     --accent-sky-text is the one value that has to differ per theme, since
+     sky-400 (used here) measures 7.51:1 against this dark card background
+     but drops to 2.14:1 on the light theme's near-white equivalent —
+     verified with the WCAG relative-luminance formula, not eyeballed. See
+     the light block below for that theme's contrast-passing value. */
+  --accent-sky-bg: rgba(14, 165, 233, 0.1);
+  --accent-sky-border: rgba(14, 165, 233, 0.4);
+  --accent-sky-text: #38bdf8;
+
   --tab-track-bg: rgba(2, 6, 23, 0.4);
   --dropzone-border: #334155;
   --drop-active-bg: rgba(23, 37, 84, 0.3);
@@ -95,6 +107,16 @@
   --success-bg: #ecfdf5;
   --success-border: #a7f3d0;
   --success-text: #047857;
+
+  /* Same rgba bg/border as the dark theme (they composite correctly against
+     either card color unchanged) — only the text shade changes, to
+     sky-700: 5.93:1 against the light theme's resulting background,
+     comfortably past the 4.5:1 AA text minimum. sky-600 (4.10:1) was the
+     next lighter step but fell just short of AA, so this goes one shade
+     further for a real margin rather than a borderline pass. */
+  --accent-sky-bg: rgba(14, 165, 233, 0.1);
+  --accent-sky-border: rgba(14, 165, 233, 0.4);
+  --accent-sky-text: #0369a1;
 
   --tab-track-bg: #f1f5f9;
   --dropzone-border: #cbd5e1;

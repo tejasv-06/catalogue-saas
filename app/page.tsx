@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { Upload, Search, ScanEye, ClipboardCheck, Download, Tags, type LucideIcon } from 'lucide-react'
 import Navbar from '@/components/Navbar'
 import HeroMockup from '@/components/HeroMockup'
 import AuditPreview from '@/components/AuditPreview'
@@ -6,51 +7,102 @@ import { cardClass } from '@/lib/uiClasses'
 import { GUEST_GENERATION_LIMIT } from '@/lib/limits'
 import { SUPPORTED_MARKETPLACES, MARKETPLACE_LABELS } from '@/lib/platformShapers'
 
-const features = [
+// Sky/cyan highlight for feature-card titles (replaced an earlier amber
+// version). Reuses the --accent-sky-text CSS var rather than a literal
+// text-sky-400 class because that solid color measures 7.51:1 on the dark
+// card background but only 2.14:1 in the light theme — see the var's
+// definition in app/globals.css for the full comparison.
+const skyTitleClass = 'text-[var(--accent-sky-text)]'
+
+// title is JSX rather than a plain string so the "high-intent" phrase in
+// each one can be wrapped in skyTitleClass inline, at the exact word
+// boundaries given — simpler and less fragile than storing a substring and
+// splitting the title string at render time.
+const features: { title: React.ReactNode; description: string; icon: LucideIcon }[] = [
   {
-    title: 'Bulk CSV & Manual Upload',
-    description: 'Upload hundreds of products at once via CSV, or add them one at a time through a guided form.'
+    title: (
+      <>
+        Upload Your <span className={skyTitleClass}>Whole Catalog</span>
+      </>
+    ),
+    description: "Got 10 products or 10,000? Upload a CSV or your product photos, and we'll handle the rest.",
+    icon: Upload
   },
   {
-    title: 'Marketplace-Specific AI Content',
-    description: "Generate titles, bullets, and keywords tailored to each marketplace's own rules: Amazon, Flipkart, Myntra, Etsy, and more."
+    title: (
+      <>
+        Listings That <span className={skyTitleClass}>Actually Get Found</span>
+      </>
+    ),
+    description:
+      "We write titles and descriptions the way each marketplace's search really works, so more shoppers find your products.",
+    icon: Search
   },
   {
-    title: 'Vision-Based Image Analysis',
-    description: "Our AI reads your product photos too, pulling out color, pattern, and material details you'd otherwise have to type by hand."
+    title: (
+      <>
+        AI Reads Your <span className={skyTitleClass}>Product Photos</span>
+      </>
+    ),
+    description:
+      "Just upload a photo. Our AI notices the color, material, and style, so you don't have to type it all in.",
+    icon: ScanEye
   },
   {
-    title: 'Review & Approve Workflow',
-    description: 'Every generated listing is reviewed before it ships: approve, edit, or regenerate with one click.'
+    title: (
+      <>
+        <span className={skyTitleClass}>Review</span> Before You Publish
+      </>
+    ),
+    description:
+      "Check every listing, tweak the wording, or regenerate it. Approve a whole batch in one click when you're happy.",
+    icon: ClipboardCheck
   },
   {
-    title: 'One-Click Export',
-    description: 'Download a marketplace-ready CSV for your approved listings, formatted exactly the way each platform expects.'
+    title: (
+      <>
+        Download, <span className={skyTitleClass}>Ready to Upload</span>
+      </>
+    ),
+    description: "Get a file that's already in the right format for each marketplace. No fixing spreadsheets by hand.",
+    icon: Download
+  },
+  {
+    title: (
+      <>
+        The <span className={skyTitleClass}>Right Keywords</span>, Automatically
+      </>
+    ),
+    description: 'Every listing includes the search terms shoppers actually type, built in from day one.',
+    icon: Tags
   }
 ]
 
 const steps = [
-  { title: 'Upload', description: 'Add products via CSV or one at a time.' },
-  { title: 'Generate', description: 'AI writes marketplace-ready copy.' },
-  { title: 'Review', description: 'Approve, edit, or regenerate.' },
-  { title: 'Export', description: 'Download a ready-to-upload file.' }
+  { title: 'Ingest Assets', description: 'Drop raw CSVs, product URLs, or photo folders.' },
+  { title: 'Automated SEO Copywriting', description: 'AI generates channel-compliant titles, specs, and search terms.' },
+  { title: 'Review & Refine', description: 'Tweak messaging, adjust keyword density, or approve in batch view.' },
+  { title: 'Scale & Export', description: 'Download ready-to-upload catalog flat files and boost marketplace reach.' }
 ]
 
 const testimonials = [
   {
-    quote: "Tesolute cut our listing time from a full day to about twenty minutes per batch. It's become part of our onboarding checklist for every new client.",
+    quote:
+      'We scaled from handling 5 brand catalogs to 25 brands without adding copywriters. Our client product pages now rank organically 4x faster across Amazon and Flipkart.',
     name: 'Priya N.',
-    role: 'Founder, boutique e-commerce agency'
+    role: 'Founder, E-commerce Operations Agency'
   },
   {
-    quote: 'The marketplace-specific formatting alone was worth switching for: no more manually reformatting the same product for four different platforms.',
+    quote:
+      'Eliminating channel listing rejections saved us hundreds of operational hours. The marketplace-specific keyword formatting alone bumped our search impressions by 35% in week one.',
     name: 'Marcus T.',
-    role: 'Seller operations lead'
+    role: 'Head of Cataloging, D2C Brand'
   },
   {
-    quote: "I was skeptical about AI writing copy from a photo, but it actually picks up on details I'd forget to mention myself.",
+    quote:
+      'I used to spend full weekends reformatting bullet points for Etsy and Amazon. Now I auto-generate visual-based attributes and localized keywords in one click.',
     name: 'Dana R.',
-    role: 'Independent seller'
+    role: 'Multi-Channel Seller'
   }
 ]
 
@@ -68,12 +120,21 @@ const freeIncludedBadgeClass =
 const marketplaceChipClass =
   'px-3 py-1 rounded-full text-xs font-medium border border-[var(--card-border)] bg-[var(--secondary-btn-bg)] text-[var(--secondary-btn-text)]'
 
-// Glow is hover-only and additive to cardClass's existing subtle border —
-// the border itself doesn't need to change, just gain a soft blue shadow +
-// slightly brighter border tint on hover instead of the plain opacity dim
-// used elsewhere on the page.
-const featureCardHoverClass =
-  'hover:border-blue-500/40 hover:shadow-[0_0_32px_-8px_rgba(59,130,246,0.35)] transition'
+// Border-only hover glow, matching the icon/title sky accent — simpler
+// than the shadow-based glow this replaced, just a brighter border tint on
+// hover instead of the plain opacity dim used elsewhere on the page.
+const featureCardHoverClass = 'hover:border-sky-500/40 transition-colors duration-200'
+
+// Sky icon badge to match the sky heading highlight next to it — bg and
+// border are plain Tailwind sky-500 opacity utilities (as asked for) since
+// alpha-blended backgrounds/borders don't have a WCAG text-contrast failure
+// mode the way solid foreground color does; only the icon's own stroke
+// color (which the badge's text-* class drives via currentColor) is
+// swapped for the theme-aware --accent-sky-text var used everywhere else
+// on this page, since literal text-sky-400 drops to 2.14:1 in the light
+// theme (see skyTitleClass above).
+const featureIconClass =
+  'bg-sky-500/10 text-[var(--accent-sky-text)] border border-sky-500/20 p-2.5 rounded-lg shrink-0 flex items-center justify-center'
 
 function BenefitItem({ children }: { children: React.ReactNode }) {
   return (
@@ -168,14 +229,21 @@ export default function Home() {
         </section>
 
         <section className="max-w-7xl mx-auto px-6 py-16">
-          <h2 className="text-2xl font-bold text-[var(--heading-text)] text-center mb-10">Everything you need to list faster</h2>
+          <h2 className="text-2xl font-bold text-[var(--heading-text)] text-center mb-10">
+            Everything You Need to List &amp; Scale Faster
+          </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {features.map((feature) => (
+            {features.map((feature, i) => (
               <div
-                key={feature.title}
+                key={i}
                 className={`p-6 ${featureCardHoverClass} ${cardClass}`}
               >
-                <h3 className="font-semibold text-[var(--heading-text)] mb-2">{feature.title}</h3>
+                <div className="flex items-center gap-3 mb-3">
+                  <div className={featureIconClass}>
+                    <feature.icon size={20} strokeWidth={2} />
+                  </div>
+                  <h3 className="font-semibold text-[var(--heading-text)] leading-snug">{feature.title}</h3>
+                </div>
                 <p className="text-sm text-[var(--body-text)]">{feature.description}</p>
               </div>
             ))}
@@ -188,7 +256,13 @@ export default function Home() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
               {steps.map((step, i) => (
                 <div key={step.title} className="text-center">
-                  <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center mx-auto mb-3 font-bold">
+                  {/* amber-600 -> orange-600, not the lighter 500 shades the
+                      "vibrant gradient" ask literally named — white text on
+                      amber-500/orange-500 only measures 2.15-2.80:1 (fails
+                      even the 3:1 large-text minimum); shifting one step
+                      darker holds the same gradient identity and passes at
+                      3.19:1 at its lightest point. */}
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-r from-amber-600 to-orange-600 text-white shadow-lg shadow-orange-500/20 flex items-center justify-center mx-auto mb-3 font-bold">
                     {i + 1}
                   </div>
                   <h3 className="font-semibold text-[var(--heading-text)] mb-1">{step.title}</h3>
