@@ -157,8 +157,8 @@ export default function QueueTable({
       : 'Generate Content'
 
   return (
-    <div className={`w-full min-w-0 p-6 ${cardClass}`}>
-      <div className="flex flex-row flex-wrap items-center justify-between gap-3 mb-4">
+    <div className={`w-full min-w-0 h-full flex flex-col p-6 ${cardClass}`}>
+      <div className="flex flex-row flex-wrap items-center justify-between gap-3 mb-4 shrink-0">
         <div className="flex flex-row flex-wrap items-center gap-3">
           <button
             onClick={onGenerateAll}
@@ -183,7 +183,11 @@ export default function QueueTable({
           Download CSV
         </button>
       </div>
-      <div className="overflow-x-auto rounded-xl border border-[var(--card-border)]">
+      {/* flex-1 + min-h-0 lets this fill the card down to its border on a
+          short queue instead of leaving empty space beneath the table, and
+          scroll internally (rather than growing the page) once the queue
+          outgrows the available height. */}
+      <div className="flex-1 min-h-0 overflow-auto rounded-xl border border-[var(--card-border)]">
         <table className="w-full border-collapse">
           <thead>
             <tr className="border-b border-[var(--row-border)] bg-[var(--table-head-bg)] text-left text-xs text-[var(--muted-text)]">

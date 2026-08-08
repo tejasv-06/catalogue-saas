@@ -1,8 +1,10 @@
 import Link from 'next/link'
 import Navbar from '@/components/Navbar'
 import VideoPlaceholder from '@/components/VideoPlaceholder'
+import HeroMockup from '@/components/HeroMockup'
 import { cardClass } from '@/lib/uiClasses'
 import { GUEST_GENERATION_LIMIT } from '@/lib/limits'
+import { SUPPORTED_MARKETPLACES, MARKETPLACE_LABELS } from '@/lib/platformShapers'
 
 const features = [
   {
@@ -57,6 +59,22 @@ const primaryCtaClass =
 
 const eyebrowClass = 'inline-block text-xs font-semibold uppercase tracking-wide text-blue-600 mb-2'
 
+// Same pill treatment on both service cards (Listing Generation, Account
+// Audit), so the two "free trial" callouts read as one consistent pattern
+// rather than each card inventing its own badge style.
+const freeIncludedBadgeClass =
+  'inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-[var(--success-bg)] text-[var(--success-text)] border border-[var(--success-border)]'
+
+const marketplaceChipClass =
+  'px-3 py-1 rounded-full text-xs font-medium border border-[var(--card-border)] bg-[var(--secondary-btn-bg)] text-[var(--secondary-btn-text)]'
+
+// Glow is hover-only and additive to cardClass's existing subtle border —
+// the border itself doesn't need to change, just gain a soft blue shadow +
+// slightly brighter border tint on hover instead of the plain opacity dim
+// used elsewhere on the page.
+const featureCardHoverClass =
+  'hover:border-blue-500/40 hover:shadow-[0_0_32px_-8px_rgba(59,130,246,0.35)] transition'
+
 function BenefitItem({ children }: { children: React.ReactNode }) {
   return (
     <li className="flex gap-2.5 text-[var(--body-text)]">
@@ -72,7 +90,7 @@ export default function Home() {
       <Navbar />
 
       <main className="flex-1">
-        <section className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-16 pb-8">
+        <section className="max-w-7xl mx-auto px-6 py-12">
           <div className={`p-8 grid grid-cols-1 lg:grid-cols-2 gap-8 items-center ${cardClass}`}>
             <div>
               <span className={eyebrowClass}>Listing Generation</span>
@@ -93,13 +111,21 @@ export default function Home() {
                   details you'd otherwise type by hand.
                 </BenefitItem>
               </ul>
-              <div className="flex flex-wrap items-center gap-3">
+              <div className="flex flex-wrap gap-2 mb-6">
+                {SUPPORTED_MARKETPLACES.map((marketplace) => (
+                  <span key={marketplace} className={marketplaceChipClass}>
+                    {MARKETPLACE_LABELS[marketplace]}
+                  </span>
+                ))}
+              </div>
+              <div className="flex flex-col items-start gap-2">
                 <Link href="/workspace" className={primaryCtaClass}>
-                  Start Generating Listings ({GUEST_GENERATION_LIMIT} Free Credits)
+                  Start Generating Listings
                 </Link>
+                <span className={freeIncludedBadgeClass}>{GUEST_GENERATION_LIMIT} Free Credits Included</span>
               </div>
             </div>
-            <VideoPlaceholder />
+            <HeroMockup />
           </div>
         </section>
 
@@ -128,22 +154,20 @@ export default function Home() {
                 <Link href="/audit" className={primaryCtaClass}>
                   Audit Your Amazon Account Now
                 </Link>
-                <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-[var(--success-bg)] text-[var(--success-text)] border border-[var(--success-border)]">
-                  1 Free Audit Included
-                </span>
+                <span className={freeIncludedBadgeClass}>1 Free Audit Included</span>
               </div>
             </div>
             <VideoPlaceholder />
           </div>
         </section>
 
-        <section className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+        <section className="max-w-7xl mx-auto px-6 py-16">
           <h2 className="text-2xl font-bold text-[var(--heading-text)] text-center mb-10">Everything you need to list faster</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {features.map((feature) => (
               <div
                 key={feature.title}
-                className={`p-6 hover:opacity-90 transition ${cardClass}`}
+                className={`p-6 ${featureCardHoverClass} ${cardClass}`}
               >
                 <h3 className="font-semibold text-[var(--heading-text)] mb-2">{feature.title}</h3>
                 <p className="text-sm text-[var(--body-text)]">{feature.description}</p>

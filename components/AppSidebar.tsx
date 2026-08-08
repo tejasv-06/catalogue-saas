@@ -94,10 +94,12 @@ const itemInactiveClass = 'text-[var(--muted-text)] hover:text-[var(--heading-te
 // sidebar-specific needed there.
 export default function AppSidebar({
   activeDestination,
-  onDestinationChange
+  onDestinationChange,
+  children
 }: {
   activeDestination?: WorkspaceDestination
   onDestinationChange?: (destination: WorkspaceDestination) => void
+  children: ReactNode
 }) {
   const pathname = usePathname()
   const isWorkspacePage = pathname === '/workspace'
@@ -167,9 +169,11 @@ export default function AppSidebar({
           top-0), stretching to the bottom of the screen. Expanded (256px) by
           default; the toggle button below collapses it to 56px icon-only,
           click-driven and persisted via localStorage — no hover behavior.
-          Overlays the content area rather than pushing it (the content's own
-          lg:pl-14 offset stays constant regardless of this state), so
-          toggling never reflows the page underneath. */}
+          Expanded is now the persistent default rather than a transient
+          hover preview, so it PUSHES the content area (see the padding on
+          the wrapper below) instead of overlaying on top of it — an overlay
+          would otherwise permanently cover the leftmost ~200px of page
+          content (e.g. the marketplace tabs) for every first-time visitor. */}
       <nav
         aria-label="Main navigation"
         className={`hidden lg:flex fixed left-0 top-16 h-[calc(100vh-4rem)] z-40 flex-col bg-[var(--card-bg)] border-r border-[var(--card-border)] overflow-hidden transition-[width] duration-200 ${
@@ -196,6 +200,8 @@ export default function AppSidebar({
       <nav aria-label="Main navigation" className="flex lg:hidden items-center gap-1 p-2 overflow-x-auto bg-[var(--card-bg)] border-b border-[var(--card-border)]">
         {DESTINATIONS.map((d) => renderItem(d, false))}
       </nav>
+
+      <div className={`transition-[padding] duration-200 ${collapsed ? 'lg:pl-14' : 'lg:pl-64'}`}>{children}</div>
     </>
   )
 }

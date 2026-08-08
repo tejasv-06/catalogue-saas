@@ -26,14 +26,12 @@ export default async function AuditPage() {
       <TopHeader usageSlot={<CreditsBalance />} />
 
       <div className="pt-16">
-        <AppSidebar />
-
-        <div className="lg:pl-14">
+        <AppSidebar>
           <div className="max-w-7xl mx-auto px-4 py-6">
             <AuditHeader />
             <AccountAuditPanel />
           </div>
-        </div>
+        </AppSidebar>
       </div>
     </div>
   )

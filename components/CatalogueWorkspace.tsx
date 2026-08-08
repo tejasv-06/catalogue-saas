@@ -1282,10 +1282,8 @@ export default function CatalogueWorkspace() {
           AppSidebar's mobile in-flow bar — its desktop rail is unaffected
           either way since position:fixed ignores parent padding entirely. */}
       <div className="pt-16">
-        <AppSidebar activeDestination={activeTab} onDestinationChange={setActiveTab} />
-
-        <div className="lg:pl-14">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+        <AppSidebar activeDestination={activeTab} onDestinationChange={setActiveTab}>
+          <div className="flex-1 flex flex-col h-[calc(100vh-64px)] p-6 overflow-y-auto">
           <AppHeader
             hasSession={hasSession}
             selectedMarketplaces={selectedMarketplaces}
@@ -1345,86 +1343,96 @@ export default function CatalogueWorkspace() {
             </div>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {activeTab === 'image' ? (
-              <ImageOnlyPanel
-                brandName={brandName}
-                onBrandNameChange={handleBrandNameChange}
-                category={category}
-                onCategoryChange={handleCategoryChange}
-                imageFile={imageFile}
-                onImageFileChange={setImageFile}
-                formPreviewUrl={formPreviewUrl}
-                fileInputRef={fileInputRef}
-                formError={formError}
-                guestLimitReached={guestLimitReached}
-                onSubmit={handleAddImageOnlyProduct}
-                uploadingImage={uploadingImage}
-                editingId={editingId}
-              />
-            ) : (
-              <LeftPanel
-                activeTab={activeTab}
-                brandName={brandName}
-                onBrandNameChange={handleBrandNameChange}
-                category={category}
-                onCategoryChange={handleCategoryChange}
-                description={description}
-                onDescriptionChange={handleDescriptionChange}
-                imageFile={imageFile}
-                onImageFileChange={setImageFile}
-                formPreviewUrl={formPreviewUrl}
-                fileInputRef={fileInputRef}
-                formError={formError}
-                guestLimitReached={guestLimitReached}
-                brandMismatchPending={brandMismatchPending}
-                selectedClient={selectedClient}
-                pendingImageUrl={pendingImageUrl}
-                onCommitAddProduct={commitAddProduct}
-                onCancelBrandMismatch={handleCancelBrandMismatch}
-                onAddProduct={handleAddProduct}
-                onClearForm={handleClearForm}
-                uploadingImage={uploadingImage}
-                editingId={editingId}
-                csvFile={csvFile}
-                onCsvFileChange={handleCsvFileChange}
-                csvFileInputRef={csvFileInputRef}
-                csvSummary={csvSummary}
-                isDragging={isDragging}
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-                pendingCsvUpload={pendingCsvUpload}
-                onUploadCsv={handleUploadCsv}
-                onCsvAddWithoutBrandVoice={handleCsvAddWithoutBrandVoice}
-                onCsvAddOnlyMatching={handleCsvAddOnlyMatching}
-                onCsvAddAllWithBrandVoice={handleCsvAddAllWithBrandVoice}
-                onCsvCancelMismatch={handleCsvCancelMismatch}
-              />
-            )}
+          {/* Asymmetrical: the form is a fixed, naturally-sized input panel,
+              not a peer that deserves equal billing with the queue — the
+              queue is where the actual catalog lives and grows, so it gets
+              the rest of the width (flex-1) and the rest of the row's height
+              (min-h-0 lets QueueTable's own flex-1 apply instead of being
+              clamped to content size by this row). */}
+          <div className="flex flex-col lg:flex-row gap-6 flex-1 min-h-0">
+            <div className="w-full lg:w-[380px] lg:shrink-0">
+              {activeTab === 'image' ? (
+                <ImageOnlyPanel
+                  brandName={brandName}
+                  onBrandNameChange={handleBrandNameChange}
+                  category={category}
+                  onCategoryChange={handleCategoryChange}
+                  imageFile={imageFile}
+                  onImageFileChange={setImageFile}
+                  formPreviewUrl={formPreviewUrl}
+                  fileInputRef={fileInputRef}
+                  formError={formError}
+                  guestLimitReached={guestLimitReached}
+                  onSubmit={handleAddImageOnlyProduct}
+                  uploadingImage={uploadingImage}
+                  editingId={editingId}
+                />
+              ) : (
+                <LeftPanel
+                  activeTab={activeTab}
+                  brandName={brandName}
+                  onBrandNameChange={handleBrandNameChange}
+                  category={category}
+                  onCategoryChange={handleCategoryChange}
+                  description={description}
+                  onDescriptionChange={handleDescriptionChange}
+                  imageFile={imageFile}
+                  onImageFileChange={setImageFile}
+                  formPreviewUrl={formPreviewUrl}
+                  fileInputRef={fileInputRef}
+                  formError={formError}
+                  guestLimitReached={guestLimitReached}
+                  brandMismatchPending={brandMismatchPending}
+                  selectedClient={selectedClient}
+                  pendingImageUrl={pendingImageUrl}
+                  onCommitAddProduct={commitAddProduct}
+                  onCancelBrandMismatch={handleCancelBrandMismatch}
+                  onAddProduct={handleAddProduct}
+                  onClearForm={handleClearForm}
+                  uploadingImage={uploadingImage}
+                  editingId={editingId}
+                  csvFile={csvFile}
+                  onCsvFileChange={handleCsvFileChange}
+                  csvFileInputRef={csvFileInputRef}
+                  csvSummary={csvSummary}
+                  isDragging={isDragging}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  pendingCsvUpload={pendingCsvUpload}
+                  onUploadCsv={handleUploadCsv}
+                  onCsvAddWithoutBrandVoice={handleCsvAddWithoutBrandVoice}
+                  onCsvAddOnlyMatching={handleCsvAddOnlyMatching}
+                  onCsvAddAllWithBrandVoice={handleCsvAddAllWithBrandVoice}
+                  onCsvCancelMismatch={handleCsvCancelMismatch}
+                />
+              )}
+            </div>
 
-            <QueueTable
-              draftProducts={draftProducts}
-              currentlyGeneratingId={currentlyGeneratingId}
-              selectedMarketplaces={selectedMarketplaces}
-              generating={generating}
-              hasApproved={hasApproved}
-              loading={!sessionReady}
-              hasSession={hasSession}
-              pendingCount={pendingCount}
-              onGenerateAll={handleGenerateAll}
-              onBulkApprove={handleBulkApprove}
-              onDownloadApproved={handleDownloadApproved}
-              onView={setViewingId}
-              onEdit={handleEditProduct}
-              onDelete={handleDeleteProduct}
-              onRetry={handleRetryProduct}
-            />
+            <div className="flex-1 min-w-0 flex flex-col">
+              <QueueTable
+                draftProducts={draftProducts}
+                currentlyGeneratingId={currentlyGeneratingId}
+                selectedMarketplaces={selectedMarketplaces}
+                generating={generating}
+                hasApproved={hasApproved}
+                loading={!sessionReady}
+                hasSession={hasSession}
+                pendingCount={pendingCount}
+                onGenerateAll={handleGenerateAll}
+                onBulkApprove={handleBulkApprove}
+                onDownloadApproved={handleDownloadApproved}
+                onView={setViewingId}
+                onEdit={handleEditProduct}
+                onDelete={handleDeleteProduct}
+                onRetry={handleRetryProduct}
+              />
+            </div>
           </div>
 
           {downloadMessage && <p className="mt-2 text-sm text-[var(--success-text)]">{downloadMessage}</p>}
         </div>
-        </div>
+        </AppSidebar>
       </div>
 
       {viewingProduct && (
