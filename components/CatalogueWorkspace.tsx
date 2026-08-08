@@ -1278,12 +1278,15 @@ export default function CatalogueWorkspace() {
     <div className="min-h-screen bg-[var(--page-bg)] text-[var(--body-text)]">
       <TopHeader usageSlot={usageSlot} />
 
-      {/* pt-16 clears the fixed header for everything below, including
-          AppSidebar's mobile in-flow bar — its desktop rail is unaffected
-          either way since position:fixed ignores parent padding entirely. */}
-      <div className="pt-16">
+      {/* pt-16 clears the fixed header; h-screen + flex-col lets the real
+          remaining height (100vh minus that padding, AND minus whatever
+          AppSidebar's in-flow mobile nav bar actually renders at) flow down
+          to the content div's flex-1 below — a hardcoded h-[calc(100vh-64px)]
+          there only ever accounted for the header and silently overflowed
+          the page on mobile, where the nav bar adds its own height on top. */}
+      <div className="pt-16 h-screen flex flex-col">
         <AppSidebar activeDestination={activeTab} onDestinationChange={setActiveTab}>
-          <div className="flex-1 flex flex-col h-[calc(100vh-64px)] p-6 overflow-y-auto">
+          <div className="flex-1 flex flex-col min-h-0 p-6 overflow-y-auto">
           <AppHeader
             hasSession={hasSession}
             selectedMarketplaces={selectedMarketplaces}
@@ -1350,7 +1353,7 @@ export default function CatalogueWorkspace() {
               (min-h-0 lets QueueTable's own flex-1 apply instead of being
               clamped to content size by this row). */}
           <div className="flex flex-col lg:flex-row gap-6 flex-1 min-h-0">
-            <div className="w-full lg:w-[380px] lg:shrink-0">
+            <div className="w-full lg:w-[420px] lg:shrink-0">
               {activeTab === 'image' ? (
                 <ImageOnlyPanel
                   brandName={brandName}

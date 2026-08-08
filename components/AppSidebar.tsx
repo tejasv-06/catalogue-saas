@@ -201,7 +201,15 @@ export default function AppSidebar({
         {DESTINATIONS.map((d) => renderItem(d, false))}
       </nav>
 
-      <div className={`transition-[padding] duration-200 ${collapsed ? 'lg:pl-14' : 'lg:pl-64'}`}>{children}</div>
+      {/* flex-1 min-h-0: this and the mobile nav bar above are siblings
+          inside the parent's own flex-col — this claims whatever height is
+          left over after that bar's real rendered height, rather than a
+          fixed height that doesn't know the bar is even there. */}
+      <div
+        className={`flex-1 min-h-0 flex flex-col transition-[padding] duration-200 ${collapsed ? 'lg:pl-14' : 'lg:pl-64'}`}
+      >
+        {children}
+      </div>
     </>
   )
 }

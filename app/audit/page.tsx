@@ -25,11 +25,13 @@ export default async function AuditPage() {
           the real credit balance — no guest-preview branch needed here. */}
       <TopHeader usageSlot={<CreditsBalance />} />
 
-      <div className="pt-16">
+      <div className="pt-16 h-screen flex flex-col">
         <AppSidebar>
-          <div className="max-w-7xl mx-auto px-4 py-6">
-            <AuditHeader />
-            <AccountAuditPanel />
+          <div className="flex-1 min-h-0 overflow-y-auto">
+            <div className="max-w-7xl mx-auto px-4 py-6">
+              <AuditHeader />
+              <AccountAuditPanel />
+            </div>
           </div>
         </AppSidebar>
       </div>

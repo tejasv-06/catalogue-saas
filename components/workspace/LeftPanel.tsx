@@ -234,19 +234,29 @@ export default function LeftPanel({
             )}
 
             {csvSummary && (
+              // table-fixed + a truncated File cell: without it, the browser's
+              // auto table layout gives File almost no width (the three
+              // number columns are just single digits) and wraps a real
+              // filename across five or six lines instead of letting it
+              // scroll or truncate — uglier than either alternative, and on
+              // an unbreakable filename (no hyphens/spaces) it would
+              // overflow the card horizontally instead. title= on the cell
+              // still shows the full name on hover.
               <div className={`overflow-x-auto ${cardClass}`}>
-                <table className="w-full border-collapse text-sm">
+                <table className="w-full table-fixed border-collapse text-sm">
                   <thead>
                     <tr className="border-b border-[var(--row-border)] bg-[var(--table-head-bg)] text-left text-xs text-[var(--muted-text)]">
                       <th className="py-3 px-4">File</th>
-                      <th className="py-3 px-4">Total</th>
-                      <th className="py-3 px-4">Added</th>
-                      <th className="py-3 px-4">Skipped</th>
+                      <th className="py-3 px-4 w-16">Total</th>
+                      <th className="py-3 px-4 w-16">Added</th>
+                      <th className="py-3 px-4 w-16">Skipped</th>
                     </tr>
                   </thead>
                   <tbody>
                     <tr className="text-[var(--body-text)]">
-                      <td className="py-3 px-4">{csvSummary.fileName}</td>
+                      <td className="py-3 px-4 truncate" title={csvSummary.fileName}>
+                        {csvSummary.fileName}
+                      </td>
                       <td className="py-3 px-4">{csvSummary.total}</td>
                       <td className="py-3 px-4">{csvSummary.added}</td>
                       <td className="py-3 px-4">{csvSummary.skipped}</td>

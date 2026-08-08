@@ -78,22 +78,32 @@ export default function ServicesDropdown() {
       </button>
 
       {open && (
-        <div
-          role="menu"
-          className="absolute left-0 top-full mt-2 w-80 rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)] shadow-xl p-2 z-50"
-        >
-          {SERVICES.map((service) => (
-            <Link
-              key={service.href}
-              href={service.href}
-              role="menuitem"
-              onClick={() => setOpen(false)}
-              className="block px-3 py-2.5 rounded-lg hover:bg-[var(--secondary-btn-bg-hover)] transition-colors"
-            >
-              <div className="text-sm font-semibold text-[var(--heading-text)]">{service.title}</div>
-              <div className="text-xs text-[var(--muted-text)] mt-0.5">{service.subtext}</div>
-            </Link>
-          ))}
+        // The visual gap between trigger and panel used to be a `mt-2`
+        // margin on the menu box itself — margin isn't part of the box for
+        // hit-testing, so that 8px strip was dead space: moving the cursor
+        // from the trigger straight down into it fired mouseleave on this
+        // container (whose own hover box only wraps the trigger, since
+        // absolutely-positioned descendants don't expand a relative
+        // ancestor's flow height) and closed the menu before the cursor
+        // ever reached it. Fix: push the gap inside this hoverable wrapper
+        // as padding-top instead, so the wrapper's own box is flush against
+        // the trigger with zero dead space, and the visible bordered menu
+        // (the nested div) just renders lower inside it.
+        <div className="absolute left-0 top-full w-80 pt-2 z-50">
+          <div role="menu" className="rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)] shadow-xl p-2">
+            {SERVICES.map((service) => (
+              <Link
+                key={service.href}
+                href={service.href}
+                role="menuitem"
+                onClick={() => setOpen(false)}
+                className="block px-3 py-2.5 rounded-lg hover:bg-[var(--secondary-btn-bg-hover)] transition-colors"
+              >
+                <div className="text-sm font-semibold text-[var(--heading-text)]">{service.title}</div>
+                <div className="text-xs text-[var(--muted-text)] mt-0.5">{service.subtext}</div>
+              </Link>
+            ))}
+          </div>
         </div>
       )}
     </div>
