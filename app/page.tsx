@@ -175,11 +175,11 @@ const freeIncludedBadgeClass =
 const marketplaceChipClass =
   'px-3 py-1 rounded-full text-xs font-medium border border-[var(--card-border)] bg-[var(--secondary-btn-bg)] text-[var(--secondary-btn-text)]'
 
-// Muted/neutral, not colored — deliberately quieter than the orange
-// eyebrow tag next to it ("distinct... but visually related" per the
-// request): the icon carries the one small orange accent tying it back to
-// the eyebrow, while the pill itself reuses the same neutral chip shell as
-// marketplaceChipClass so it doesn't compete for attention.
+// Muted/neutral, not colored — deliberately quieter than the sky eyebrow
+// tag above it: the icon carries the one small sky accent tying it back to
+// the eyebrow and the rest of the page's highlight color, while the pill
+// itself reuses the same neutral chip shell as marketplaceChipClass so it
+// doesn't compete for attention.
 const trustChipClass =
   'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border border-[var(--card-border)] bg-[var(--secondary-btn-bg)] text-[var(--secondary-btn-text)]'
 
@@ -217,22 +217,19 @@ export default function Home() {
         {/* Value-prop section, now the first thing below the nav header,
             directly above the Listing Generation hero — moved up per an
             explicit re-order request. Colors still deviate from a literal
-            slate-900/text-white/text-sky-400/text-orange-400 spec for the
-            same reason as when this section was first added: this page has
-            a real light theme (ThemeToggle in Navbar), and every other
-            section uses the --heading-text/--body-text/--card-bg/
-            --accent-sky-text/--accent-orange-text CSS vars specifically so
-            it doesn't break there — see those vars' definitions in
-            app/globals.css for the measured contrast ratios. bg/border
-            opacity utilities (orange-500/10, orange-500/30) are literal
+            slate-900/text-white/text-sky-400 spec for the same reason as
+            when this section was first added: this page has a real light
+            theme (ThemeToggle in Navbar), and every other section uses the
+            --heading-text/--body-text/--card-bg/--accent-sky-text CSS vars
+            specifically so it doesn't break there — see that var's
+            definition in app/globals.css for the measured contrast ratios.
+            bg/border opacity utilities (sky-500/10, sky-500/20) are literal
             Tailwind classes as specified, since alpha-blended fills don't
-            have that same contrast-failure mode. */}
+            have that same contrast-failure mode. Orange/amber, previously
+            used here, has been fully purged in favor of this one sky/cyan
+            accent across the whole page. */}
         <section className="max-w-6xl mx-auto px-6 py-16 text-center">
-          {/* Orange, not the page's dominant blue/sky — the eyebrow's job
-              is to be the first thing a scanning eye catches, which it
-              can't do blending into the same color already used for nav,
-              CTAs, and icons everywhere else on the page. */}
-          <span className="inline-block px-4 py-1.5 rounded-full text-xs font-semibold tracking-wider text-[var(--accent-orange-text)] bg-orange-500/10 border border-orange-500/30 mb-4">
+          <span className="inline-block px-4 py-1.5 rounded-full text-xs font-semibold tracking-wider text-[var(--accent-sky-text)] bg-sky-500/10 border border-sky-500/20 mb-4">
             PURPOSE-BUILT FOR E-COMMERCE BRANDS &amp; AGENCIES
           </span>
           <h2 className="text-3xl md:text-4xl font-extrabold text-[var(--heading-text)] mb-4">
@@ -247,7 +244,7 @@ export default function Home() {
           <div className="flex flex-wrap justify-center gap-2 mb-12">
             {trustSignals.map((signal) => (
               <span key={signal.label} className={trustChipClass}>
-                <signal.icon size={13} strokeWidth={2} className="text-[var(--accent-orange-text)]" />
+                <signal.icon size={13} strokeWidth={2} className="text-[var(--accent-sky-text)]" />
                 {signal.label}
               </span>
             ))}
@@ -260,7 +257,7 @@ export default function Home() {
               >
                 <prop.icon size={22} strokeWidth={2} className="text-[var(--accent-sky-text)] mb-3" />
                 {prop.stat && (
-                  <div className="text-3xl font-extrabold text-[var(--accent-orange-text)] leading-none mb-1">
+                  <div className="text-3xl font-extrabold text-[var(--accent-sky-text)] leading-none mb-1">
                     {prop.stat}
                   </div>
                 )}
@@ -376,13 +373,12 @@ export default function Home() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
               {steps.map((step, i) => (
                 <div key={step.title} className="text-center">
-                  {/* amber-600 -> orange-600, not the lighter 500 shades the
-                      "vibrant gradient" ask literally named — white text on
-                      amber-500/orange-500 only measures 2.15-2.80:1 (fails
-                      even the 3:1 large-text minimum); shifting one step
-                      darker holds the same gradient identity and passes at
-                      3.19:1 at its lightest point. */}
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-r from-amber-600 to-orange-600 text-white shadow-lg shadow-orange-500/20 flex items-center justify-center mx-auto mb-3 font-bold">
+                  {/* blue-600 -> sky-600, not sky-400 as literally named —
+                      white text on blue-600/sky-400 only measures 2.14:1 at
+                      the sky-400 end (fails even the 3:1 large-text
+                      minimum); sky-600 holds the same blue-to-cyan identity
+                      and passes at 4.10:1 at its lightest point. */}
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-r from-blue-600 to-sky-600 text-white shadow-md shadow-sky-500/20 flex items-center justify-center mx-auto mb-3 font-bold">
                     {i + 1}
                   </div>
                   <h3 className="font-semibold text-[var(--heading-text)] mb-1">{step.title}</h3>

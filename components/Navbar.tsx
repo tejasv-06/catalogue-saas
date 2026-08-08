@@ -11,7 +11,16 @@ export default async function Navbar() {
   const isLoggedIn = !!data?.claims
 
   return (
-    <nav className="border-b shadow-lg bg-[var(--card-bg)] border-[var(--card-border)]">
+    // sticky (not fixed) deliberately — it keeps its own height in normal
+    // flow, so the pages that render this (/, /contact, /how-it-works)
+    // don't need any compensating top padding the way a fixed header would
+    // require; it only starts floating once the page scrolls past it.
+    // bg/border are theme CSS vars with an added /80 opacity + backdrop-blur
+    // for the glassmorphism effect, not the literal bg-slate-950/80 asked
+    // for — that hardcoded value is dark-only and would pair dark-mode text
+    // colors with a near-black bar in the light theme (ThemeToggle exists
+    // for a reason), same fix pattern as every other color in this build.
+    <nav className="sticky top-0 z-50 w-full border-b shadow-lg bg-[var(--card-bg)]/80 backdrop-blur-md border-[var(--card-border)] transition-all duration-200">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
         <Link href="/" className="flex items-center gap-2 shrink-0">
           <Image src="/logo.png" alt="" width={36} height={36} priority />
