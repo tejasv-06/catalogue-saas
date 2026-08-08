@@ -1,11 +1,32 @@
 import Link from 'next/link'
-import { Upload, Search, ScanEye, ClipboardCheck, Download, Tags, type LucideIcon } from 'lucide-react'
+import { Upload, Search, ScanEye, ClipboardCheck, Download, Tags, Zap, Lock, ShieldCheck, type LucideIcon } from 'lucide-react'
 import Navbar from '@/components/Navbar'
 import HeroMockup from '@/components/HeroMockup'
 import AuditPreview from '@/components/AuditPreview'
 import { cardClass } from '@/lib/uiClasses'
 import { GUEST_GENERATION_LIMIT } from '@/lib/limits'
 import { SUPPORTED_MARKETPLACES, MARKETPLACE_LABELS } from '@/lib/platformShapers'
+
+const valueProps: { title: string; description: string; icon: LucideIcon }[] = [
+  {
+    title: '90% Faster Catalog Launch',
+    description:
+      'Eliminate spreadsheet chaos and manual copy-pasting. Go from raw CSV or photo uploads to multi-channel launch-ready files in minutes.',
+    icon: Zap
+  },
+  {
+    title: '100% Locked Brand Voice',
+    description:
+      'Never sound like generic AI. Teach the system your tone once — whether premium, technical, or playful — and keep every single SKU strictly on-brand.',
+    icon: Lock
+  },
+  {
+    title: 'Channel-Compliant SEO',
+    description:
+      'Built-in character validation, bullet point limits, and A9/search-indexed backend keywords for Amazon, Flipkart, Etsy, and Myntra.',
+    icon: ShieldCheck
+  }
+]
 
 // Sky/cyan highlight for feature-card titles (replaced an earlier amber
 // version). Reuses the --accent-sky-text CSS var rather than a literal
@@ -151,6 +172,45 @@ export default function Home() {
       <Navbar />
 
       <main className="flex-1">
+        {/* Value-prop section, now the first thing below the nav header,
+            directly above the Listing Generation hero — moved up per an
+            explicit re-order request. Colors still deviate from a literal
+            slate-900/text-white/text-sky-400 spec for the same reason as
+            when this section was first added: this page has a real light
+            theme (ThemeToggle in Navbar), and every other section uses the
+            --heading-text/--body-text/--card-bg/--accent-sky-text CSS vars
+            specifically so it doesn't break there — see those vars'
+            definitions in app/globals.css for the measured contrast
+            ratios. bg/border opacity utilities (sky-500/10, sky-500/20)
+            are literal Tailwind classes as specified, since alpha-blended
+            fills don't have that same contrast-failure mode. */}
+        <section className="max-w-6xl mx-auto px-6 py-16 text-center">
+          <span className="inline-block px-4 py-1.5 rounded-full text-xs font-semibold tracking-wider text-[var(--accent-sky-text)] bg-sky-500/10 border border-sky-500/20 mb-4">
+            PURPOSE-BUILT FOR E-COMMERCE BRANDS &amp; AGENCIES
+          </span>
+          <h2 className="text-3xl md:text-4xl font-extrabold text-[var(--heading-text)] mb-4">
+            Stop Wasting Days on Manual Cataloging &amp; Generic AI Copy
+          </h2>
+          <p className="max-w-3xl mx-auto text-[var(--body-text)] text-base md:text-lg leading-relaxed mb-12">
+            Most AI tools spit out generic ChatGPT text that fails marketplace character limits, ignores backend
+            search algorithms, and strips away your brand's unique identity. Tesolute is engineered specifically for
+            e-commerce operators — combining computer vision with platform-tailored SEO to transform raw assets into
+            high-converting, brand-aligned listings instantly.
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-left">
+            {valueProps.map((prop) => (
+              <div
+                key={prop.title}
+                className="bg-[var(--card-bg)]/60 backdrop-blur-xl border border-[var(--card-border)] p-6 rounded-2xl"
+              >
+                <prop.icon size={22} strokeWidth={2} className="text-[var(--accent-sky-text)] mb-3" />
+                <h3 className="font-semibold text-[var(--heading-text)] mb-2">{prop.title}</h3>
+                <p className="text-sm text-[var(--body-text)]">{prop.description}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
         <section className="max-w-7xl mx-auto px-6 py-12">
           <div className={`p-8 grid grid-cols-1 lg:grid-cols-2 gap-8 items-center ${cardClass}`}>
             <div>
