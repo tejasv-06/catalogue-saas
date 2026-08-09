@@ -97,8 +97,13 @@ const ADD_METHOD_TABS: { id: WorkspaceDestination; label: string }[] = [
 
 // Same states computeListingHealth already reports per (product, marketplace)
 // row — 'all' is the only addition, and it's just "no filter applied," not a
-// new status. No second health engine, no new statuses invented.
-type ReadinessFilter = 'all' | 'ready' | 'needs-review' | 'missing-data' | 'error'
+// new status. No second health engine, no new statuses invented. Exported so
+// QueueTable can filter its own rows at the exact same (product, marketplace)
+// granularity it renders at — filtering lives entirely in QueueTable now
+// (see filterRowData/productHasVisibleRow there), not here, so a product with
+// one Ready and one Needs Review marketplace shows only the matching row
+// under either filter instead of both.
+export type ReadinessFilter = 'all' | 'ready' | 'needs-review' | 'missing-data' | 'error'
 const FILTER_OPTIONS: { id: ReadinessFilter; label: string }[] = [
   { id: 'all', label: 'All' },
   { id: 'ready', label: 'Ready' },
@@ -106,24 +111,6 @@ const FILTER_OPTIONS: { id: ReadinessFilter; label: string }[] = [
   { id: 'missing-data', label: 'Missing Data' },
   { id: 'error', label: 'Error' }
 ]
-
-// A product "matches" a filter if any of its attempted marketplace rows has
-// that health status — filtering happens at the product level (which
-// products get passed into QueueTable) rather than inside QueueTable's own
-// per-row rendering, so its existing rowSpan/grouping logic doesn't need to
-// change at all. Trade-off: a product with one Ready and one Needs Review
-// marketplace shows both rows under either filter, not just the matching
-// one — an acceptable simplification for a first pass, not a full per-row
-// filter.
-function productMatchesFilter(product: DraftProduct, filter: ReadinessFilter): boolean {
-  if (filter === 'all') return true
-  return SUPPORTED_MARKETPLACES.some((m) => {
-    const content = product.generatedContent[m]
-    const error = product.generationError[m]
-    if (content === null && error === null) return false
-    return computeListingHealth(m, content, error, product.generationMeta[m]).status === filter
-  })
-}
 
 // Compact single-line summary, not a stat-card grid — counts real
 // (product, marketplace) pairs that have actually been attempted (content
@@ -258,13 +245,16 @@ function FieldSection({
   )
 }
 
-// One product can now hold a distinct result (content, error, approval) per
-// marketplace, so the drawer shows one section per marketplace that's
-// actually been attempted (has content or an error) rather than a single
-// flat listing. A marketplace never attempted for this product (both null)
-// doesn't get a section at all.
+// A QueueTable row is one (product, marketplace) pair, and "View Content"
+// on that row must review exactly that pair — not every marketplace the
+// product has ever been generated for. `marketplace` is the one the row was
+// clicked for; attemptedMarketplaces is now always that single value (never
+// derived from the product as a whole), so every per-marketplace read below
+// — content, error, health, regenerate, approve — reads that one
+// marketplace's own state and nothing else.
 function GeneratedListingDrawer({
   product,
+  marketplace,
   currentlyGenerating,
   failedRegenFieldGroup,
   onClose,
@@ -274,6 +264,7 @@ function GeneratedListingDrawer({
   onRegenerateField
 }: {
   product: DraftProduct
+  marketplace: Marketplace
   currentlyGenerating: { productId: string; marketplace: Marketplace } | null
   failedRegenFieldGroup: Record<string, FieldGroup | 'full'>
   onClose: () => void
@@ -282,9 +273,7 @@ function GeneratedListingDrawer({
   onRetryMarketplace: (id: string, marketplace: Marketplace) => void
   onRegenerateField: (id: string, marketplace: Marketplace, fieldGroup?: FieldGroup) => void
 }) {
-  const attemptedMarketplaces = SUPPORTED_MARKETPLACES.filter(
-    (m) => product.generatedContent[m] !== null || product.generationError[m] !== null
-  )
+  const attemptedMarketplaces = [marketplace]
 
   const containerRef = useRef<HTMLDivElement>(null)
   useFocusTrap(containerRef, onClose)
@@ -776,7 +765,11 @@ export default function CatalogueWorkspace() {
   const [draftProducts, setDraftProducts] = useState<DraftProduct[]>([])
   const [activeTab, setActiveTab] = useState<WorkspaceDestination>('manual')
   const [readinessFilter, setReadinessFilter] = useState<ReadinessFilter>('all')
-  const [viewingId, setViewingId] = useState<string | null>(null)
+  // A QueueTable row is a (product, marketplace) pair — View Content must
+  // review exactly that pair, so this carries both instead of just a
+  // product id (which previously left the drawer to guess/show every
+  // marketplace the product had ever attempted).
+  const [viewingTarget, setViewingTarget] = useState<{ productId: string; marketplace: Marketplace } | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [pendingRestoreCount, setPendingRestoreCount] = useState<number | null>(null)
   const [sessionReady, setSessionReady] = useState(false)
@@ -1048,14 +1041,26 @@ export default function CatalogueWorkspace() {
     setSessionReady(true)
   }
 
+  // Still used by Bulk Approve/Download (unrelated to this change — their
+  // own alert-based gating is untouched). Generate Content deliberately does
+  // NOT use this — see flagMissingMarketplace below, which shows the same
+  // requirement as an inline warning under Target Marketplaces instead of a
+  // native alert().
   function requireMarketplace(): boolean {
     if (selectedMarketplaces.length === 0) {
-      alert('Please select at least one target marketplace first.')
+      alert('Please select at least one target marketplace')
       return false
     }
     return true
   }
 
+  // Generate Content's own marketplace gate — inline, not a native alert(),
+  // since generation (unlike Add Product) genuinely requires at least one
+  // marketplace selected. Sets the same marketplaceError/marketplaceFlash
+  // state AppHeader already renders as a red ring on the Target Marketplaces
+  // group plus red text underneath; handleToggleMarketplace already clears
+  // both the moment a marketplace is picked, so the warning disappears on
+  // its own once the requirement is satisfied.
   function flagMissingMarketplace() {
     setMarketplaceError('Please select at least one target marketplace before proceeding.')
     setMarketplaceFlash(true)
@@ -1134,12 +1139,10 @@ export default function CatalogueWorkspace() {
   }
 
   async function handleAddProduct() {
-    if (selectedMarketplaces.length === 0) {
-      flagMissingMarketplace()
-      return
-    }
-    setMarketplaceError(null)
-
+    // Marketplace selection is not required to add a product — it's only
+    // relevant to generation (see handleGenerateAll's requireMarketplace()
+    // check). A product can exist in the catalog before any marketplace has
+    // been chosen; it just sits there ungenerated until one is.
     if (!brandName.trim() || !category.trim() || !description.trim()) {
       setFormError('Brand Name, Category, and Description are required.')
       return
@@ -1173,12 +1176,8 @@ export default function CatalogueWorkspace() {
   // typed brand name that doesn't match the selected client, and there's
   // nothing to mismatch-check when the field was deliberately left blank.
   async function handleAddImageOnlyProduct() {
-    if (selectedMarketplaces.length === 0) {
-      flagMissingMarketplace()
-      return
-    }
-    setMarketplaceError(null)
-
+    // Marketplace selection is not required to add a product — see the same
+    // note in handleAddProduct.
     if (!imageFile && !editingId) {
       setFormError('An image is required.')
       return
@@ -1279,7 +1278,7 @@ export default function CatalogueWorkspace() {
 
   function handleDeleteProduct(id: string) {
     setDraftProducts((prev) => prev.filter((p) => p.id !== id))
-    if (viewingId === id) setViewingId(null)
+    if (viewingTarget?.productId === id) setViewingTarget(null)
     if (editingId === id) handleClearForm()
   }
 
@@ -1289,12 +1288,8 @@ export default function CatalogueWorkspace() {
   }
 
   async function handleUploadCsv() {
-    if (selectedMarketplaces.length === 0) {
-      flagMissingMarketplace()
-      return
-    }
-    setMarketplaceError(null)
-
+    // Marketplace selection is not required to add products — see the same
+    // note in handleAddProduct.
     if (!csvFile) {
       alert('Choose a CSV file first')
       return
@@ -1418,9 +1413,6 @@ export default function CatalogueWorkspace() {
     if (file) {
       setCsvFile(file)
       setPendingCsvUpload(null)
-      if (selectedMarketplaces.length === 0) {
-        flagMissingMarketplace()
-      }
     }
   }
 
@@ -1445,7 +1437,10 @@ export default function CatalogueWorkspace() {
   // full-price generate-single call — total cost for a batch is simply the
   // count of successful calls, not a separate bulk formula.
   async function handleGenerateAll() {
-    if (!requireMarketplace()) return
+    if (selectedMarketplaces.length === 0) {
+      flagMissingMarketplace()
+      return
+    }
     const pending = draftProducts.filter((p) => p.status === 'draft')
     if (pending.length === 0) return
 
@@ -1868,8 +1863,7 @@ export default function CatalogueWorkspace() {
   // handlers), so a "Ready" filter never narrows what an action operates
   // on, only what the table currently shows.
   const listingSummary = computeListingSummary(draftProducts)
-  const filteredDraftProducts = draftProducts.filter((p) => productMatchesFilter(p, readinessFilter))
-  const viewingProduct = draftProducts.find((p) => p.id === viewingId) || null
+  const viewingProduct = viewingTarget ? draftProducts.find((p) => p.id === viewingTarget.productId) || null : null
   const editingProduct = editingId ? draftProducts.find((p) => p.id === editingId) || null : null
   const formPreviewUrl = imageFile ? null : editingProduct?.imageUrl ?? null
   const guestLimitReached = !hasSession && draftProducts.length >= GUEST_PRODUCT_LIMIT
@@ -2097,7 +2091,8 @@ export default function CatalogueWorkspace() {
                   </div>
                 )}
                 <QueueTable
-                  draftProducts={filteredDraftProducts}
+                  draftProducts={draftProducts}
+                  readinessFilter={readinessFilter}
                   currentlyGenerating={currentlyGenerating}
                   selectedMarketplaces={selectedMarketplaces}
                   generating={generating}
@@ -2108,7 +2103,7 @@ export default function CatalogueWorkspace() {
                   onGenerateAll={handleGenerateAll}
                   onBulkApprove={handleBulkApprove}
                   onDownloadApproved={handleDownloadApproved}
-                  onView={setViewingId}
+                  onView={(id, marketplace) => setViewingTarget({ productId: id, marketplace })}
                   onEdit={handleEditProduct}
                   onDelete={handleDeleteProduct}
                   onRetry={handleRetryProductMarketplace}
@@ -2121,12 +2116,13 @@ export default function CatalogueWorkspace() {
         </AppSidebar>
       </div>
 
-      {viewingProduct && (
+      {viewingProduct && viewingTarget && (
         <GeneratedListingDrawer
           product={viewingProduct}
+          marketplace={viewingTarget.marketplace}
           currentlyGenerating={currentlyGenerating}
           failedRegenFieldGroup={failedRegenFieldGroup}
-          onClose={() => setViewingId(null)}
+          onClose={() => setViewingTarget(null)}
           onApproveMarketplace={handleApproveMarketplace}
           onUnapproveMarketplace={handleUnapproveMarketplace}
           onRetryMarketplace={handleRetryProductMarketplace}

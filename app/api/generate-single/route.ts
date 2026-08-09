@@ -4,7 +4,14 @@ import { createClient as createSupabaseAdminClient } from '@supabase/supabase-js
 import { createClient as createAuthClient } from '@/lib/supabase/server'
 import { getOrCreateAnonId } from '@/lib/guestId'
 import { shapeForPlatform, computeGenerationMeta, MARKETPLACE_LABELS } from '@/lib/platformShapers'
-import { getTitleRoleFields, getDescriptionRule, getFieldRules, describeUniversalConstraints } from '@/lib/marketplaceRules'
+import {
+  getTitleRoleFields,
+  getDescriptionRule,
+  getKeywordsLengthRule,
+  getFieldRules,
+  describeUniversalConstraints,
+  enforceCharLimit
+} from '@/lib/marketplaceRules'
 import { GUEST_GENERATION_LIMIT } from '@/lib/limits'
 import { CREDIT_COSTS, InsufficientCreditsError, assertSufficientCredits, deductCredits } from '@/lib/credits'
 
@@ -72,13 +79,18 @@ async function withRetry<T>(fn: () => Promise<T>, maxAttempts = 3): Promise<T> {
 }
 
 // Enforces a real, verified character limit (lib/marketplaceRules.ts) by
-// asking the model to rewrite the text to fit — never by slicing it. Called
-// only when the value actually exceeds its limit, so the common case (model
-// already complied thanks to the constraint in the main prompt) costs
-// nothing extra. Bounded to a couple of rewrite attempts so one stubborn
-// field can't blow up latency; if it still doesn't fit after that,
-// shapeForPlatform's own .slice() remains the last-resort safety net and
-// the health check honestly reports the overage rather than hiding it.
+// asking the model to rewrite the text to fit — never by slicing it as the
+// primary mechanism. Called only when the value actually exceeds its limit,
+// so the common case (model already complied thanks to the constraint in
+// the main prompt) costs nothing extra. Bounded to a couple of rewrite
+// attempts so one stubborn field can't blow up latency.
+//
+// The return value is UNCONDITIONALLY guaranteed to be <= maxLength: if the
+// model still hasn't complied after the allowed attempts, enforceCharLimit
+// (sentence/word-boundary-aware, see lib/marketplaceRules.ts) is applied as
+// the actual final enforcement step, not shapeForPlatform's blind slice —
+// callers never need to re-check the result or fall back to truncating it
+// themselves.
 async function rewriteToFitLimit(params: { value: string; maxLength: number; fieldLabel: string; marketplaceLabel: string }): Promise<string> {
   let current = params.value
   let attempts = 0
@@ -108,7 +120,7 @@ async function rewriteToFitLimit(params: { value: string; maxLength: number; fie
     }
   }
 
-  return current
+  return enforceCharLimit(current, params.maxLength)
 }
 
 // Field-level regenerate must use the SAME marketplace-specific rules as
@@ -373,6 +385,7 @@ CRITICAL: Output ONLY valid, raw JSON. Do NOT wrap output in markdown fences (no
       bullets: string[]
       keywordPool: string[]
       listViewName?: string
+      keywordsFieldOverride?: string
       visualAttributes?: Record<string, string | null>
     } = { title: '', description: '', bullets: [], keywordPool: [], ...JSON.parse(rawContent) }
 
@@ -405,6 +418,30 @@ CRITICAL: Output ONLY valid, raw JSON. Do NOT wrap output in markdown fences (no
             value: currentValue,
             maxLength: descRule.maxLength!,
             fieldLabel: descRule.label,
+            marketplaceLabel
+          })
+        }
+      }
+    }
+
+    // Keywords have no "Regenerate Keywords" button — they're only ever
+    // part of a full-listing generation, never a field-scoped request, so
+    // this only needs to run when !scopedFieldGroup. Mirrors shapeForPlatform's
+    // own amazon derivation (pool.slice(0, maxCount).join(' ')) so the value
+    // checked here is exactly the one that would otherwise reach the final
+    // .slice(0, 200) unexamined. Only Amazon has a verified scalar limit on
+    // its keywords field today (getKeywordsLengthRule returns undefined for
+    // every other marketplace), so this is a no-op elsewhere.
+    if (!scopedFieldGroup) {
+      const keywordsRule = getKeywordsLengthRule(targetMarketplace)
+      if (keywordsRule) {
+        const pool = aiResult.keywordPool || []
+        const currentValue = pool.slice(0, keywordsRule.maxCount ?? pool.length).join(' ')
+        if (currentValue.length > keywordsRule.maxLength!) {
+          aiResult.keywordsFieldOverride = await rewriteToFitLimit({
+            value: currentValue,
+            maxLength: keywordsRule.maxLength!,
+            fieldLabel: keywordsRule.label,
             marketplaceLabel
           })
         }

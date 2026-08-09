@@ -168,6 +168,26 @@ export function getFieldRules(marketplace: string): FieldRule[] {
   return MARKETPLACE_RULES[marketplace as MarketplaceKey] ?? []
 }
 
+// The deterministic, non-negotiable final guarantee that a value fits a
+// character limit — used as the last step after an LLM rewrite attempt
+// (never as the primary compliance mechanism on its own) and as the
+// defensive fallback inside shapeForPlatform. Unlike a blind slice, this
+// prefers cutting at the last sentence boundary, then the last word
+// boundary, before falling back to a hard cut — so a still-oversized value
+// reads as an intentionally shorter sentence/phrase rather than text
+// chopped off mid-word. The 50%/60% floors exist so a limit reached very
+// early in the string (e.g. one long word right at the start) doesn't throw
+// away almost the entire value just to land on a boundary.
+export function enforceCharLimit(value: string, maxLength: number): string {
+  if (value.length <= maxLength) return value
+  const truncated = value.slice(0, maxLength)
+  const sentenceEnd = Math.max(truncated.lastIndexOf('. '), truncated.lastIndexOf('! '), truncated.lastIndexOf('? '))
+  if (sentenceEnd > maxLength * 0.5) return truncated.slice(0, sentenceEnd + 1).trim()
+  const wordEnd = truncated.lastIndexOf(' ')
+  if (wordEnd > maxLength * 0.6) return truncated.slice(0, wordEnd).trim()
+  return truncated.trim()
+}
+
 export function getFieldRule(marketplace: string, key: string): FieldRule | undefined {
   return getFieldRules(marketplace).find((r) => r.key === key)
 }

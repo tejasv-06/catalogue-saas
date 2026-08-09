@@ -1,6 +1,7 @@
 "use client"
 
 import type { DraftProduct, Marketplace } from '@/lib/types'
+import type { ReadinessFilter } from '@/components/CatalogueWorkspace'
 import { SUPPORTED_MARKETPLACES, MARKETPLACE_LABELS } from '@/lib/platformShapers'
 import { computeListingHealth } from '@/lib/listingHealth'
 import ProductThumbnail from '@/components/ProductThumbnail'
@@ -35,9 +36,64 @@ function getDisplayMarketplaces(product: DraftProduct, generatingMarketplace: Ma
   return SUPPORTED_MARKETPLACES.filter((m) => displaySet.has(m))
 }
 
+// One row's worth of pre-computed display facts — built once per candidate
+// marketplace so filtering (below) and rendering both work off the exact
+// same computeListingHealth call, never a second one that could drift from it.
+type RowData = {
+  marketplace: Marketplace | null
+  isGenerating: boolean
+  content: any | null
+  error: string | null
+  health: ReturnType<typeof computeListingHealth> | null
+  rowStatus: RowHealthStatus
+}
+
+function buildRowData(product: DraftProduct, generatingMarketplace: Marketplace | null): RowData[] {
+  const displayMarketplaces = getDisplayMarketplaces(product, generatingMarketplace)
+  const marketplaceRows: (Marketplace | null)[] = displayMarketplaces.length > 0 ? displayMarketplaces : [null]
+
+  return marketplaceRows.map((marketplace) => {
+    const isGenerating = marketplace !== null && marketplace === generatingMarketplace
+    const content = marketplace ? product.generatedContent[marketplace] : null
+    const error = marketplace ? product.generationError[marketplace] : null
+    const health =
+      marketplace && !isGenerating ? computeListingHealth(marketplace, content, error, product.generationMeta[marketplace]) : null
+
+    const rowStatus: RowHealthStatus = isGenerating
+      ? 'generating'
+      : !marketplace
+        ? 'not-generated'
+        : (health!.status as RowHealthStatus)
+
+    return { marketplace, isGenerating, content, error, health, rowStatus }
+  })
+}
+
+// A product can span several marketplaces at different readiness states
+// (Amazon Ready, Flipkart Needs Review) — filtering must operate at the same
+// (product, marketplace) granularity QueueRows renders at, not hide/show a
+// whole product's rows as one unit. 'all' keeps everything, including the
+// in-flight/not-yet-attempted placeholder rows; any specific status keeps
+// only the rows whose own real health.status matches it — a row still
+// generating (health null) or never attempted (health null) never matches a
+// specific filter.
+function filterRowData(rows: RowData[], filter: ReadinessFilter): RowData[] {
+  if (filter === 'all') return rows
+  return rows.filter((r) => r.health?.status === filter)
+}
+
+// Whether this product has at least one row visible under the current
+// filter — used by QueueTable to decide which products to render at all,
+// using the exact same per-row data (and therefore the exact same
+// computeListingHealth calls) QueueRows itself renders from.
+function productHasVisibleRow(product: DraftProduct, generatingMarketplace: Marketplace | null, filter: ReadinessFilter): boolean {
+  return filterRowData(buildRowData(product, generatingMarketplace), filter).length > 0
+}
+
 function QueueRows({
   product,
   generatingMarketplace,
+  filter,
   onView,
   onEdit,
   onDelete,
@@ -49,29 +105,18 @@ function QueueRows({
   // doesn't get stuck showing "Generating…" just because a sibling row for
   // the same product is still in flight.
   generatingMarketplace: Marketplace | null
-  onView: (id: string) => void
+  filter: ReadinessFilter
+  onView: (id: string, marketplace: Marketplace) => void
   onEdit: (product: DraftProduct) => void
   onDelete: (id: string) => void
   onRetry: (id: string, marketplace: Marketplace) => void
 }) {
-  const displayMarketplaces = getDisplayMarketplaces(product, generatingMarketplace)
-  const marketplaceRows: (Marketplace | null)[] = displayMarketplaces.length > 0 ? displayMarketplaces : [null]
+  const marketplaceRows = filterRowData(buildRowData(product, generatingMarketplace), filter)
+  if (marketplaceRows.length === 0) return null
 
   return (
     <>
-      {marketplaceRows.map((marketplace, i) => {
-        const isGenerating = marketplace !== null && marketplace === generatingMarketplace
-        const content = marketplace ? product.generatedContent[marketplace] : null
-        const error = marketplace ? product.generationError[marketplace] : null
-        const health =
-          marketplace && !isGenerating ? computeListingHealth(marketplace, content, error, product.generationMeta[marketplace]) : null
-
-        const rowStatus: RowHealthStatus = isGenerating
-          ? 'generating'
-          : !marketplace
-            ? 'not-generated'
-            : (health!.status as RowHealthStatus)
-
+      {marketplaceRows.map(({ marketplace, isGenerating, content, error, health, rowStatus }, i) => {
         const failedChecks = health ? health.checks.filter((c) => c.applicable && !c.passed).length : 0
 
         return (
@@ -106,8 +151,13 @@ function QueueRows({
             </td>
             <td className="py-3 px-4 text-sm text-[var(--body-text)]">{health ? failedChecks : '—'}</td>
             <td className="py-3 px-4 whitespace-nowrap space-x-2">
-              {(content || error) && (
-                <button onClick={() => onView(product.id)} className={linkButtonClass}>
+              {/* marketplace narrowed explicitly (not just content||error)
+                  so onView always carries the exact row's own marketplace —
+                  this is the one (product, marketplace) pair this row
+                  represents, and the drawer it opens must show only this
+                  one, not every marketplace this product has ever attempted. */}
+              {marketplace && (content || error) && (
+                <button onClick={() => onView(product.id, marketplace)} className={linkButtonClass}>
                   View
                 </button>
               )}
@@ -130,6 +180,7 @@ function QueueRows({
 
 export default function QueueTable({
   draftProducts,
+  readinessFilter,
   currentlyGenerating,
   selectedMarketplaces,
   generating,
@@ -146,6 +197,12 @@ export default function QueueTable({
   onRetry
 }: {
   draftProducts: DraftProduct[]
+  // Filtering happens here, at the same (product, marketplace) granularity
+  // the rows themselves render at (see filterRowData/productHasVisibleRow
+  // above) — draftProducts is passed in unfiltered so a product with, say,
+  // one Ready and one Needs Review marketplace can show just the matching
+  // row under either filter instead of both.
+  readinessFilter: ReadinessFilter
   // Only one (product, marketplace) pair is ever generating at a time (the
   // generation loop is sequential) — passed through as-is so each row can
   // tell whether it specifically is the one in flight, not just its product.
@@ -159,7 +216,7 @@ export default function QueueTable({
   onGenerateAll: () => void
   onBulkApprove: () => void
   onDownloadApproved: () => void
-  onView: (id: string) => void
+  onView: (id: string, marketplace: Marketplace) => void
   onEdit: (product: DraftProduct) => void
   onDelete: (id: string) => void
   onRetry: (id: string, marketplace: Marketplace) => void
@@ -213,7 +270,15 @@ export default function QueueTable({
           <div>
             <button
               onClick={onGenerateAll}
-              disabled={!hasSelectedMarketplaces || !hasDraft || generating}
+              // Deliberately NOT gated on hasSelectedMarketplaces — this
+              // button must stay clickable with zero marketplaces selected
+              // so the click reaches handleGenerateAll's own
+              // requireMarketplace() check, which is what actually shows
+              // "Please select at least one target marketplace." A disabled
+              // button here would silently swallow that click and make the
+              // warning unreachable, the same problem the old
+              // Add-Product-side gate had.
+              disabled={!hasDraft || generating}
               className={generateIsPrimary ? buttonPrimaryClass : buttonSecondaryClass}
             >
               {generateLabel}
@@ -260,12 +325,21 @@ export default function QueueTable({
               <TableSkeleton columns={COLUMN_COUNT} />
             ) : draftProducts.length === 0 ? (
               <EmptyQueueState colSpan={COLUMN_COUNT} />
+            ) : !draftProducts.some((p) =>
+                productHasVisibleRow(
+                  p,
+                  currentlyGenerating?.productId === p.id ? currentlyGenerating.marketplace : null,
+                  readinessFilter
+                )
+              ) ? (
+              <EmptyQueueState colSpan={COLUMN_COUNT} message="No listings match this filter." />
             ) : (
               draftProducts.map((product) => (
                 <QueueRows
                   key={product.id}
                   product={product}
                   generatingMarketplace={currentlyGenerating?.productId === product.id ? currentlyGenerating.marketplace : null}
+                  filter={readinessFilter}
                   onView={onView}
                   onEdit={onEdit}
                   onDelete={onDelete}
