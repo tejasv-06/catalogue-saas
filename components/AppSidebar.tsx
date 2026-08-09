@@ -5,35 +5,24 @@ import { usePathname } from 'next/navigation'
 import Link from 'next/link'
 import type { ReactNode } from 'react'
 
+// Bulk Upload / Manual Entry / Image-Only used to live here as three
+// top-level nav destinations. They're input methods into the one Listings
+// workspace, not separate destinations — CatalogueWorkspace now owns that
+// switch as an in-panel tab-strip (see its 'Add Products' section) using
+// this same state type, which is why it's still exported from here rather
+// than moved — the smallest change that keeps that import working.
 export type WorkspaceDestination = 'csv' | 'manual' | 'image'
-type Destination = WorkspaceDestination | 'audit'
+
+type SidebarItemId = 'listings' | 'audit'
 
 const COLLAPSE_STORAGE_KEY = 'workspace-sidebar-collapsed'
 
-function UploadIcon() {
+function ListingsIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
-      <path d="M12 16V4M12 4l-4 4M12 4l4 4" />
-      <path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
-    </svg>
-  )
-}
-
-function PencilIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
-      <path d="M12 20h9" />
-      <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
-    </svg>
-  )
-}
-
-function ImageIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
-      <rect x="3" y="3" width="18" height="18" rx="2" />
-      <circle cx="8.5" cy="8.5" r="1.5" />
-      <path d="m21 15-5-5L5 21" />
+      <rect x="3" y="4" width="18" height="4" rx="1" />
+      <rect x="3" y="10" width="18" height="4" rx="1" />
+      <rect x="3" y="16" width="18" height="4" rx="1" />
     </svg>
   )
 }
@@ -67,40 +56,31 @@ function ChevronIcon({ pointingRight }: { pointingRight: boolean }) {
   )
 }
 
-const DESTINATIONS: { id: Destination; label: string; icon: ReactNode }[] = [
-  { id: 'csv', label: 'Bulk Upload', icon: <UploadIcon /> },
-  { id: 'manual', label: 'Manual Entry', icon: <PencilIcon /> },
-  { id: 'image', label: 'Image-Only Generate', icon: <ImageIcon /> },
-  { id: 'audit', label: 'Account Audit', icon: <AuditIcon /> }
+// Two real destinations now, each its own group — Listings under Catalog,
+// Account Audit under Tools. Account Audit was previously one divider away
+// from Bulk Upload/Manual Entry/Image-Only in a single flat list; grouping
+// makes it explicit that it's a separate tool, not a peer input method.
+const NAV_ITEMS: { id: SidebarItemId; label: string; groupLabel: string; href: string; icon: ReactNode }[] = [
+  { id: 'listings', label: 'Listings', groupLabel: 'Catalog', href: '/workspace', icon: <ListingsIcon /> },
+  { id: 'audit', label: 'Account Audit', groupLabel: 'Tools', href: '/audit', icon: <AuditIcon /> }
 ]
 
 const itemBaseClass =
   'flex items-center gap-3 shrink-0 px-3 py-2.5 rounded-lg text-sm font-medium whitespace-nowrap transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[var(--card-bg)] focus:ring-blue-500'
 const itemActiveClass = 'bg-blue-600 text-white shadow-sm'
 const itemInactiveClass = 'text-[var(--muted-text)] hover:text-[var(--heading-text)] hover:bg-[var(--secondary-btn-bg-hover)]'
+const groupLabelClass = 'px-3 pt-1 pb-1 text-[10px] font-semibold tracking-wider text-[var(--muted-text)] uppercase'
 
 // Shared nav, rendered on both /workspace and /audit, anchored directly
 // beneath TopHeader (top-16, not top-0) and stretching to the bottom of the
-// screen. Just the four destinations now — logo, credits, theme, and logout
-// all live in TopHeader instead. The three generation destinations
-// (csv/manual/image) live inside /workspace as client-side panel state, not
-// separate routes — so clicking one while already on /workspace just swaps
-// local state (no navigation), but clicking one from /audit (or anywhere
-// else) is a real navigation to /workspace?tab=<id>, which CatalogueWorkspace
-// reads on mount to land on the right panel. "Account Audit" is always a
-// plain Link to /audit — that route's own server-side auth check (redirect
-// to /login?next=/audit) already handles the logged-out case identically
-// whether you arrive via this link or by typing the URL directly; nothing
-// sidebar-specific needed there.
-export default function AppSidebar({
-  activeDestination,
-  onDestinationChange,
-  children
-}: {
-  activeDestination?: WorkspaceDestination
-  onDestinationChange?: (destination: WorkspaceDestination) => void
-  children: ReactNode
-}) {
+// screen. Just the two destinations now — logo, credits, theme, and logout
+// all live in TopHeader instead. Both are plain Links (no client-side panel
+// switching happens at this level anymore): Listings always goes to
+// /workspace, Account Audit always goes to /audit. That route's own
+// server-side auth check (redirect to /login?next=/audit) already handles
+// the logged-out case identically whether you arrive via this link or by
+// typing the URL directly; nothing sidebar-specific needed there.
+export default function AppSidebar({ children }: { children: ReactNode }) {
   const pathname = usePathname()
   const isWorkspacePage = pathname === '/workspace'
   const isAuditPage = pathname === '/audit'
@@ -125,43 +105,23 @@ export default function AppSidebar({
     })
   }
 
-  function renderItem(destination: (typeof DESTINATIONS)[number], compactLabel: boolean) {
-    const isActive = destination.id === 'audit' ? isAuditPage : isWorkspacePage && activeDestination === destination.id
+  function renderItem(item: (typeof NAV_ITEMS)[number], compactLabel: boolean) {
+    const isActive = item.id === 'audit' ? isAuditPage : isWorkspacePage
     // Only the desktop rail (compactLabel=true) ever collapses — the mobile
     // bar (compactLabel=false) always shows full labels regardless of this
     // state, since collapse is a desktop-only concept here.
     const isIconOnly = compactLabel && collapsed
     const className = `${itemBaseClass} ${isActive ? itemActiveClass : itemInactiveClass} ${isIconOnly ? 'justify-center' : ''}`
 
-    const content = (
-      <>
-        {destination.icon}
-        {!isIconOnly && <span>{destination.label}</span>}
-      </>
-    )
-
-    if (destination.id !== 'audit' && isWorkspacePage) {
-      return (
-        <button
-          key={destination.id}
-          type="button"
-          onClick={() => onDestinationChange?.(destination.id as WorkspaceDestination)}
-          aria-current={isActive ? 'page' : undefined}
-          title={isIconOnly ? destination.label : undefined}
-          className={className}
-        >
-          {content}
-        </button>
-      )
-    }
-
-    const href = destination.id === 'audit' ? '/audit' : `/workspace?tab=${destination.id}`
     return (
-      <Link key={destination.id} href={href} aria-current={isActive ? 'page' : undefined} title={isIconOnly ? destination.label : undefined} className={className}>
-        {content}
+      <Link key={item.id} href={item.href} aria-current={isActive ? 'page' : undefined} title={isIconOnly ? item.label : undefined} className={className}>
+        {item.icon}
+        {!isIconOnly && <span>{item.label}</span>}
       </Link>
     )
   }
+
+  const [listingsItem, auditItem] = NAV_ITEMS
 
   return (
     <>
@@ -173,7 +133,7 @@ export default function AppSidebar({
           hover preview, so it PUSHES the content area (see the padding on
           the wrapper below) instead of overlaying on top of it — an overlay
           would otherwise permanently cover the leftmost ~200px of page
-          content (e.g. the marketplace tabs) for every first-time visitor. */}
+          content (e.g. the marketplace chips) for every first-time visitor. */}
       <nav
         aria-label="Main navigation"
         className={`hidden lg:flex fixed left-0 top-16 h-[calc(100vh-4rem)] z-40 flex-col bg-[var(--card-bg)] border-r border-[var(--card-border)] overflow-hidden transition-[width] duration-200 ${
@@ -192,13 +152,22 @@ export default function AppSidebar({
           <ChevronIcon pointingRight={collapsed} />
         </button>
 
-        <div className="flex-1 flex flex-col gap-1 px-2 py-2 overflow-y-auto">{DESTINATIONS.map((d) => renderItem(d, true))}</div>
+        <div className="flex-1 flex flex-col gap-1 px-2 py-2 overflow-y-auto">
+          {!collapsed && <p className={groupLabelClass}>{listingsItem.groupLabel}</p>}
+          {renderItem(listingsItem, true)}
+          <div className="my-2 border-t border-[var(--card-border)]" />
+          {!collapsed && <p className={groupLabelClass}>{auditItem.groupLabel}</p>}
+          {renderItem(auditItem, true)}
+        </div>
       </nav>
 
       {/* Mobile / tablet: normal-flow horizontal bar — no collapse concept
-          here, always shows full labels. */}
+          here, always shows full labels. Same grouping as the desktop rail,
+          via a vertical divider instead of a label (no room for both). */}
       <nav aria-label="Main navigation" className="flex lg:hidden items-center gap-1 p-2 overflow-x-auto bg-[var(--card-bg)] border-b border-[var(--card-border)]">
-        {DESTINATIONS.map((d) => renderItem(d, false))}
+        {renderItem(listingsItem, false)}
+        <div className="self-stretch w-px mx-1 bg-[var(--card-border)]" />
+        {renderItem(auditItem, false)}
       </nav>
 
       {/* flex-1 min-h-0: this and the mobile nav bar above are siblings

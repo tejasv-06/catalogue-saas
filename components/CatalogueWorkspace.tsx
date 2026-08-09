@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState, type DragEvent } from 'react'
+import { useEffect, useRef, useState, type DragEvent, type RefObject } from 'react'
 import Papa from 'papaparse'
 import JSZip from 'jszip'
 import { pick } from '@/lib/csvMapping'
@@ -14,6 +14,8 @@ import LeftPanel from '@/components/workspace/LeftPanel'
 import ImageOnlyPanel from '@/components/workspace/ImageOnlyPanel'
 import AppSidebar, { type WorkspaceDestination } from '@/components/AppSidebar'
 import QueueTable from '@/components/workspace/QueueTable'
+import ListingHealthBadge from '@/components/workspace/ListingHealthBadge'
+import { computeListingHealth, FIELD_SPECS } from '@/lib/listingHealth'
 import { createClient } from '@/lib/supabase/client'
 import CreditsBalance, { notifyCreditsChanged } from '@/components/CreditsBalance'
 import { CREDIT_COSTS } from '@/lib/creditCosts'
@@ -26,16 +28,19 @@ import {
   type PendingCsvUpload,
   emptyGeneratedContent,
   emptyApproved,
-  emptyGenerationError
+  emptyGenerationError,
+  emptyGenerationMeta
 } from '@/lib/types'
 import {
   buttonPrimaryClass,
   buttonSecondaryClass,
   buttonDestructiveClass,
   buttonWarningClass,
+  buttonSecondarySmallClass,
   linkButtonClass,
   sectionHeadingClass,
   labelClass,
+  bodyTextClass,
   cardClass,
   warningBannerClass,
   warningTextClass,
@@ -72,45 +77,185 @@ function fileToBase64(file: File): Promise<string> {
   })
 }
 
-function getDisplayFields(marketplace: string, gc: any): { label: string; value: string }[] {
-  switch (marketplace) {
-    case 'amazon':
-      return [
-        { label: 'Title', value: gc.title || '' },
-        { label: 'Description', value: gc.description || '' },
-        ...(gc.bullets || []).map((b: string, i: number) => ({ label: `Bullet ${i + 1}`, value: b })),
-        { label: 'Generic Keywords', value: gc.genericKeywords || '' }
-      ]
-    case 'flipkart':
-      return [
-        { label: 'Title', value: gc.title || '' },
-        { label: 'Description', value: gc.description || '' },
-        ...(gc.keyFeatures || []).map((f: string, i: number) => ({ label: `Key Feature ${i + 1}`, value: f })),
-        ...(gc.searchKeywords || []).map((k: string, i: number) => ({ label: `Search Keyword ${i + 1}`, value: k }))
-      ]
-    case 'myntra':
-      return [
-        { label: 'Vendor Article Name', value: gc.vendorArticleName || '' },
-        { label: 'List View Name', value: gc.listViewName || '' },
-        { label: 'Product Details', value: gc.productDetails || '' },
-        { label: 'Style Note', value: gc.styleNote || '' },
-        { label: 'Product Display Name', value: gc.productDisplayName || '' },
-        { label: 'Tags', value: gc.tags || '' }
-      ]
-    case 'etsy':
-      return [
-        { label: 'Title', value: gc.title || '' },
-        { label: 'Description', value: gc.description || '' },
-        { label: 'Tags', value: (gc.tags || []).join(', ') }
-      ]
-    default:
-      return [
-        { label: 'Title', value: gc.title || '' },
-        { label: 'Description', value: gc.description || '' },
-        { label: 'Bullets', value: (gc.bullets || []).join(' | ') },
-        { label: 'Tags', value: Array.isArray(gc.tags) ? gc.tags.join(', ') : gc.tags || '' }
-      ]
+// Which shaped-content keys count as "the title" / "the bullets" / "the
+// description" varies per marketplace (Myntra has no single title field —
+// vendorArticleName, listViewName, and productDisplayName are all
+// title-derived; Etsy/Myntra have no bullets-equivalent field at all).
+// Field-level regenerate uses this to know which keys from a fresh
+// generation response to keep, and which to discard in favor of the
+// existing content — see generateForProductMarketplace's fieldGroup param.
+// The three ways to add products — previously top-level sidebar nav items,
+// now an in-panel tab-strip (see the "Add Products" section in the render
+// below) since they're input methods into one Listings workspace, not
+// separate destinations. Same WorkspaceDestination values AppSidebar
+// originally drove, same activeTab state, just switched from here instead.
+const ADD_METHOD_TABS: { id: WorkspaceDestination; label: string }[] = [
+  { id: 'csv', label: 'Bulk Upload' },
+  { id: 'manual', label: 'Manual Entry' },
+  { id: 'image', label: 'Photos Only' }
+]
+
+// Same states computeListingHealth already reports per (product, marketplace)
+// row — 'all' is the only addition, and it's just "no filter applied," not a
+// new status. No second health engine, no new statuses invented.
+type ReadinessFilter = 'all' | 'ready' | 'needs-review' | 'missing-data' | 'error'
+const FILTER_OPTIONS: { id: ReadinessFilter; label: string }[] = [
+  { id: 'all', label: 'All' },
+  { id: 'ready', label: 'Ready' },
+  { id: 'needs-review', label: 'Needs Review' },
+  { id: 'missing-data', label: 'Missing Data' },
+  { id: 'error', label: 'Error' }
+]
+
+// A product "matches" a filter if any of its attempted marketplace rows has
+// that health status — filtering happens at the product level (which
+// products get passed into QueueTable) rather than inside QueueTable's own
+// per-row rendering, so its existing rowSpan/grouping logic doesn't need to
+// change at all. Trade-off: a product with one Ready and one Needs Review
+// marketplace shows both rows under either filter, not just the matching
+// one — an acceptable simplification for a first pass, not a full per-row
+// filter.
+function productMatchesFilter(product: DraftProduct, filter: ReadinessFilter): boolean {
+  if (filter === 'all') return true
+  return SUPPORTED_MARKETPLACES.some((m) => {
+    const content = product.generatedContent[m]
+    const error = product.generationError[m]
+    if (content === null && error === null) return false
+    return computeListingHealth(m, content, error, product.generationMeta[m]).status === filter
+  })
+}
+
+// Compact single-line summary, not a stat-card grid — counts real
+// (product, marketplace) pairs that have actually been attempted (content
+// or error present), using the exact same computeListingHealth call
+// QueueTable's own rows use. A draft product with nothing generated yet
+// isn't counted as a "listing" here, same as it isn't shown as a real
+// health-bearing row in the table.
+function computeListingSummary(draftProducts: DraftProduct[]) {
+  const counts = { total: 0, ready: 0, needsReview: 0, missingData: 0, error: 0 }
+  for (const product of draftProducts) {
+    for (const m of SUPPORTED_MARKETPLACES) {
+      const content = product.generatedContent[m]
+      const error = product.generationError[m]
+      if (content === null && error === null) continue
+      counts.total++
+      const status = computeListingHealth(m, content, error, product.generationMeta[m]).status
+      if (status === 'ready') counts.ready++
+      else if (status === 'needs-review') counts.needsReview++
+      else if (status === 'missing-data') counts.missingData++
+      else if (status === 'error') counts.error++
+    }
   }
+  return counts
+}
+
+type FieldGroup = 'title' | 'bullets' | 'description'
+const FIELD_GROUPS: Record<Marketplace, Partial<Record<FieldGroup, string[]>>> = {
+  amazon: { title: ['title'], bullets: ['bullets'], description: ['description'] },
+  flipkart: { title: ['title'], bullets: ['keyFeatures'], description: ['description'] },
+  myntra: { title: ['vendorArticleName', 'listViewName', 'productDisplayName'], description: ['productDetails'] },
+  etsy: { title: ['title'], description: ['description'] }
+}
+
+// Friendly labels for every shaped-content key across all four marketplaces
+// — used only for display grouping below, doesn't affect what's generated.
+const KEY_LABELS: Record<string, string> = {
+  title: 'Title',
+  description: 'Description',
+  bullets: 'Bullets',
+  genericKeywords: 'Generic Keywords',
+  keyFeatures: 'Key Features',
+  searchKeywords: 'Search Keywords',
+  vendorArticleName: 'Vendor Article Name',
+  listViewName: 'List View Name',
+  productDetails: 'Product Details',
+  styleNote: 'Style Note',
+  productDisplayName: 'Product Display Name',
+  tags: 'Tags'
+}
+
+type DisplayField = { label: string; value: string | string[] }
+type FieldSectionData = { role: FieldGroup | 'keywords' | 'other'; heading: string; fields: DisplayField[] }
+
+// Groups one marketplace's shaped content by role (Title/Bullets/Description/
+// Keywords/other required fields) using the same FIELD_SPECS + FIELD_GROUPS
+// maps computeListingHealth checks against — so a section's inline
+// pass/fail annotation and the content shown under it are guaranteed to be
+// talking about the same keys. "other" catches marketplace-specific required
+// fields that aren't title/bullets/description/keywords (e.g. Myntra's
+// Style Note), so nothing required silently goes undisplayed.
+function getFieldSections(marketplace: Marketplace, content: any): FieldSectionData[] {
+  const spec = FIELD_SPECS[marketplace]
+  const titleKeys = FIELD_GROUPS[marketplace].title ?? [spec.titleKey]
+  const bulletsKeys = spec.bulletsKey ? [spec.bulletsKey] : []
+  const descriptionKeys = spec.descriptionKey ? [spec.descriptionKey] : []
+  const keywordsKeys = spec.keywordsKey ? [spec.keywordsKey] : []
+  const usedKeys = new Set([...titleKeys, ...bulletsKeys, ...descriptionKeys, ...keywordsKeys])
+  const otherKeys = spec.requiredKeys.filter((key) => !usedKeys.has(key))
+
+  const toFields = (keys: string[]): DisplayField[] =>
+    keys.map((key) => ({ label: KEY_LABELS[key] ?? key, value: content[key] ?? '' }))
+
+  const sections: FieldSectionData[] = [
+    { role: 'title', heading: 'Title', fields: toFields(titleKeys) },
+    { role: 'bullets', heading: 'Bullets', fields: toFields(bulletsKeys) },
+    { role: 'description', heading: 'Description', fields: toFields(descriptionKeys) },
+    { role: 'keywords', heading: 'Keywords', fields: toFields(keywordsKeys) },
+    { role: 'other', heading: 'Marketplace Fields', fields: toFields(otherKeys) }
+  ]
+
+  return sections.filter((s) => s.fields.length > 0)
+}
+
+function isEmptyFieldValue(value: string | string[]): boolean {
+  return Array.isArray(value) ? value.length === 0 : !String(value ?? '').trim()
+}
+
+// One field group's label line + its own small pass/fail annotation (pulled
+// straight from computeListingHealth's checks, never a separate score) with
+// the actual generated content directly beneath — content stays the larger,
+// dominant text throughout, the check is a compact suffix on the label only.
+function FieldSection({
+  section,
+  check
+}: {
+  section: FieldSectionData
+  check?: { passed: boolean; detail?: string; subDetail?: string }
+}) {
+  return (
+    <div className="mb-3">
+      <div className="flex items-baseline justify-between gap-2">
+        <p className={labelClass}>{section.heading}</p>
+        {check && (
+          <span className={`text-xs shrink-0 text-right ${check.passed ? 'text-[var(--success-text)]' : 'text-[var(--warn-text)]'}`}>
+            <span className="block">
+              {check.passed ? '✓' : '⚠'} {check.detail}
+            </span>
+            {/* Second line explaining WHAT the count means, e.g. "Title
+                exceeds Amazon's limit" / "Within Amazon title limit" —
+                not just a bare number the user has to interpret. */}
+            {check.subDetail && <span className="block opacity-80">{check.subDetail}</span>}
+          </span>
+        )}
+      </div>
+      <div className="mt-1 space-y-2">
+        {section.fields.map((field) => (
+          <div key={field.label}>
+            {section.fields.length > 1 && <p className="text-xs text-[var(--muted-text)]">{field.label}</p>}
+            {Array.isArray(field.value) ? (
+              <ul className="text-sm text-[var(--body-text)] list-disc list-inside space-y-0.5">
+                {field.value.map((item, i) => (
+                  <li key={i}>{item}</li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-[var(--body-text)]">{field.value || '—'}</p>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
 }
 
 // One product can now hold a distinct result (content, error, approval) per
@@ -120,16 +265,22 @@ function getDisplayFields(marketplace: string, gc: any): { label: string; value:
 // doesn't get a section at all.
 function GeneratedListingDrawer({
   product,
+  currentlyGenerating,
+  failedRegenFieldGroup,
   onClose,
   onApproveMarketplace,
   onUnapproveMarketplace,
-  onRetryMarketplace
+  onRetryMarketplace,
+  onRegenerateField
 }: {
   product: DraftProduct
+  currentlyGenerating: { productId: string; marketplace: Marketplace } | null
+  failedRegenFieldGroup: Record<string, FieldGroup | 'full'>
   onClose: () => void
   onApproveMarketplace: (id: string, marketplace: Marketplace) => void
   onUnapproveMarketplace: (id: string, marketplace: Marketplace) => void
   onRetryMarketplace: (id: string, marketplace: Marketplace) => void
+  onRegenerateField: (id: string, marketplace: Marketplace, fieldGroup?: FieldGroup) => void
 }) {
   const attemptedMarketplaces = SUPPORTED_MARKETPLACES.filter(
     (m) => product.generatedContent[m] !== null || product.generationError[m] !== null
@@ -137,6 +288,14 @@ function GeneratedListingDrawer({
 
   const containerRef = useRef<HTMLDivElement>(null)
   useFocusTrap(containerRef, onClose)
+
+  // Only ever surfaced when at least one attribute has a real value — an
+  // image analyzed with every key coming back null shouldn't present an
+  // empty "Detected from image" section as if something had been found.
+  const detectedAttributes = product.visualAttributes
+    ? Object.entries(product.visualAttributes).filter(([, value]) => value != null && String(value).trim() !== '')
+    : []
+  const hasVisualAttributes = detectedAttributes.length > 0
 
   return (
     <div className="fixed inset-0 z-30 flex justify-end">
@@ -162,41 +321,173 @@ function GeneratedListingDrawer({
           </div>
         </div>
 
+        {hasVisualAttributes && (
+          <div className="mb-4 pb-4 border-b border-[var(--card-border)]">
+            <p className={labelClass}>Detected from image</p>
+            <div className="mt-1 grid grid-cols-2 gap-x-3 gap-y-1">
+              {detectedAttributes.map(([key, value]) => (
+                <p key={key} className="text-sm text-[var(--body-text)] capitalize">
+                  <span className="text-[var(--muted-text)]">{key}: </span>
+                  {value}
+                </p>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="flex flex-col gap-4">
+          {/* Product → Marketplace → Listing Content → Validation/Issues →
+              Approve, per marketplace: content is the dominant element in
+              every section below, health is a compact status chip up top
+              and small inline annotations on each field's own label line —
+              never a separate checklist preceding the content. */}
           {attemptedMarketplaces.map((marketplace) => {
             const content = product.generatedContent[marketplace]
             const error = product.generationError[marketplace]
             const isApproved = product.approved[marketplace]
-            const displayFields = content ? getDisplayFields(marketplace, content) : []
+            const health = computeListingHealth(marketplace, content, error, product.generationMeta[marketplace])
+            const findCheck = (label: string) => health.checks.find((c) => c.label === label)
+            const sections = content ? getFieldSections(marketplace, content) : []
+            const fieldGroups = FIELD_GROUPS[marketplace]
+
+            const isGenerating =
+              currentlyGenerating?.productId === product.id && currentlyGenerating?.marketplace === marketplace
+
+            // A failed field-level regenerate leaves the old content in
+            // place (see runGeneration/generateForProductMarketplace) — so
+            // content and error can be true at once here. That combination
+            // only ever means "a regenerate attempt on an existing listing
+            // failed," never "the whole listing is broken," and the UI
+            // below treats it accordingly: no full-width error banner, no
+            // generic full-listing retry button, just the specific field
+            // section flagged and its own regenerate button as the fix.
+            const failedGroup = content && error ? failedRegenFieldGroup[`${product.id}:${marketplace}`] : undefined
+
+            const titleCheck = findCheck('Title')
+            const charLimitCheck = findCheck('Character limit')
+            const titleAnnotation =
+              titleCheck && !titleCheck.passed
+                ? { passed: false, detail: titleCheck.detail ?? 'Missing' }
+                : charLimitCheck
+                  ? { passed: charLimitCheck.passed, detail: charLimitCheck.detail, subDetail: charLimitCheck.subDetail }
+                  : undefined
+
+            const otherSection = sections.find((s) => s.role === 'other')
+            // Scoped to exactly this section's own fields (e.g. just Myntra's
+            // Style Note) rather than the overall Required Fields check,
+            // which also covers title/description/keywords keys already
+            // annotated in their own sections above — reusing that check's
+            // text here would restate "vendorArticleName missing" a second
+            // time under an unrelated field.
+            const otherMissing = otherSection ? otherSection.fields.filter((f) => isEmptyFieldValue(f.value)).map((f) => f.label) : []
+
+            const failedCheck = { passed: false as const, detail: 'Regeneration failed' }
+
+            const checkForRole: Partial<Record<FieldSectionData['role'], { passed: boolean; detail?: string; subDetail?: string }>> = {
+              title: failedGroup === 'title' ? failedCheck : titleAnnotation,
+              bullets:
+                failedGroup === 'bullets'
+                  ? failedCheck
+                  : (() => {
+                      const c = findCheck('Bullets')
+                      return c ? { passed: c.passed, detail: c.detail } : undefined
+                    })(),
+              description:
+                failedGroup === 'description'
+                  ? failedCheck
+                  : (() => {
+                      const c = findCheck('Description')
+                      return c
+                        ? { passed: c.passed, detail: c.detail ?? (c.passed ? 'Present' : 'Missing'), subDetail: c.subDetail }
+                        : undefined
+                    })(),
+              keywords: (() => {
+                const c = findCheck('Keywords')
+                return c ? { passed: c.passed, detail: c.detail ?? (c.passed ? 'Present' : 'Missing') } : undefined
+              })(),
+              other: otherSection
+                ? { passed: otherMissing.length === 0, detail: otherMissing.length === 0 ? 'Complete' : `Missing: ${otherMissing.join(', ')}` }
+                : undefined
+            }
 
             return (
               <div key={marketplace} className="pt-4 border-t border-[var(--card-border)] first:pt-0 first:border-t-0">
                 <div className="flex items-center justify-between mb-2">
                   <h3 className="text-sm font-semibold text-[var(--heading-text)]">{MARKETPLACE_LABELS[marketplace]}</h3>
-                  {isApproved && <StatusBadge status="approved" />}
+                  <div className="flex items-center gap-2">
+                    {isApproved && <StatusBadge status="approved" />}
+                    {(content || error) && <ListingHealthBadge status={isGenerating ? 'generating' : health.status} />}
+                  </div>
                 </div>
 
-                {error && (
+                {/* True first-ever-attempt failure (no content exists yet) —
+                    unchanged from before: full-width banner, generic retry. */}
+                {error && !content && (
                   <div className={`mb-3 ${dangerBannerClass}`}>
                     <p className={dangerTextClass}>{error}</p>
                   </div>
                 )}
 
+                {/* A "Regenerate Entire Listing" attempt failed but the old
+                    listing is still intact — a small note, not an alarming
+                    banner, and no field section to attach it to. */}
+                {error && content && failedGroup === 'full' && (
+                  <p className="mb-3 text-xs text-[var(--warn-text)]">
+                    ⚠ Full listing regeneration failed — your existing listing is unchanged
+                  </p>
+                )}
+
                 {content && (
-                  <div className="space-y-2 mb-3">
-                    {displayFields.map((field) => (
-                      <div key={field.label}>
-                        <p className={labelClass}>{field.label}</p>
-                        <p className="text-sm text-[var(--body-text)]">{field.value}</p>
-                      </div>
+                  <div className="mb-3">
+                    {sections.map((section) => (
+                      <FieldSection key={section.role} section={section} check={checkForRole[section.role]} />
                     ))}
+                  </div>
+                )}
+
+                {content && (
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    {fieldGroups.title && (
+                      <button
+                        onClick={() => onRegenerateField(product.id, marketplace, 'title')}
+                        disabled={isGenerating}
+                        className={buttonSecondarySmallClass}
+                      >
+                        Regenerate Title
+                      </button>
+                    )}
+                    {fieldGroups.bullets && (
+                      <button
+                        onClick={() => onRegenerateField(product.id, marketplace, 'bullets')}
+                        disabled={isGenerating}
+                        className={buttonSecondarySmallClass}
+                      >
+                        Regenerate Bullets
+                      </button>
+                    )}
+                    {fieldGroups.description && (
+                      <button
+                        onClick={() => onRegenerateField(product.id, marketplace, 'description')}
+                        disabled={isGenerating}
+                        className={buttonSecondarySmallClass}
+                      >
+                        Regenerate Description
+                      </button>
+                    )}
+                    <button
+                      onClick={() => onRegenerateField(product.id, marketplace, undefined)}
+                      disabled={isGenerating}
+                      className={buttonSecondarySmallClass}
+                    >
+                      Regenerate Entire Listing
+                    </button>
                   </div>
                 )}
 
                 <div className="flex gap-2">
                   {content && !isApproved && (
                     <button onClick={() => onApproveMarketplace(product.id, marketplace)} className={buttonPrimaryClass}>
-                      Approve
+                      Approve Listing
                     </button>
                   )}
                   {content && isApproved && (
@@ -204,7 +495,11 @@ function GeneratedListingDrawer({
                       Unapprove
                     </button>
                   )}
-                  {error && (
+                  {/* Only the true first-attempt failure (no prior content)
+                      gets this generic full-listing retry — a failed
+                      regenerate on an existing listing is recovered via the
+                      matching Regenerate button above instead, never this. */}
+                  {error && !content && (
                     <button onClick={() => onRetryMarketplace(product.id, marketplace)} className={buttonDestructiveClass}>
                       Retry {MARKETPLACE_LABELS[marketplace]}
                     </button>
@@ -222,6 +517,194 @@ function GeneratedListingDrawer({
         </div>
       </div>
     </div>
+  )
+}
+
+// The three input methods (Bulk Upload / Manual Entry / Photos Only),
+// unchanged from Milestone 1's tab-strip — a persistent workspace column
+// now (sidebar → Add Products → Listings), not a modal/drawer: always
+// mounted, no backdrop, no focus trap, no close action. None of
+// LeftPanel/ImageOnlyPanel's own props, fields, or submit logic changed,
+// only where this whole block renders.
+function AddProductsPanel({
+  activeTab,
+  onActiveTabChange,
+  brandName,
+  onBrandNameChange,
+  category,
+  onCategoryChange,
+  description,
+  onDescriptionChange,
+  imageFile,
+  onImageFileChange,
+  formPreviewUrl,
+  fileInputRef,
+  formError,
+  guestLimitReached,
+  brandMismatchPending,
+  selectedClient,
+  pendingImageUrl,
+  onCommitAddProduct,
+  onCancelBrandMismatch,
+  onAddProduct,
+  onAddImageOnlyProduct,
+  onClearForm,
+  uploadingImage,
+  editingId,
+  csvFile,
+  onCsvFileChange,
+  csvFileInputRef,
+  csvSummary,
+  isDragging,
+  onDragOver,
+  onDragLeave,
+  onDrop,
+  pendingCsvUpload,
+  onUploadCsv,
+  onCsvAddWithoutBrandVoice,
+  onCsvAddOnlyMatching,
+  onCsvAddAllWithBrandVoice,
+  onCsvCancelMismatch
+}: {
+  activeTab: WorkspaceDestination
+  onActiveTabChange: (tab: WorkspaceDestination) => void
+  brandName: string
+  onBrandNameChange: (value: string) => void
+  category: string
+  onCategoryChange: (value: string) => void
+  description: string
+  onDescriptionChange: (value: string) => void
+  imageFile: File | null
+  onImageFileChange: (file: File | null) => void
+  formPreviewUrl: string | null
+  fileInputRef: RefObject<HTMLInputElement | null>
+  formError: string | null
+  guestLimitReached: boolean
+  brandMismatchPending: boolean
+  selectedClient: Client | null
+  pendingImageUrl: string | null
+  onCommitAddProduct: (skipBrandVoice: boolean, uploadedImageUrl: string | null) => void
+  onCancelBrandMismatch: () => void
+  onAddProduct: () => void
+  onAddImageOnlyProduct: () => void
+  onClearForm: () => void
+  uploadingImage: boolean
+  editingId: string | null
+  csvFile: File | null
+  onCsvFileChange: (file: File | null) => void
+  csvFileInputRef: RefObject<HTMLInputElement | null>
+  csvSummary: CsvSummary | null
+  isDragging: boolean
+  onDragOver: (e: DragEvent<HTMLDivElement>) => void
+  onDragLeave: () => void
+  onDrop: (e: DragEvent<HTMLDivElement>) => void
+  pendingCsvUpload: PendingCsvUpload | null
+  onUploadCsv: () => void
+  onCsvAddWithoutBrandVoice: () => void
+  onCsvAddOnlyMatching: () => void
+  onCsvAddAllWithBrandVoice: () => void
+  onCsvCancelMismatch: () => void
+}) {
+  return (
+    // A normal flex column, not an overlay — no fixed positioning, no
+    // z-index, no backdrop, no focus trap. Sits between AppSidebar and the
+    // Listings column as a permanent part of the workspace layout.
+    // h-full/overflow-y-auto/border-r only apply at lg: below that the
+    // outer row switches to flex-col (see the call site), so this panel
+    // just takes its natural stacked height instead of each column
+    // fighting to be 100% of a row that no longer has a fixed cross-axis
+    // size — border moves from the right edge to the bottom edge to match.
+    <aside
+      id="add-products-panel"
+      className="w-full lg:w-[420px] lg:shrink-0 lg:h-full lg:overflow-y-auto p-6 border-b lg:border-b-0 border-r-0 lg:border-r border-[var(--card-border)] bg-[var(--page-bg)]"
+    >
+      <h2 className={sectionHeadingClass}>Add Products</h2>
+      <p className={`${bodyTextClass} mb-4`}>Add products to your catalog using any of the methods below.</p>
+
+        <div className="mb-3">
+          {/* grid-cols-3 (not flex-wrap): guarantees Bulk Upload / Manual
+              Entry / Photos Only stay on exactly one row, each taking an
+              equal, deterministic third of the panel's width, rather than
+              risking the last tab wrapping if content width runs tight. */}
+          <div className="grid grid-cols-3 gap-1.5">
+            {ADD_METHOD_TABS.map((tab) => {
+              const isActive = activeTab === tab.id
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => onActiveTabChange(tab.id)}
+                  aria-pressed={isActive}
+                  className={`px-2 py-2 rounded-lg text-xs sm:text-sm font-medium border whitespace-nowrap text-center transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[var(--page-bg)] focus:ring-blue-500 ${
+                    isActive
+                      ? 'bg-blue-600 border-blue-600 text-white'
+                      : 'bg-[var(--input-bg)] border-[var(--input-border)] text-[var(--heading-text)] hover:bg-[var(--secondary-btn-bg-hover)]'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        {activeTab === 'image' ? (
+          <ImageOnlyPanel
+            brandName={brandName}
+            onBrandNameChange={onBrandNameChange}
+            category={category}
+            onCategoryChange={onCategoryChange}
+            imageFile={imageFile}
+            onImageFileChange={onImageFileChange}
+            formPreviewUrl={formPreviewUrl}
+            fileInputRef={fileInputRef}
+            formError={formError}
+            guestLimitReached={guestLimitReached}
+            onSubmit={onAddImageOnlyProduct}
+            uploadingImage={uploadingImage}
+            editingId={editingId}
+          />
+        ) : (
+          <LeftPanel
+            activeTab={activeTab}
+            brandName={brandName}
+            onBrandNameChange={onBrandNameChange}
+            category={category}
+            onCategoryChange={onCategoryChange}
+            description={description}
+            onDescriptionChange={onDescriptionChange}
+            imageFile={imageFile}
+            onImageFileChange={onImageFileChange}
+            formPreviewUrl={formPreviewUrl}
+            fileInputRef={fileInputRef}
+            formError={formError}
+            guestLimitReached={guestLimitReached}
+            brandMismatchPending={brandMismatchPending}
+            selectedClient={selectedClient}
+            pendingImageUrl={pendingImageUrl}
+            onCommitAddProduct={onCommitAddProduct}
+            onCancelBrandMismatch={onCancelBrandMismatch}
+            onAddProduct={onAddProduct}
+            onClearForm={onClearForm}
+            uploadingImage={uploadingImage}
+            editingId={editingId}
+            csvFile={csvFile}
+            onCsvFileChange={onCsvFileChange}
+            csvFileInputRef={csvFileInputRef}
+            csvSummary={csvSummary}
+            isDragging={isDragging}
+            onDragOver={onDragOver}
+            onDragLeave={onDragLeave}
+            onDrop={onDrop}
+            pendingCsvUpload={pendingCsvUpload}
+            onUploadCsv={onUploadCsv}
+            onCsvAddWithoutBrandVoice={onCsvAddWithoutBrandVoice}
+            onCsvAddOnlyMatching={onCsvAddOnlyMatching}
+            onCsvAddAllWithBrandVoice={onCsvAddAllWithBrandVoice}
+            onCsvCancelMismatch={onCsvCancelMismatch}
+          />
+        )}
+    </aside>
   )
 }
 
@@ -254,6 +737,36 @@ function ExportGateModal({ onClose, onSignIn }: { onClose: () => void; onSignIn:
   )
 }
 
+// Replaces the queue table entirely when there's nothing in it yet — not a
+// decorated illustration, just the one thing the seller needs to know
+// ("nothing here yet"). No Add Products button here anymore: the panel to
+// its left is always visible, so a second entry point would be redundant.
+// Uses the same cardClass surface QueueTable itself sits in, so swapping
+// between the two doesn't change the page's visual rhythm.
+function WorkspaceEmptyState() {
+  // The Add Products panel is always visible on desktop, but stacks above
+  // Listings below the lg breakpoint — this scrolls it into view (and
+  // focuses its first field) rather than being a purely decorative button,
+  // since there's no show/hide state left to toggle.
+  function focusAddProducts() {
+    const panel = document.getElementById('add-products-panel')
+    panel?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    panel?.querySelector<HTMLElement>('input, textarea, button')?.focus()
+  }
+
+  return (
+    <div className="flex-1 flex items-center justify-center">
+      <div className={`flex flex-col items-center text-center gap-2 px-8 py-8 max-w-sm ${cardClass}`}>
+        <p className={sectionHeadingClass}>Your listings are ready to be created</p>
+        <p className={bodyTextClass}>Add products using the panel on the left to start creating marketplace-ready listings.</p>
+        <button onClick={focusAddProducts} className={`mt-2 ${buttonPrimaryClass}`}>
+          + Add Products
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export default function CatalogueWorkspace() {
   // Global/session-scoped, same as the old single-value dropdown — not
   // frozen onto individual products at add time. The generation loop always
@@ -262,6 +775,7 @@ export default function CatalogueWorkspace() {
   const [selectedMarketplaces, setSelectedMarketplaces] = useState<Marketplace[]>([])
   const [draftProducts, setDraftProducts] = useState<DraftProduct[]>([])
   const [activeTab, setActiveTab] = useState<WorkspaceDestination>('manual')
+  const [readinessFilter, setReadinessFilter] = useState<ReadinessFilter>('all')
   const [viewingId, setViewingId] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [pendingRestoreCount, setPendingRestoreCount] = useState<number | null>(null)
@@ -294,7 +808,21 @@ export default function CatalogueWorkspace() {
 
   const [generating, setGenerating] = useState(false)
   const [generationProgress, setGenerationProgress] = useState<{ current: number; total: number } | null>(null)
-  const [currentlyGeneratingId, setCurrentlyGeneratingId] = useState<string | null>(null)
+  // Which single (product, marketplace) pair is in flight right now — not
+  // just which product, since a product can have several marketplace rows
+  // and only one of them is actually generating at any instant (the
+  // generation loop is sequential, never parallel across marketplaces).
+  const [currentlyGenerating, setCurrentlyGenerating] = useState<{ productId: string; marketplace: Marketplace } | null>(
+    null
+  )
+  // Remembers which field group (title/bullets/description/'full') the most
+  // recent FAILED generate attempt was for, per (product, marketplace) pair
+  // — so a failed "Regenerate Title" can be reported and retried as exactly
+  // that, never silently widened into a full-listing retry. Keyed by
+  // `${productId}:${marketplace}`; an entry is removed the moment that pair
+  // next succeeds. Deliberately separate from generationError (which only
+  // holds the message) since this tracks *scope*, not the error text.
+  const [failedRegenFieldGroup, setFailedRegenFieldGroup] = useState<Record<string, FieldGroup | 'full'>>({})
   // Structured rather than a pre-formatted string — rendered as a top-level,
   // impossible-to-miss banner (see the JSX below), not the per-row "One or
   // more marketplaces failed" text, so it needs a heading, a body, and a
@@ -718,6 +1246,8 @@ export default function CatalogueWorkspace() {
       approved: emptyApproved(),
       status: 'draft',
       generationError: emptyGenerationError(),
+      generationMeta: emptyGenerationMeta(),
+      visualAttributes: null,
       skipBrandVoice
     }
 
@@ -741,6 +1271,9 @@ export default function CatalogueWorkspace() {
       fileInputRef.current.value = ''
     }
     setEditingId(product.id)
+    // Switches the always-visible Add Products panel to Manual Entry so
+    // the pre-filled form is immediately visible — the panel itself never
+    // needs to be shown/hidden anymore, it's already on screen.
     setActiveTab('manual')
   }
 
@@ -801,6 +1334,8 @@ export default function CatalogueWorkspace() {
         approved: emptyApproved(),
         status: 'draft',
         generationError: emptyGenerationError(),
+        generationMeta: emptyGenerationMeta(),
+        visualAttributes: null,
         skipBrandVoice: false
       })
     }
@@ -931,9 +1466,8 @@ export default function CatalogueWorkspace() {
     let succeededPairs = 0
 
     outer: for (const product of pending) {
-      setCurrentlyGeneratingId(product.id)
-
       for (const marketplace of runMarketplaces) {
+        setCurrentlyGenerating({ productId: product.id, marketplace })
         setGenerationProgress({ current: completedPairs + 1, total: totalPairs })
 
         const outcome = await generateForProductMarketplace(product, marketplace, runMarketplaces)
@@ -954,40 +1488,62 @@ export default function CatalogueWorkspace() {
       }
     }
 
-    setCurrentlyGeneratingId(null)
+    setCurrentlyGenerating(null)
     setGenerationProgress(null)
     setGenerating(false)
   }
 
-  // Marketplace-gap-aware: only attempts marketplaces this product doesn't
-  // already have successful content for, so retrying never re-charges a
-  // credit for a marketplace that already succeeded.
-  async function handleRetryProduct(id: string) {
-    const product = draftProducts.find((p) => p.id === id)
-    if (!product || selectedMarketplaces.length === 0) return
-
-    setCurrentlyGeneratingId(id)
-    for (const marketplace of selectedMarketplaces) {
-      if (product.generatedContent[marketplace] !== null) continue
-      const outcome = await generateForProductMarketplace(product, marketplace, selectedMarketplaces)
-      if (outcome === 'insufficient_credits') break
-    }
-    setCurrentlyGeneratingId(null)
-  }
-
-  async function handleRetryProductMarketplace(id: string, marketplace: Marketplace) {
+  // Shared by the row-level "Retry" button and every drawer regenerate
+  // button — both just call generateForProductMarketplace for one
+  // (product, marketplace) pair, differing only in whether a fieldGroup is
+  // passed. Centralized here so failedRegenFieldGroup (which the drawer
+  // needs to know exactly what to offer to retry) stays in sync with every
+  // caller instead of being duplicated per call site.
+  async function runGeneration(id: string, marketplace: Marketplace, fieldGroup?: FieldGroup) {
     const product = draftProducts.find((p) => p.id === id)
     if (!product) return
 
-    setCurrentlyGeneratingId(id)
-    await generateForProductMarketplace(product, marketplace, selectedMarketplaces)
-    setCurrentlyGeneratingId(null)
+    const key = `${id}:${marketplace}`
+    setCurrentlyGenerating({ productId: id, marketplace })
+    const outcome = await generateForProductMarketplace(product, marketplace, selectedMarketplaces, fieldGroup)
+    setCurrentlyGenerating(null)
+
+    setFailedRegenFieldGroup((prev) => {
+      if (outcome === 'success') {
+        if (!(key in prev)) return prev
+        const next = { ...prev }
+        delete next[key]
+        return next
+      }
+      return { ...prev, [key]: fieldGroup ?? 'full' }
+    })
   }
 
+  async function handleRetryProductMarketplace(id: string, marketplace: Marketplace) {
+    await runGeneration(id, marketplace)
+  }
+
+  // Drawer's Regenerate Title/Bullets/Description/Entire Listing buttons —
+  // fieldGroup undefined means "entire listing," same call as a normal
+  // retry above, just exposed with a name that matches what the button says.
+  async function handleRegenerateField(id: string, marketplace: Marketplace, fieldGroup?: FieldGroup) {
+    await runGeneration(id, marketplace, fieldGroup)
+  }
+
+  // fieldGroup undefined/null = replace the whole marketplace content, same
+  // as every existing caller today (fresh generation, full retry). When set
+  // ('title' | 'bullets' | 'description'), only that group's keys (per
+  // FIELD_GROUPS above) are taken from the fresh response — every other key
+  // in the existing content object is preserved untouched via the spread
+  // below, so "Regenerate Bullets" genuinely cannot alter the title or
+  // description. Still one full generate-single call underneath (the model
+  // has no partial-output mode), so it costs the same 1 credit as any other
+  // retry already does — no new billing path.
   async function generateForProductMarketplace(
     product: DraftProduct,
     marketplace: Marketplace,
-    runMarketplaces: Marketplace[]
+    runMarketplaces: Marketplace[],
+    fieldGroup?: FieldGroup
   ): Promise<'success' | 'insufficient_credits' | 'error'> {
     try {
       const imageBase64 = product.imageFile ? await fileToBase64(product.imageFile) : null
@@ -1002,18 +1558,68 @@ export default function CatalogueWorkspace() {
           targetMarketplace: marketplace,
           imageBase64,
           imageUrl: product.imageFile ? null : product.imageUrl,
-          brandGuidelines: product.skipBrandVoice ? null : selectedClient?.brand_guidelines || null
+          brandGuidelines: product.skipBrandVoice ? null : selectedClient?.brand_guidelines || null,
+          // Lets the route build a small, field-specific prompt (its own
+          // marketplace-specific constraint) instead of the generic
+          // full-listing one — undefined means "entire listing," same as
+          // every other caller of this function.
+          fieldGroup
         })
       })
       const data = await res.json()
 
       if (res.ok) {
+        // Meta describes the fresh response's title specifically — only
+        // trustworthy to record when the title actually changed (no
+        // fieldGroup at all, i.e. entire listing, or fieldGroup === 'title').
+        // Regenerating just the bullets/description leaves the existing
+        // title (and therefore its existing meta) untouched.
+        const updatesTitle = !fieldGroup || fieldGroup === 'title'
+
         setDraftProducts((prev) =>
           prev.map((p) => {
             if (p.id !== product.id) return p
-            const generatedContent = { ...p.generatedContent, [marketplace]: data.generatedContent }
+            const existing = p.generatedContent[marketplace] ?? {}
+            const keysToKeep = fieldGroup ? FIELD_GROUPS[marketplace][fieldGroup] : undefined
+            const mergedContent = keysToKeep
+              ? {
+                  ...existing,
+                  ...Object.fromEntries(keysToKeep.map((key) => [key, data.generatedContent[key]]))
+                }
+              : data.generatedContent
+
+            const generatedContent = { ...p.generatedContent, [marketplace]: mergedContent }
             const generationError = { ...p.generationError, [marketplace]: null }
-            return { ...p, generatedContent, generationError, status: computeProductStatus(generatedContent, runMarketplaces) }
+            // keywordsField only reflects reality when keywords were
+            // actually part of this response — true for a full generation,
+            // NOT for a title-only regenerate (there's no "Regenerate
+            // Keywords" button; a title-only request's prompt never asks
+            // for keywordPool at all, so the server's fresh meta would
+            // otherwise carry an empty/inert keywordsField that could
+            // silently look "within limit" and overwrite a previously
+            // real, possibly-failing one). Preserve the existing value in
+            // that one case; every other case (full regenerate, or the
+            // whole meta being discarded for bullets/description-only
+            // requests below) already behaves correctly untouched.
+            const generationMeta = updatesTitle
+              ? {
+                  ...p.generationMeta,
+                  [marketplace]: {
+                    ...(data.meta ?? { titleFields: [], descriptionField: null, keywordsField: null, bulletCount: 0 }),
+                    keywordsField: fieldGroup === 'title' ? p.generationMeta[marketplace]?.keywordsField ?? null : data.meta?.keywordsField ?? null
+                  }
+                }
+              : p.generationMeta
+            const visualAttributes = data.visualAttributes ?? p.visualAttributes
+
+            return {
+              ...p,
+              generatedContent,
+              generationError,
+              generationMeta,
+              visualAttributes,
+              status: computeProductStatus(generatedContent, runMarketplaces)
+            }
           })
         )
         if (hasSession) notifyCreditsChanged()
@@ -1257,6 +1863,12 @@ export default function CatalogueWorkspace() {
 
   const hasApproved = draftProducts.some((p) => SUPPORTED_MARKETPLACES.some((m) => p.approved[m]))
   const pendingCount = draftProducts.filter((p) => p.status === 'draft').length
+  // Display-only — Generate/Bulk Approve/Export above still read the full,
+  // unfiltered draftProducts (via pendingCount/hasApproved and their own
+  // handlers), so a "Ready" filter never narrows what an action operates
+  // on, only what the table currently shows.
+  const listingSummary = computeListingSummary(draftProducts)
+  const filteredDraftProducts = draftProducts.filter((p) => productMatchesFilter(p, readinessFilter))
   const viewingProduct = draftProducts.find((p) => p.id === viewingId) || null
   const editingProduct = editingId ? draftProducts.find((p) => p.id === editingId) || null : null
   const formPreviewUrl = imageFile ? null : editingProduct?.imageUrl ?? null
@@ -1285,8 +1897,71 @@ export default function CatalogueWorkspace() {
           there only ever accounted for the header and silently overflowed
           the page on mobile, where the nav bar adds its own height on top. */}
       <div className="pt-16 h-screen flex flex-col">
-        <AppSidebar activeDestination={activeTab} onDestinationChange={setActiveTab}>
-          <div className="flex-1 flex flex-col min-h-0 p-6 overflow-y-auto">
+        <AppSidebar>
+          {/* Sidebar → Add Products → Listings: a normal three-column flex
+              row at lg: and above, not sidebar-plus-overlay. Add Products is
+              a fixed-width, always-mounted sibling of the Listings column,
+              each with its own independent overflow-y-auto (lg: only — see
+              AddProductsPanel) so a tall form and a long queue can each
+              scroll on their own without a page-level horizontal scrollbar.
+              Below lg, flex-col stacks Add Products above Listings instead
+              of squeezing both into a shrinking row — this is what keeps
+              the three-tab strip from ever fighting for width against the
+              Listings column at tablet sizes. */}
+          <div className="flex-1 flex flex-col lg:flex-row min-h-0">
+            <AddProductsPanel
+              activeTab={activeTab}
+              onActiveTabChange={setActiveTab}
+              brandName={brandName}
+              onBrandNameChange={handleBrandNameChange}
+              category={category}
+              onCategoryChange={handleCategoryChange}
+              description={description}
+              onDescriptionChange={handleDescriptionChange}
+              imageFile={imageFile}
+              onImageFileChange={setImageFile}
+              formPreviewUrl={formPreviewUrl}
+              fileInputRef={fileInputRef}
+              formError={formError}
+              guestLimitReached={guestLimitReached}
+              brandMismatchPending={brandMismatchPending}
+              selectedClient={selectedClient}
+              pendingImageUrl={pendingImageUrl}
+              onCommitAddProduct={commitAddProduct}
+              onCancelBrandMismatch={handleCancelBrandMismatch}
+              onAddProduct={handleAddProduct}
+              onAddImageOnlyProduct={handleAddImageOnlyProduct}
+              onClearForm={handleClearForm}
+              uploadingImage={uploadingImage}
+              editingId={editingId}
+              csvFile={csvFile}
+              onCsvFileChange={handleCsvFileChange}
+              csvFileInputRef={csvFileInputRef}
+              csvSummary={csvSummary}
+              isDragging={isDragging}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              pendingCsvUpload={pendingCsvUpload}
+              onUploadCsv={handleUploadCsv}
+              onCsvAddWithoutBrandVoice={handleCsvAddWithoutBrandVoice}
+              onCsvAddOnlyMatching={handleCsvAddOnlyMatching}
+              onCsvAddAllWithBrandVoice={handleCsvAddAllWithBrandVoice}
+              onCsvCancelMismatch={handleCsvCancelMismatch}
+            />
+          {/* min-h-0/overflow-y-auto gated to lg: same reasoning as the row
+              above — below lg this column takes its natural stacked
+              height instead of competing with Add Products for a shared
+              row height it no longer has, and the page's own scroll
+              (this whole block's ancestor) takes over. */}
+          <div className="flex-1 flex flex-col lg:min-h-0 p-6 lg:overflow-y-auto">
+          {/* Compact — a heading and one line, not a page-header-sized
+              banner. Establishes "what am I working on" without taking
+              space from the catalog table below it. */}
+          <div className="mb-4">
+            <h1 className={sectionHeadingClass}>Listings</h1>
+            <p className={bodyTextClass}>Create, validate and prepare marketplace listings.</p>
+          </div>
           <AppHeader
             hasSession={hasSession}
             selectedMarketplaces={selectedMarketplaces}
@@ -1346,105 +2021,116 @@ export default function CatalogueWorkspace() {
             </div>
           )}
 
-          {/* Asymmetrical: the form is a fixed, naturally-sized input panel,
-              not a peer that deserves equal billing with the queue — the
-              queue is where the actual catalog lives and grows, so it gets
-              the rest of the width (flex-1) and the rest of the row's height
-              (min-h-0 lets QueueTable's own flex-1 apply instead of being
-              clamped to content size by this row). */}
-          <div className="flex flex-col lg:flex-row gap-6 flex-1 min-h-0">
-            <div className="w-full lg:w-[420px] lg:shrink-0">
-              {activeTab === 'image' ? (
-                <ImageOnlyPanel
-                  brandName={brandName}
-                  onBrandNameChange={handleBrandNameChange}
-                  category={category}
-                  onCategoryChange={handleCategoryChange}
-                  imageFile={imageFile}
-                  onImageFileChange={setImageFile}
-                  formPreviewUrl={formPreviewUrl}
-                  fileInputRef={fileInputRef}
-                  formError={formError}
-                  guestLimitReached={guestLimitReached}
-                  onSubmit={handleAddImageOnlyProduct}
-                  uploadingImage={uploadingImage}
-                  editingId={editingId}
-                />
-              ) : (
-                <LeftPanel
-                  activeTab={activeTab}
-                  brandName={brandName}
-                  onBrandNameChange={handleBrandNameChange}
-                  category={category}
-                  onCategoryChange={handleCategoryChange}
-                  description={description}
-                  onDescriptionChange={handleDescriptionChange}
-                  imageFile={imageFile}
-                  onImageFileChange={setImageFile}
-                  formPreviewUrl={formPreviewUrl}
-                  fileInputRef={fileInputRef}
-                  formError={formError}
-                  guestLimitReached={guestLimitReached}
-                  brandMismatchPending={brandMismatchPending}
-                  selectedClient={selectedClient}
-                  pendingImageUrl={pendingImageUrl}
-                  onCommitAddProduct={commitAddProduct}
-                  onCancelBrandMismatch={handleCancelBrandMismatch}
-                  onAddProduct={handleAddProduct}
-                  onClearForm={handleClearForm}
-                  uploadingImage={uploadingImage}
-                  editingId={editingId}
-                  csvFile={csvFile}
-                  onCsvFileChange={handleCsvFileChange}
-                  csvFileInputRef={csvFileInputRef}
-                  csvSummary={csvSummary}
-                  isDragging={isDragging}
-                  onDragOver={handleDragOver}
-                  onDragLeave={handleDragLeave}
-                  onDrop={handleDrop}
-                  pendingCsvUpload={pendingCsvUpload}
-                  onUploadCsv={handleUploadCsv}
-                  onCsvAddWithoutBrandVoice={handleCsvAddWithoutBrandVoice}
-                  onCsvAddOnlyMatching={handleCsvAddOnlyMatching}
-                  onCsvAddAllWithBrandVoice={handleCsvAddAllWithBrandVoice}
-                  onCsvCancelMismatch={handleCsvCancelMismatch}
-                />
-              )}
+          {/* Grouped with the other transient status banners above (not
+              left trailing under whatever renders below it, which could be
+              the empty state right after a full export clears the queue) —
+              same bordered-banner shape as those, success-tinted with the
+              existing theme variables. */}
+          {downloadMessage && (
+            <div className={`mb-4 flex items-center gap-2 px-4 py-3 rounded-xl border border-[var(--success-border)] bg-[var(--success-bg)]`}>
+              <p className="text-sm text-[var(--success-text)]">✓ {downloadMessage}</p>
             </div>
+          )}
 
-            <div className="flex-1 min-w-0 flex flex-col">
-              <QueueTable
-                draftProducts={draftProducts}
-                currentlyGeneratingId={currentlyGeneratingId}
-                selectedMarketplaces={selectedMarketplaces}
-                generating={generating}
-                hasApproved={hasApproved}
-                loading={!sessionReady}
-                hasSession={hasSession}
-                pendingCount={pendingCount}
-                onGenerateAll={handleGenerateAll}
-                onBulkApprove={handleBulkApprove}
-                onDownloadApproved={handleDownloadApproved}
-                onView={setViewingId}
-                onEdit={handleEditProduct}
-                onDelete={handleDeleteProduct}
-                onRetry={handleRetryProduct}
-              />
-            </div>
+          {/* Listings — the primary content of this column. Add Products is
+              the persistent sibling column to the left, not an action
+              triggered from here anymore. */}
+          <div className="flex-1 min-h-0 flex flex-col">
+            {sessionReady && draftProducts.length === 0 ? (
+              <WorkspaceEmptyState />
+            ) : (
+              <>
+                {draftProducts.length > 0 && (
+                  <div className="mb-3 flex flex-wrap items-center gap-4">
+                    {/* Real counts of attempted (product, marketplace) pairs
+                        from computeListingSummary — the same per-row health
+                        computation QueueTable itself uses, just tallied.
+                        Never shown as a percentage or score. */}
+                    <p className={bodyTextClass}>
+                      <span className="font-semibold text-[var(--heading-text)]">{listingSummary.total}</span>{' '}
+                      Listing{listingSummary.total === 1 ? '' : 's'}
+                      {listingSummary.ready > 0 && (
+                        <>
+                          {' '}
+                          · <span className="text-[var(--success-text)]">{listingSummary.ready} Ready</span>
+                        </>
+                      )}
+                      {listingSummary.needsReview > 0 && (
+                        <>
+                          {' '}
+                          · <span className="text-[var(--warn-text)]">{listingSummary.needsReview} Needs Review</span>
+                        </>
+                      )}
+                      {listingSummary.missingData > 0 && (
+                        <>
+                          {' '}
+                          · <span className="text-[var(--warn-text)]">{listingSummary.missingData} Missing Data</span>
+                        </>
+                      )}
+                      {listingSummary.error > 0 && (
+                        <>
+                          {' '}
+                          · <span className="text-[var(--danger-text)]">{listingSummary.error} Error{listingSummary.error === 1 ? '' : 's'}</span>
+                        </>
+                      )}
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {FILTER_OPTIONS.map((option) => {
+                        const isActive = readinessFilter === option.id
+                        return (
+                          <button
+                            key={option.id}
+                            type="button"
+                            onClick={() => setReadinessFilter(option.id)}
+                            aria-pressed={isActive}
+                            className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[var(--page-bg)] focus:ring-blue-500 ${
+                              isActive
+                                ? 'bg-blue-600 border-blue-600 text-white'
+                                : 'bg-[var(--secondary-btn-bg)] border-[var(--secondary-btn-border)] text-[var(--secondary-btn-text)] hover:bg-[var(--secondary-btn-bg-hover)]'
+                            }`}
+                          >
+                            {option.label}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+                <QueueTable
+                  draftProducts={filteredDraftProducts}
+                  currentlyGenerating={currentlyGenerating}
+                  selectedMarketplaces={selectedMarketplaces}
+                  generating={generating}
+                  hasApproved={hasApproved}
+                  loading={!sessionReady}
+                  hasSession={hasSession}
+                  pendingCount={pendingCount}
+                  onGenerateAll={handleGenerateAll}
+                  onBulkApprove={handleBulkApprove}
+                  onDownloadApproved={handleDownloadApproved}
+                  onView={setViewingId}
+                  onEdit={handleEditProduct}
+                  onDelete={handleDeleteProduct}
+                  onRetry={handleRetryProductMarketplace}
+                />
+              </>
+            )}
           </div>
-
-          {downloadMessage && <p className="mt-2 text-sm text-[var(--success-text)]">{downloadMessage}</p>}
         </div>
+          </div>
         </AppSidebar>
       </div>
 
       {viewingProduct && (
         <GeneratedListingDrawer
           product={viewingProduct}
+          currentlyGenerating={currentlyGenerating}
+          failedRegenFieldGroup={failedRegenFieldGroup}
           onClose={() => setViewingId(null)}
           onApproveMarketplace={handleApproveMarketplace}
           onUnapproveMarketplace={handleUnapproveMarketplace}
           onRetryMarketplace={handleRetryProductMarketplace}
+          onRegenerateField={handleRegenerateField}
         />
       )}
 

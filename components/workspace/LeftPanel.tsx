@@ -110,6 +110,14 @@ export default function LeftPanel({
               onChange={(e) => onCategoryChange(e.target.value)}
               className={inputClass}
             />
+            {/* Limited to what the app already knows going into generation —
+                not a new attribute taxonomy, just surfacing the one gap that
+                affects listing quality before the user submits instead of
+                only after. Only shown once the user has actually started
+                filling the form, not on a blank first load. */}
+            {!category.trim() && (brandName.trim() || description.trim()) && (
+              <p className="text-xs text-[var(--warn-text)]">⚠ Category missing — add category for better results</p>
+            )}
             <textarea
               placeholder="Description"
               value={description}

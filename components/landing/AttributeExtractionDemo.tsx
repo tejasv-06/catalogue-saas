@@ -1,16 +1,18 @@
 import Link from 'next/link'
 import { Image as ImageIcon, ArrowRight } from 'lucide-react'
 
-// Computer-vision section demo (spec section 13) — a static example, not a
-// live extraction: "a green floral saree" in, a fixed attribute list out.
-// "Add to Listing" is a real link to /workspace (the actual place this
-// attribute data would end up), not a decorative dead button.
+// Computer-vision section demo — a static example, not a live extraction.
+// Same product as the hero's HeroTransformDemo (insulated stainless-steel
+// water bottle), so the two demos read as one consistent story rather than
+// two unrelated products. "Add to Listing" is a real link to /workspace
+// (the actual place this attribute data would end up), not a decorative
+// dead button.
 const extractedAttributes: { label: string; value: string }[] = [
-  { label: 'Colour', value: 'Bottle Green' },
-  { label: 'Pattern', value: 'Floral' },
-  { label: 'Fabric', value: 'Jacquard' },
-  { label: 'Occasion', value: 'Festive' },
-  { label: 'Style', value: 'Traditional' }
+  { label: 'Colour', value: 'Matte Black' },
+  { label: 'Material', value: 'Stainless Steel' },
+  { label: 'Capacity', value: '750 ml' },
+  { label: 'Design', value: 'Double-wall / Insulated' },
+  { label: 'Feature', value: 'Leak-Resistant Lid' }
 ]
 
 export default function AttributeExtractionDemo() {
@@ -20,7 +22,7 @@ export default function AttributeExtractionDemo() {
         <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-text)] mb-3">Product Image</p>
         <div className="aspect-square w-full max-w-xs rounded-xl bg-[var(--placeholder-bg)] flex flex-col items-center justify-center gap-2 text-[var(--muted-text)]">
           <ImageIcon size={28} strokeWidth={1.5} />
-          <span className="text-xs px-4 text-center">A green floral saree</span>
+          <span className="text-xs px-4 text-center">Insulated Stainless Steel Water Bottle</span>
         </div>
       </div>
 

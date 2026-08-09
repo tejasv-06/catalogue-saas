@@ -1,15 +1,19 @@
 export type BadgeStatus = 'draft' | 'generating' | 'partial' | 'generated' | 'approved'
 
+// Same --* theme variable families ListingHealthBadge uses (bg/text/border),
+// so the two badge types — generation progress here, listing health there —
+// stay visually consistent with each other in both themes instead of this
+// one being a fixed light-mode pill next to a properly themed one.
 const styles: Record<BadgeStatus, string> = {
-  draft: 'bg-gray-100 text-gray-600',
-  generating: 'bg-yellow-100 text-yellow-700 animate-pulse',
+  draft: 'bg-[var(--secondary-btn-bg)] text-[var(--secondary-btn-text)] border-[var(--secondary-btn-border)]',
+  generating: 'bg-[var(--secondary-btn-bg)] text-[var(--secondary-btn-text)] border-[var(--secondary-btn-border)] animate-pulse',
   // Some but not all of a product's selected marketplaces generated
   // successfully (e.g. credits ran out partway through) — visually distinct
   // from both "nothing done yet" (draft) and "fully done" (generated) so it
   // never reads as an ambiguous half-finished state.
-  partial: 'bg-orange-100 text-orange-700',
-  generated: 'bg-blue-100 text-blue-700',
-  approved: 'bg-green-100 text-green-700'
+  partial: 'bg-[var(--warn-bg)] text-[var(--warn-text)] border-[var(--warn-border)]',
+  generated: 'bg-[var(--accent-sky-bg)] text-[var(--accent-sky-text)] border-[var(--accent-sky-border)]',
+  approved: 'bg-[var(--success-bg)] text-[var(--success-text)] border-[var(--success-border)]'
 }
 
 const labels: Record<BadgeStatus, string> = {
@@ -21,5 +25,5 @@ const labels: Record<BadgeStatus, string> = {
 }
 
 export default function StatusBadge({ status }: { status: BadgeStatus }) {
-  return <span className={`text-xs font-medium px-2 py-1 rounded-full ${styles[status]}`}>{labels[status]}</span>
+  return <span className={`text-xs font-medium px-2 py-1 rounded-full border ${styles[status]}`}>{labels[status]}</span>
 }

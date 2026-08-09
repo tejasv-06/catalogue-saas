@@ -4,6 +4,7 @@ import type { RefObject } from 'react'
 import ClientSelector, { type Client } from '@/components/ClientSelector'
 import { SUPPORTED_MARKETPLACES, MARKETPLACE_LABELS } from '@/lib/platformShapers'
 import type { Marketplace } from '@/lib/types'
+import { labelClass } from '@/lib/uiClasses'
 
 // Slim top bar for the right panel — logo, usage/credits, theme, and logout
 // all live in AppSidebar now (shared with /audit). This keeps only what's
@@ -31,8 +32,9 @@ export default function AppHeader({
   onSelectClient: (client: Client | null) => void
 }) {
   return (
-    <div className="mb-6 flex flex-wrap items-center gap-3">
+    <div className="mb-6 flex flex-wrap items-end gap-6">
       <div className="flex flex-col gap-1">
+        <p className={labelClass}>Target Marketplaces</p>
         <div
           ref={marketplaceGroupRef}
           tabIndex={-1}
@@ -63,7 +65,12 @@ export default function AppHeader({
         </div>
         {marketplaceError && <p className="text-xs font-medium text-[var(--danger-link-text)]">{marketplaceError}</p>}
       </div>
-      {hasSession && <ClientSelector selectedClientId={selectedClientId} onSelectClient={onSelectClient} />}
+      {hasSession && (
+        <div className="flex flex-col gap-1">
+          <p className={labelClass}>Brand Voice</p>
+          <ClientSelector selectedClientId={selectedClientId} onSelectClient={onSelectClient} />
+        </div>
+      )}
     </div>
   )
 }

@@ -6,17 +6,15 @@ import ToolsDropdown from '@/components/ToolsDropdown'
 import MobileMenu from '@/components/MobileMenu'
 
 // Product/For Brands/For Agencies/Pricing have no dedicated pages — they're
-// anchors into sections on this same homepage (added via id= on those
-// sections in app/page.tsx). Pricing has no section of its own in the
-// redesign spec, so it points at /contact instead of a dead anchor —
-// closest existing equivalent to "talk to us about pricing", same pattern
-// already used for "Buy more credits" elsewhere in this app.
+// anchors into sections on this same homepage (id= on those sections in
+// app/page.tsx, including id="pricing" now that a real Pricing section
+// exists there).
 const navLinks = [
   { href: '/#product', label: 'Product' },
   { href: '/how-it-works', label: 'How It Works' },
   { href: '/#for-brands', label: 'For Brands' },
   { href: '/#for-agencies', label: 'For Agencies' },
-  { href: '/contact', label: 'Pricing' }
+  { href: '/#pricing', label: 'Pricing' }
 ]
 
 export default async function Navbar() {

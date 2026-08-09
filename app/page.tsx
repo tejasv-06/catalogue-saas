@@ -1,17 +1,5 @@
 import Link from 'next/link'
-import {
-  ArrowRight,
-  Check,
-  X,
-  CheckCircle2,
-  Building2,
-  Users,
-  Upload,
-  Sparkles,
-  ClipboardCheck,
-  Download,
-  type LucideIcon
-} from 'lucide-react'
+import { ArrowRight, Check, X, CheckCircle2, Building2, Users } from 'lucide-react'
 import Navbar from '@/components/Navbar'
 import HeroTransformDemo from '@/components/landing/HeroTransformDemo'
 import AttributeExtractionDemo from '@/components/landing/AttributeExtractionDemo'
@@ -24,22 +12,32 @@ import { SUPPORTED_MARKETPLACES, MARKETPLACE_LABELS } from '@/lib/platformShaper
 
 const problemFlow = ['Photos', 'Attributes', 'Keywords', 'Copy', 'Marketplace Fields', 'Validation', 'Export']
 
+// The one official Tesolute workflow — this exact 5-step sequence is what
+// /how-it-works expands on and what /workspace's queue/health/drawer are
+// built around. Deliberately the only place on this page that explains the
+// workflow — see the deleted "How It Works" section below for why a second,
+// differently-worded version doesn't also exist here.
 const solutionSteps = [
-  { number: '01', title: 'Understand', description: 'Upload product images, CSVs or existing product data.' },
+  { number: '01', title: 'Add', description: 'Upload your product photos, CSV or existing catalog data.' },
   {
     number: '02',
-    title: 'Enrich',
-    description: 'Tesolute extracts product attributes and fills the information needed for marketplace listings.'
+    title: 'Generate',
+    description: 'Tesolute creates marketplace-specific titles, bullets, descriptions, attributes and search terms.'
   },
   {
     number: '03',
-    title: 'Generate',
-    description: 'Create titles, bullet points, descriptions, attributes and search terms tailored to the marketplace.'
+    title: 'Validate',
+    description: 'Every listing is checked against the applicable marketplace requirements, and missing information is flagged.'
   },
   {
     number: '04',
+    title: 'Review',
+    description: 'Fix only what needs your attention. Regenerate individual fields when necessary.'
+  },
+  {
+    number: '05',
     title: 'Export',
-    description: 'Review your catalog, make changes inline and download marketplace-ready files.'
+    description: 'Approve your listings and download marketplace-ready files.'
   }
 ]
 
@@ -57,7 +55,7 @@ const tesolutePoints = [
   'Builds complete listings',
   'Extracts attributes from product images',
   'Marketplace-specific output',
-  'SEO-aware content',
+  'Marketplace-aware content',
   'Built-in validation',
   'Locked brand voice',
   'Bulk generation and export'
@@ -78,20 +76,20 @@ const brandVoiceExamples: { product: string; copy: string }[] = [
   { product: 'Ceramic Vase', copy: 'Understated form, deliberate proportions. Elegant on any shelf.' }
 ]
 
-const bulkChecklist = ['Bulk CSV upload', 'Bulk image processing', 'Inline editing', 'Bulk approval', 'Marketplace-ready export']
+const bulkChecklist = ['Bulk CSV upload', 'Bulk image processing', 'Inline editing', 'Bulk approval', 'Structured catalog export']
 
-const proofPoints: { problem: string; solution: string }[] = [
-  { problem: 'Manual attribute entry', solution: 'Automated extraction' },
-  { problem: 'Generic AI copy', solution: 'Brand-specific content' },
-  { problem: 'Marketplace formatting', solution: 'Channel-specific generation' },
-  { problem: 'Spreadsheet cleanup', solution: 'Ready-to-upload exports' }
+const beforeTesolutePoints = [
+  'Manual attribute entry for every SKU',
+  'Generic, copy-pasted AI text',
+  'Reformatting the same content for each marketplace by hand',
+  'Hours of spreadsheet cleanup before every upload'
 ]
 
-const howItWorksSteps: { title: string; description: string; icon: LucideIcon }[] = [
-  { title: 'Upload', description: 'Drop in your product images and CSV.', icon: Upload },
-  { title: 'Generate', description: 'Tesolute analyzes your products and creates channel-specific listings.', icon: Sparkles },
-  { title: 'Review', description: "Edit anything you want. Regenerate anything you don't.", icon: ClipboardCheck },
-  { title: 'Export', description: 'Download your marketplace-ready catalog.', icon: Download }
+const withTesolutePoints = [
+  'Automated attribute extraction from product photos',
+  'Brand-specific, on-voice content',
+  'Channel-specific generation, built in',
+  'Ready-to-upload exports, no cleanup'
 ]
 
 // ---------------------------------------------------------------------------
@@ -126,8 +124,8 @@ export default function Home() {
             Stop Writing Listings. Start Launching Products.
           </h1>
           <p className="max-w-2xl mx-auto text-[var(--body-text)] text-base md:text-lg leading-relaxed mb-8">
-            Turn product photos and product data into marketplace-ready listings for Amazon, Flipkart, Myntra and
-            Etsy — optimized for each channel and consistent with your brand.
+            Turn your product data and photos into marketplace-ready listings for Amazon, Flipkart, Myntra and Etsy
+            — generated, validated and ready to export.
           </p>
           <div className="flex flex-wrap items-center justify-center gap-3 mb-4">
             <Link href="/workspace" className={primaryCtaClass}>
@@ -176,13 +174,14 @@ export default function Home() {
         </section>
 
         {/* -------------------------------------------------------------
-            SOLUTION (spec section 10) */}
+            THE TESOLUTE WORKFLOW — the one official step sequence, also
+            used (in expanded form) on /how-it-works. */}
         <section className="max-w-6xl mx-auto px-6 py-16">
           <div className="text-center mb-12">
-            <span className={eyebrowClass}>From Raw Assets to Ready-to-Upload</span>
-            <h2 className={sectionHeadingClass}>You bring the product. Tesolute builds the listing.</h2>
+            <span className={eyebrowClass}>The Tesolute Workflow</span>
+            <h2 className={sectionHeadingClass}>From Raw Product Data to Marketplace-Ready</h2>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
             {solutionSteps.map((step) => (
               <div key={step.number}>
                 <p className="text-3xl font-extrabold text-[var(--accent-sky-text)] leading-none mb-3">{step.number}</p>
@@ -241,6 +240,10 @@ export default function Home() {
               Amazon, Flipkart, Myntra and Etsy don't use the same catalog structure, content requirements or search
               behavior. Tesolute adapts your product listing to the marketplace you're selling on.
             </p>
+            <p className="max-w-2xl mx-auto text-[var(--body-text)] leading-relaxed mt-3 font-medium">
+              Tesolute doesn't copy one listing across marketplaces. It adapts each listing to the channel you're
+              selling on.
+            </p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
             {marketplaceFields.map((mp) => (
@@ -263,10 +266,10 @@ export default function Home() {
             COMPUTER VISION / ATTRIBUTE EXTRACTION (spec section 13) */}
         <section className="max-w-5xl mx-auto px-6 py-16">
           <div className="text-center mb-10">
-            <span className={eyebrowClass}>Your Photos Already Contain the Data</span>
+            <span className={eyebrowClass}>Less Manual Catalog Entry</span>
             <h2 className={sectionHeadingClass}>Stop typing what your product photos already show.</h2>
             <p className="max-w-2xl mx-auto text-[var(--body-text)] leading-relaxed mb-4">
-              Upload your product images and Tesolute identifies relevant visual attributes automatically.
+              Skip the manual attribute entry — Tesolute reads what's already in your product photos.
             </p>
             <p className="text-sm text-[var(--muted-text)]">Colour · Pattern · Material · Style · Design · Features</p>
           </div>
@@ -338,7 +341,7 @@ export default function Home() {
               <span className={eyebrowClass}>For E-Commerce Brands</span>
               <h3 className="text-2xl font-bold text-[var(--heading-text)] mb-3">Launch products faster.</h3>
               <p className="text-[var(--body-text)] mb-6">
-                Turn your product assets into marketplace-ready listings without building a larger cataloging team.
+                Turn your product assets into publish-ready listings without building a larger cataloging team.
               </p>
               <Link href="/workspace" className={secondaryCtaClass}>
                 For Brands
@@ -380,45 +383,108 @@ export default function Home() {
         </section>
 
         {/* -------------------------------------------------------------
-            HOW IT WORKS (spec section 18) */}
-        <section className="py-16 bg-[var(--table-head-bg)]">
-          <div className="max-w-5xl mx-auto px-6 text-center">
-            <h2 className={sectionHeadingClass}>From product folder to marketplace catalog.</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 my-10">
-              {howItWorksSteps.map((step, i) => (
-                <div key={step.title}>
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-r from-blue-600 to-sky-600 text-white shadow-md shadow-sky-500/20 flex items-center justify-center mx-auto mb-3 font-bold">
-                    {i + 1}
-                  </div>
-                  <h3 className="font-semibold text-[var(--heading-text)] mb-1">{step.title}</h3>
-                  <p className="text-sm text-[var(--body-text)]">{step.description}</p>
-                </div>
-              ))}
+            PROOF (spec section 20) — placeholder testimonials removed
+            entirely, replaced with a Before Tesolute / With Tesolute
+            comparison instead of fabricated names/quotes/results. Reuses
+            the same two-column card pattern as the "Generic AI vs
+            Tesolute" section above, for visual consistency rather than a
+            third one-off comparison layout. */}
+        <section className="max-w-5xl mx-auto px-6 py-16 text-center">
+          <span className={eyebrowClass}>Built for Real Catalog Operations</span>
+          <h2 className={sectionHeadingClass}>Less cataloging. More selling.</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-10 text-left">
+            <div className={`p-6 ${cardClass}`}>
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-[var(--muted-text)] mb-4">
+                Before Tesolute
+              </h3>
+              <ul className="flex flex-col gap-3">
+                {beforeTesolutePoints.map((point) => (
+                  <li key={point} className="flex items-start gap-2.5 text-sm text-[var(--body-text)]">
+                    <X size={16} className="text-[var(--danger-link-text)] shrink-0 mt-0.5" />
+                    {point}
+                  </li>
+                ))}
+              </ul>
             </div>
-            <Link href="/workspace" className={primaryCtaClass}>
-              Try It With Your Catalog
-              <ArrowRight size={16} />
-            </Link>
+            <div className={`p-6 border-sky-500/30 ${cardClass}`}>
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-[var(--accent-sky-text)] mb-4">
+                With Tesolute
+              </h3>
+              <ul className="flex flex-col gap-3">
+                {withTesolutePoints.map((point) => (
+                  <li key={point} className="flex items-start gap-2.5 text-sm text-[var(--body-text)]">
+                    <Check size={16} className="text-[var(--accent-sky-text)] shrink-0 mt-0.5" />
+                    {point}
+                  </li>
+                ))}
+              </ul>
+            </div>
           </div>
         </section>
 
         {/* -------------------------------------------------------------
-            PROOF (spec section 20) — placeholder testimonials removed
-            entirely, replaced with the four problem->solution pairs the
-            spec calls for instead of fabricated names/quotes/results. */}
-        <section className="max-w-5xl mx-auto px-6 py-16 text-center">
-          <span className={eyebrowClass}>Built for Real Catalog Operations</span>
-          <h2 className={sectionHeadingClass}>Less cataloging. More selling.</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-10 text-left">
-            {proofPoints.map((point) => (
-              <div key={point.problem} className={`flex items-center gap-4 p-5 ${cardClass}`}>
-                <span className="text-sm text-[var(--muted-text)] line-through decoration-[var(--muted-text)]/50 shrink-0">
-                  {point.problem}
-                </span>
-                <ArrowRight size={16} className="text-[var(--accent-sky-text)] shrink-0" />
-                <span className="text-sm font-semibold text-[var(--heading-text)]">{point.solution}</span>
-              </div>
-            ))}
+            PRICING — added because the nav's "Pricing" anchor had no
+            matching section. Credit-based, using only real, already-true
+            facts (10 free credits, no credit card, the real marketplace
+            list, /contact as the actual sales channel) — no invented tier
+            names or dollar figures, since no paid-tier billing exists in
+            this app yet. */}
+        <section id="pricing" className="max-w-5xl mx-auto px-6 py-16 text-center scroll-mt-20">
+          <span className={eyebrowClass}>Pricing</span>
+          <h2 className={sectionHeadingClass}>Start free. Scale when you're ready.</h2>
+          <p className="max-w-2xl mx-auto text-[var(--body-text)] leading-relaxed mb-10">
+            Tesolute runs on a simple credit system — one credit per generated listing. Every account starts with
+            free credits to try it on your own catalog.
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-left">
+            <div className={`p-8 border-sky-500/30 ${cardClass}`}>
+              <h3 className="text-xl font-bold text-[var(--heading-text)] mb-2">Free to Start</h3>
+              <p className="text-sm text-[var(--body-text)] mb-6">
+                Generate real, publish-ready listings with no setup and no card required.
+              </p>
+              <ul className="flex flex-col gap-2.5 mb-6">
+                <li className="flex items-center gap-2 text-sm text-[var(--body-text)]">
+                  <Check size={15} className="text-[var(--accent-sky-text)] shrink-0" />
+                  10 free credits included
+                </li>
+                <li className="flex items-center gap-2 text-sm text-[var(--body-text)]">
+                  <Check size={15} className="text-[var(--accent-sky-text)] shrink-0" />
+                  No credit card required
+                </li>
+                <li className="flex items-center gap-2 text-sm text-[var(--body-text)]">
+                  <Check size={15} className="text-[var(--accent-sky-text)] shrink-0" />
+                  Amazon, Flipkart, Myntra and Etsy generation
+                </li>
+              </ul>
+              <Link href="/workspace" className={primaryCtaClass}>
+                Try Tesolute Free
+                <ArrowRight size={16} />
+              </Link>
+            </div>
+            <div className={`p-8 ${cardClass}`}>
+              <h3 className="text-xl font-bold text-[var(--heading-text)] mb-2">Brands &amp; Agencies</h3>
+              <p className="text-sm text-[var(--body-text)] mb-6">
+                Processing a larger catalog, or managing multiple client brands? Talk to us about a credit package
+                that fits your volume.
+              </p>
+              <ul className="flex flex-col gap-2.5 mb-6">
+                <li className="flex items-center gap-2 text-sm text-[var(--body-text)]">
+                  <Check size={15} className="text-[var(--accent-sky-text)] shrink-0" />
+                  Bulk credit packages
+                </li>
+                <li className="flex items-center gap-2 text-sm text-[var(--body-text)]">
+                  <Check size={15} className="text-[var(--accent-sky-text)] shrink-0" />
+                  Multi-brand / multi-client support
+                </li>
+                <li className="flex items-center gap-2 text-sm text-[var(--body-text)]">
+                  <Check size={15} className="text-[var(--accent-sky-text)] shrink-0" />
+                  Direct support for onboarding
+                </li>
+              </ul>
+              <Link href="/contact" className={secondaryCtaClass}>
+                Contact Sales
+              </Link>
+            </div>
           </div>
         </section>
 
@@ -427,7 +493,9 @@ export default function Home() {
         <section className="max-w-3xl mx-auto px-6 py-16 text-center">
           <span className={eyebrowClass}>Ready to Build Your Next Catalog?</span>
           <h2 className={sectionHeadingClass}>Your next 100 listings shouldn't take 100 hours.</h2>
-          <p className="text-[var(--body-text)] mb-8">Upload your product data. Let Tesolute do the cataloging.</p>
+          <p className="text-[var(--body-text)] mb-8">
+            Upload your catalog. Tesolute generates, validates and prepares your listings for export.
+          </p>
           <Link href="/workspace" className={primaryCtaClass}>
             Create Your First Listing
             <ArrowRight size={16} />
@@ -469,7 +537,7 @@ export default function Home() {
                 </Link>
               </li>
               <li>
-                <Link href="/contact" className="text-[var(--body-text)] hover:text-[var(--heading-text)] transition-colors">
+                <Link href="/#pricing" className="text-[var(--body-text)] hover:text-[var(--heading-text)] transition-colors">
                   Pricing
                 </Link>
               </li>

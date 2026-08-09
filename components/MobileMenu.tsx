@@ -14,7 +14,7 @@ const navLinks = [
   { href: '/how-it-works', label: 'How It Works' },
   { href: '/#for-brands', label: 'For Brands' },
   { href: '/#for-agencies', label: 'For Agencies' },
-  { href: '/contact', label: 'Pricing' }
+  { href: '/#pricing', label: 'Pricing' }
 ]
 
 export default function MobileMenu({ isLoggedIn }: { isLoggedIn: boolean }) {

@@ -49,10 +49,10 @@ export default function ImageOnlyPanel({
   return (
     <div className={`w-full min-w-0 flex flex-col gap-3 p-6 h-fit ${cardClass}`}>
       <div>
-        <h3 className={sectionHeadingClass}>Generate from Image Only</h3>
+        <h3 className={sectionHeadingClass}>Have only product photos? That's enough to start.</h3>
         <p className={`${bodyTextClass} mt-1`}>
-          No description needed — upload a product photo and the AI writes the full listing (title, description,
-          bullets, keywords) purely from what it sees.
+          Upload a product photo and Tesolute writes the full listing — title, description, bullets, keywords —
+          from what's visible in the image. You'll see exactly what was detected before you export.
         </p>
       </div>
 
@@ -84,6 +84,9 @@ export default function ImageOnlyPanel({
         onChange={(e) => onCategoryChange(e.target.value)}
         className={inputClass}
       />
+      {!category.trim() && hasImage && (
+        <p className="text-xs text-[var(--warn-text)]">⚠ Category missing — add category for better results</p>
+      )}
 
       {formError && <p className="text-sm text-[var(--danger-link-text)]">{formError}</p>}
       {guestLimitReached && (

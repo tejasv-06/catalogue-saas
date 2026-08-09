@@ -2,18 +2,17 @@ import { FileSpreadsheet, Sparkles, CheckCircle2, ChevronRight, ChevronDown } fr
 
 // The hero's product-transformation visual (spec section 8) — replaces the
 // old three-mini-listing-card mockup with the actual input -> process ->
-// output story: YOUR PRODUCT / TESOLUTE AI / MARKETPLACE LISTING. Static
+// output story: YOUR PRODUCT / TESOLUTE / MARKETPLACE LISTING. Static
 // example data, not live product state — this is a demo visual, not a real
-// generation run.
+// generation run. Framed as what Tesolute does (the workflow), not a list of
+// AI capabilities — matches the Add/Generate/Validate/Review/Export story
+// told elsewhere on the page rather than a separate "AI features" narrative.
 const processingSteps = [
-  'Colour detected: Matte Black',
-  'Material detected: Stainless Steel',
-  'Capacity identified: 750 ml',
-  'Design detected: Double-wall / insulated',
-  'Feature detected: Leak-resistant lid',
-  'Product category mapped',
-  'Marketplace attributes matched',
-  'Brand voice applied'
+  'Product attributes extracted',
+  'Marketplace fields mapped',
+  'Listing generated',
+  'Marketplace rules checked',
+  'Brand guidelines applied'
 ]
 
 const glassCardClass = 'rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)]/60 backdrop-blur-xl shadow-2xl p-5 flex-1 min-w-0'
@@ -60,7 +59,7 @@ export default function HeroTransformDemo() {
       <div className={glassCardClass}>
         <div className="flex items-center gap-1.5 mb-3">
           <Sparkles size={13} className="text-[var(--accent-sky-text)]" />
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-text)]">Tesolute AI</p>
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-text)]">Tesolute</p>
         </div>
         <ul className="flex flex-col gap-2.5">
           {processingSteps.map((step, i) => (
@@ -109,7 +108,7 @@ export default function HeroTransformDemo() {
         </div>
         <div className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-[var(--success-text)] bg-[var(--success-bg)] border border-[var(--success-border)] rounded-full px-2.5 py-1">
           <CheckCircle2 size={12} />
-          Marketplace Ready
+          Ready to publish
         </div>
       </div>
     </div>
