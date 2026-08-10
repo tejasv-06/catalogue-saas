@@ -223,7 +223,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    await deductCredits(userId, CREDIT_COSTS.accountAudit)
+    await deductCredits(userId, CREDIT_COSTS.accountAudit, 'account_audit')
   } catch (err: any) {
     // Same reasoning as generate-single: the audit already succeeded and
     // shipped to the client — a bookkeeping write failing afterward

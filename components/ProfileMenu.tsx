@@ -2,6 +2,17 @@
 
 import { useEffect, useRef, useState } from 'react'
 import LogoutButton from '@/components/LogoutButton'
+import ExportHistoryModal from '@/components/ExportHistoryModal'
+
+function HistoryIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+      <path d="M3 3v5h5" />
+      <path d="M3.05 13A9 9 0 1 0 6 5.3L3 8" />
+      <path d="M12 7v5l4 2" />
+    </svg>
+  )
+}
 
 function UserIcon() {
   return (
@@ -25,6 +36,7 @@ function ChevronDownIcon() {
 // no hover involved, matching MobileMenu's interaction pattern.
 export default function ProfileMenu() {
   const [open, setOpen] = useState(false)
+  const [showExportHistory, setShowExportHistory] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -66,12 +78,25 @@ export default function ProfileMenu() {
       </button>
 
       {open && (
-        <div role="menu" className="absolute right-0 top-full mt-2 w-40 rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)] shadow-xl p-1 z-50">
+        <div role="menu" className="absolute right-0 top-full mt-2 w-44 rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)] shadow-xl p-1 z-50">
+          <button
+            onClick={() => {
+              setOpen(false)
+              setShowExportHistory(true)
+            }}
+            role="menuitem"
+            className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium text-left text-[var(--heading-text)] hover:bg-[var(--secondary-btn-bg-hover)] transition-colors"
+          >
+            <HistoryIcon />
+            Export History
+          </button>
           <div onClick={() => setOpen(false)}>
             <LogoutButton variant="menuItem" />
           </div>
         </div>
       )}
+
+      {showExportHistory && <ExportHistoryModal onClose={() => setShowExportHistory(false)} />}
     </div>
   )
 }

@@ -15,8 +15,10 @@ import ImageOnlyPanel from '@/components/workspace/ImageOnlyPanel'
 import AppSidebar, { type WorkspaceDestination } from '@/components/AppSidebar'
 import QueueTable from '@/components/workspace/QueueTable'
 import ListingHealthBadge from '@/components/workspace/ListingHealthBadge'
-import { computeListingHealth, FIELD_SPECS } from '@/lib/listingHealth'
+import { computeListingHealth, FIELD_SPECS, type GenerationMeta } from '@/lib/listingHealth'
 import { createClient } from '@/lib/supabase/client'
+import { createProduct, upsertListing, setApproval, recordExport, getCatalog } from '@/lib/catalog'
+import { reconcileCatalog } from '@/lib/catalogReconciliation'
 import CreditsBalance, { notifyCreditsChanged } from '@/components/CreditsBalance'
 import { CREDIT_COSTS } from '@/lib/creditCosts'
 import { useFocusTrap } from '@/lib/useFocusTrap'
@@ -134,6 +136,25 @@ function computeListingSummary(draftProducts: DraftProduct[]) {
     }
   }
   return counts
+}
+
+// Real per-marketplace export-eligibility tally — approved[marketplace],
+// NOT health/Ready status (a seller can approve a Needs-Review listing
+// after reviewing it, and it stays exportable). Mirrors the same
+// approved[marketplace] check performExport's export logic
+// already uses; only marketplaces with count > 0 are returned so the
+// confirmation surface never shows a zero-count marketplace.
+function computeExportableCounts(draftProducts: DraftProduct[]): { marketplace: Marketplace; count: number }[] {
+  const counts = new Map<Marketplace, number>()
+  for (const product of draftProducts) {
+    for (const m of SUPPORTED_MARKETPLACES) {
+      if (product.approved[m]) counts.set(m, (counts.get(m) ?? 0) + 1)
+    }
+  }
+  return SUPPORTED_MARKETPLACES.filter((m) => (counts.get(m) ?? 0) > 0).map((m) => ({
+    marketplace: m,
+    count: counts.get(m)!
+  }))
 }
 
 type FieldGroup = 'title' | 'bullets' | 'description'
@@ -608,7 +629,7 @@ function AddProductsPanel({
       className="w-full lg:w-[420px] lg:shrink-0 lg:h-full lg:overflow-y-auto p-6 border-b lg:border-b-0 border-r-0 lg:border-r border-[var(--card-border)] bg-[var(--page-bg)]"
     >
       <h2 className={sectionHeadingClass}>Add Products</h2>
-      <p className={`${bodyTextClass} mb-4`}>Add products to your catalog using any of the methods below.</p>
+      <p className={`${bodyTextClass} mb-4`}>How would you like to add products?</p>
 
         <div className="mb-3">
           {/* grid-cols-3 (not flex-wrap): guarantees Bulk Upload / Manual
@@ -726,6 +747,97 @@ function ExportGateModal({ onClose, onSignIn }: { onClose: () => void; onSignIn:
   )
 }
 
+// Pre-download confirmation surface (Milestone 9). Reuses ExportGateModal's
+// exact structural convention above (fixed inset-0 z-40 centered overlay +
+// backdrop + useFocusTrap + cardClass panel) for visual consistency with the
+// one existing modal in this workspace. Eligibility copy says "approved,"
+// not "Ready" — the real export rule is approved[marketplace], and a seller
+// can approve a Needs Review listing after reviewing it, so it stays
+// exportable. The Ready/Needs Review/Missing Data/Error breakdown shown here
+// is purely informational context (via the same computeListingSummary()
+// QueueTable's own filters use), not a second eligibility rule.
+function ExportSummaryModal({
+  exportableCounts,
+  summary,
+  exportError,
+  onClose,
+  onConfirm
+}: {
+  exportableCounts: { marketplace: Marketplace; count: number }[]
+  summary: { total: number; ready: number; needsReview: number; missingData: number; error: number }
+  exportError: string | null
+  onClose: () => void
+  onConfirm: () => void
+}) {
+  const containerRef = useRef<HTMLDivElement>(null)
+  useFocusTrap(containerRef, onClose)
+  const totalExportable = exportableCounts.reduce((sum, c) => sum + c.count, 0)
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div
+        ref={containerRef}
+        tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Export listings"
+        className={`relative p-6 max-w-sm w-full mx-4 focus:outline-none ${cardClass}`}
+      >
+        <h2 className={`${sectionHeadingClass} mb-3`}>Export Listings</h2>
+
+        {totalExportable === 0 ? (
+          <>
+            <p className={`${bodyTextClass} mb-1`}>No listings are ready to export yet.</p>
+            <p className="mb-4 text-sm text-[var(--muted-text)]">Generate and review your listings before exporting.</p>
+          </>
+        ) : (
+          <>
+            <p className={`${bodyTextClass} mb-3`}>Only approved listings will be exported.</p>
+
+            <ul className="mb-3 flex flex-col gap-1">
+              {exportableCounts.map(({ marketplace, count }) => (
+                <li key={marketplace} className="flex justify-between text-sm text-[var(--body-text)]">
+                  <span>{MARKETPLACE_LABELS[marketplace]}</span>
+                  <span>{count}</span>
+                </li>
+              ))}
+              <li className="flex justify-between text-sm font-semibold text-[var(--body-text)] pt-1 border-t border-[var(--row-border)]">
+                <span>Total</span>
+                <span>{totalExportable}</span>
+              </li>
+            </ul>
+
+            {summary.total > 0 && (
+              <p className="mb-4 text-xs text-[var(--muted-text)]">
+                Across all listings: {summary.ready} Ready, {summary.needsReview} Needs Review, {summary.missingData} Missing
+                Data, {summary.error} Error.
+              </p>
+            )}
+          </>
+        )}
+
+        {exportError && (
+          <div className={`mb-4 ${dangerBannerClass}`}>
+            <p className={dangerTextClass}>{exportError}</p>
+          </div>
+        )}
+
+        <div className="flex justify-end gap-2">
+          <button onClick={onClose} className={linkButtonClass}>
+            {totalExportable === 0 ? 'Close' : 'Cancel'}
+          </button>
+          {totalExportable > 0 && (
+            <button onClick={onConfirm} className={buttonPrimaryClass}>
+              Export Listings
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // Replaces the queue table entirely when there's nothing in it yet — not a
 // decorated illustration, just the one thing the seller needs to know
 // ("nothing here yet"). No Add Products button here anymore: the panel to
@@ -808,6 +920,17 @@ export default function CatalogueWorkspace() {
   const [currentlyGenerating, setCurrentlyGenerating] = useState<{ productId: string; marketplace: Marketplace } | null>(
     null
   )
+  // Milestone 22 (Step C2) — memoizes the in-flight/completed catalog_products
+  // creation per DraftProduct.id, keyed by the stable client-local `id` (never
+  // the possibly-stale `serverId` snapshot a caller might be holding). A ref,
+  // not state: it must never trigger a re-render, and must survive across the
+  // whole component's lifetime, not reset per render. This closes the one
+  // realistic same-tab race the comment above already rules out for the bulk
+  // path (sequential, never parallel) but doesn't rule out for two individual
+  // regenerate/retry actions fired close together for the same product — see
+  // ensureServerProduct below and the Milestone 22 report for what this does
+  // and does not protect against.
+  const serverProductPromises = useRef<Map<string, Promise<string>>>(new Map())
   // Remembers which field group (title/bullets/description/'full') the most
   // recent FAILED generate attempt was for, per (product, marketplace) pair
   // — so a failed "Regenerate Title" can be reported and retried as exactly
@@ -842,6 +965,10 @@ export default function CatalogueWorkspace() {
   // rather than restored, since the nested generatedContent/approved shape
   // changed and a straight restore would silently produce broken products.
   const [outdatedSessionDiscarded, setOutdatedSessionDiscarded] = useState(false)
+  // Pre-download confirmation surface (Milestone 9) — shown after the
+  // existing sign-in/marketplace gates pass, before the real download runs.
+  const [showExportSummary, setShowExportSummary] = useState(false)
+  const [exportError, setExportError] = useState<string | null>(null)
 
   // Client-side only, purely for UI: /workspace is public, so this never gates
   // access — it just decides whether to show the Brand/Clients dropdown at all,
@@ -927,15 +1054,45 @@ export default function CatalogueWorkspace() {
   }, [savedSessionData, hasCheckedSession, hasSession])
 
   // Fires once both the restore and the "am I actually logged in now" check
-  // have landed. handleDownloadApproved's own hasSession check would otherwise
+  // have landed. handleOpenExportSummary's own hasSession check would otherwise
   // still see the stale initial `false` if called directly above, since that
   // auth check resolves asynchronously.
   useEffect(() => {
     if (autoDownloadPending && hasSession) {
       setAutoDownloadPending(false)
-      handleDownloadApproved()
+      handleOpenExportSummary()
     }
   }, [autoDownloadPending, hasSession])
+
+  // Milestone 26 (Step C4) — server-backed catalog hydration, authenticated
+  // users only. Deliberately layered on top of the existing local-restore
+  // flow above (fires only once `sessionReady` is already true) rather than
+  // threaded into that flow's own timing — the local-restore/guest-banner
+  // behavior above is already verified across many milestones and this
+  // milestone is read-path-only, so it isn't touched. The tradeoff: an
+  // authenticated user may briefly see their local-only view before it
+  // updates with anything additional the server has, rather than the
+  // loading skeleton staying up for both steps combined. A ref (not state)
+  // guards this to run exactly once per mount — StrictMode's dev
+  // double-invoke, or any incidental re-run of this effect, must not
+  // re-fetch and re-merge repeatedly.
+  const catalogHydrationRan = useRef(false)
+  useEffect(() => {
+    if (!sessionReady || !hasCheckedSession || !hasSession) return
+    if (catalogHydrationRan.current) return
+    catalogHydrationRan.current = true
+
+    getCatalog()
+      .then((server) => {
+        setDraftProducts((prev) => reconcileCatalog(prev, server, computeProductStatus))
+      })
+      .catch((err: any) => {
+        // Rule 14 — fail open to whatever the existing local-restore flow
+        // already produced. Never clear draftProducts, never block the
+        // workspace, never surface a fatal error over a read failure.
+        console.error('Catalog hydration failed, continuing with local data only:', err?.message ?? err)
+      })
+  }, [sessionReady, hasCheckedSession, hasSession])
 
   // Mirrors the form's in-progress imageFile into a base64 data URL so it can
   // survive a redirect/refresh via localStorage (a raw File can't be
@@ -1534,6 +1691,91 @@ export default function CatalogueWorkspace() {
   // description. Still one full generate-single call underneath (the model
   // has no partial-output mode), so it costs the same 1 credit as any other
   // retry already does — no new billing path.
+  // Milestone 22 (Step C2) — resolves (creating if necessary) the
+  // catalog_products row for a DraftProduct. Checks the product's own
+  // `serverId` first (set once a prior creation in this session succeeded,
+  // or restored from a saved localStorage session), then falls back to the
+  // in-flight/completed promise cache keyed by the stable `product.id` —
+  // this second check is what actually closes the race for two
+  // near-simultaneous calls, since a stale `product` snapshot's `serverId`
+  // can't be trusted the way the map (keyed by an id that never changes)
+  // can. See the Milestone 22 report for the one case this does NOT cover:
+  // two separate browser tabs/devices both restoring the same localStorage
+  // draft and generating independently — this map is per-tab, in-memory
+  // only, and catalog_products has no column to put a database-level
+  // uniqueness guarantee on without a schema change (out of scope here).
+  async function ensureServerProduct(product: DraftProduct): Promise<string> {
+    if (product.serverId) return product.serverId
+
+    const existing = serverProductPromises.current.get(product.id)
+    if (existing) return existing
+
+    const promise = (async () => {
+      const id = await createProduct({
+        brand_name: product.brandName || null,
+        description: product.description || null,
+        category: product.category || null,
+        image_url: product.imageUrl || null,
+        client_id: product.skipBrandVoice ? null : selectedClient?.id ?? null
+      })
+      setDraftProducts((prev) => prev.map((p) => (p.id === product.id ? { ...p, serverId: id } : p)))
+      return id
+    })()
+
+    serverProductPromises.current.set(product.id, promise)
+    return promise
+  }
+
+  // Milestone 22 (Step C2) — best-effort persistence bookkeeping, never part
+  // of the generation transaction itself. Fire-and-forget from the caller
+  // (not awaited), matching the existing notifyCreditsChanged() pattern just
+  // below it — a failure here must never turn an already-successful
+  // generation into an error, retry, roll back local state, or affect
+  // credits in any way. The two try/catches are separate on purpose so the
+  // logged message always says which operation actually failed.
+  async function persistGenerationToCatalog(
+    product: DraftProduct,
+    marketplace: Marketplace,
+    shapedContent: unknown,
+    meta: GenerationMeta | null
+  ) {
+    let serverId: string
+    try {
+      serverId = await ensureServerProduct(product)
+    } catch (err: any) {
+      console.error(
+        `Catalog persistence: failed to create/resolve catalog_products for draft product ${product.id}:`,
+        err?.message ?? err
+      )
+      return
+    }
+
+    try {
+      const listing = await upsertListing(serverId, marketplace, {
+        shaped_content: shapedContent,
+        generation_meta: meta,
+        generation_error: null
+      })
+      // Milestone 23 (Step C3) discovery: the returned row's own id was
+      // previously discarded here — nothing recorded which catalog_listings
+      // row corresponds to this (product, marketplace) pair, which made
+      // approval/export persistence impossible (setApproval/recordExport
+      // both need the listing's own id, never catalog_products.id). Storing
+      // it is the minimal fix; nothing about upsertListing's own contract
+      // changed.
+      setDraftProducts((prev) =>
+        prev.map((p) =>
+          p.id === product.id ? { ...p, listingServerIds: { ...p.listingServerIds, [marketplace]: listing.id } } : p
+        )
+      )
+    } catch (err: any) {
+      console.error(
+        `Catalog persistence: failed to upsert catalog_listings for product ${serverId} / ${marketplace}:`,
+        err?.message ?? err
+      )
+    }
+  }
+
   async function generateForProductMarketplace(
     product: DraftProduct,
     marketplace: Marketplace,
@@ -1571,40 +1813,63 @@ export default function CatalogueWorkspace() {
         // title (and therefore its existing meta) untouched.
         const updatesTitle = !fieldGroup || fieldGroup === 'title'
 
+        // Milestone 25 — computed ONCE, here, as plain synchronous values,
+        // not inside the setDraftProducts updater below. The previous
+        // version captured these via `let` variables assigned inside that
+        // updater and read immediately after the setDraftProducts(...)
+        // call, on the assumption that React invokes a function updater
+        // synchronously as part of that call — it doesn't; the updater only
+        // runs once React actually processes the fiber's update queue
+        // during render, which isn't guaranteed to have happened yet at
+        // that point. Confirmed live in Milestone 24: catalog_listings.
+        // shaped_content/generation_meta were always null in the database
+        // despite the UI showing fully correct content.
+        //
+        // Using `product.generatedContent[marketplace]` (this function's
+        // own parameter) as the field-scoped merge base instead of the
+        // updater's `prev`/`p` is safe specifically because generation is
+        // sequential and globally single-flight (see currentlyGenerating
+        // above) — nothing else can have written to this exact (product,
+        // marketplace) slot between when `product` was captured and this
+        // response arriving, since this call IS that in-flight generation.
+        // Every OTHER marketplace's data still comes from `p` inside the
+        // updater below, unaffected by anything here.
+        const existing = product.generatedContent[marketplace] ?? {}
+        const keysToKeep = fieldGroup ? FIELD_GROUPS[marketplace][fieldGroup] : undefined
+        const mergedContent = keysToKeep
+          ? {
+              ...existing,
+              ...Object.fromEntries(keysToKeep.map((key) => [key, data.generatedContent[key]]))
+            }
+          : data.generatedContent
+
+        // keywordsField only reflects reality when keywords were actually
+        // part of this response — true for a full generation, NOT for a
+        // title-only regenerate (there's no "Regenerate Keywords" button; a
+        // title-only request's prompt never asks for keywordPool at all, so
+        // the server's fresh meta would otherwise carry an empty/inert
+        // keywordsField that could silently look "within limit" and
+        // overwrite a previously real, possibly-failing one). Preserve the
+        // existing value in that one case; every other case (full
+        // regenerate, or the meta being left untouched entirely for
+        // bullets/description-only requests below) already behaves
+        // correctly untouched.
+        const mergedMeta: GenerationMeta | null = updatesTitle
+          ? {
+              ...(data.meta ?? { titleFields: [], descriptionField: null, keywordsField: null, bulletCount: 0 }),
+              keywordsField:
+                fieldGroup === 'title'
+                  ? product.generationMeta[marketplace]?.keywordsField ?? null
+                  : data.meta?.keywordsField ?? null
+            }
+          : product.generationMeta[marketplace] ?? null
+
         setDraftProducts((prev) =>
           prev.map((p) => {
             if (p.id !== product.id) return p
-            const existing = p.generatedContent[marketplace] ?? {}
-            const keysToKeep = fieldGroup ? FIELD_GROUPS[marketplace][fieldGroup] : undefined
-            const mergedContent = keysToKeep
-              ? {
-                  ...existing,
-                  ...Object.fromEntries(keysToKeep.map((key) => [key, data.generatedContent[key]]))
-                }
-              : data.generatedContent
-
             const generatedContent = { ...p.generatedContent, [marketplace]: mergedContent }
             const generationError = { ...p.generationError, [marketplace]: null }
-            // keywordsField only reflects reality when keywords were
-            // actually part of this response — true for a full generation,
-            // NOT for a title-only regenerate (there's no "Regenerate
-            // Keywords" button; a title-only request's prompt never asks
-            // for keywordPool at all, so the server's fresh meta would
-            // otherwise carry an empty/inert keywordsField that could
-            // silently look "within limit" and overwrite a previously
-            // real, possibly-failing one). Preserve the existing value in
-            // that one case; every other case (full regenerate, or the
-            // whole meta being discarded for bullets/description-only
-            // requests below) already behaves correctly untouched.
-            const generationMeta = updatesTitle
-              ? {
-                  ...p.generationMeta,
-                  [marketplace]: {
-                    ...(data.meta ?? { titleFields: [], descriptionField: null, keywordsField: null, bulletCount: 0 }),
-                    keywordsField: fieldGroup === 'title' ? p.generationMeta[marketplace]?.keywordsField ?? null : data.meta?.keywordsField ?? null
-                  }
-                }
-              : p.generationMeta
+            const generationMeta = updatesTitle ? { ...p.generationMeta, [marketplace]: mergedMeta } : p.generationMeta
             const visualAttributes = data.visualAttributes ?? p.visualAttributes
 
             return {
@@ -1618,6 +1883,12 @@ export default function CatalogueWorkspace() {
           })
         )
         if (hasSession) notifyCreditsChanged()
+        // Milestone 22 (Step C2) — fire-and-forget, same reasoning as
+        // notifyCreditsChanged() just above: bookkeeping, not part of this
+        // function's own success/failure contract. Guests are excluded here
+        // (not just left to fail inside lib/catalog.ts's own session check)
+        // so a guest generation never even attempts the network round-trip.
+        if (hasSession) void persistGenerationToCatalog(product, marketplace, mergedContent, mergedMeta)
         return 'success'
       }
 
@@ -1641,16 +1912,47 @@ export default function CatalogueWorkspace() {
     }
   }
 
+  // Milestone 23 (Step C3) — fire-and-forget, same philosophy as C2's
+  // persistGenerationToCatalog. Requires both an authenticated session (only
+  // signed-in users have catalog rows) and a resolved catalog_listings.id
+  // for this exact (product, marketplace) pair — which only exists once
+  // C2's generation dual-write has actually succeeded for it. Neither
+  // condition being unmet is an error: it just means there is nothing to
+  // persist yet (guest, or a listing that predates C2, or whose own C2
+  // write failed) — skipped cleanly and logged, never inventing an id or
+  // writing to an unrelated row.
+  async function persistApprovalToCatalog(draftProductId: string, marketplace: Marketplace, approved: boolean) {
+    if (!hasSession) return
+    const product = draftProducts.find((p) => p.id === draftProductId)
+    const listingId = product?.listingServerIds?.[marketplace]
+    if (!listingId) {
+      console.error(
+        `Catalog persistence: skipped approval write for draft product ${draftProductId} / ${marketplace} — no persisted catalog_listings id yet.`
+      )
+      return
+    }
+    try {
+      await setApproval(listingId, approved)
+    } catch (err: any) {
+      console.error(
+        `Catalog persistence: failed to upsert catalog_listing_approvals for listing ${listingId}:`,
+        err?.message ?? err
+      )
+    }
+  }
+
   function handleApproveMarketplace(id: string, marketplace: Marketplace) {
     setDraftProducts((prev) =>
       prev.map((p) => (p.id === id ? { ...p, approved: { ...p.approved, [marketplace]: true } } : p))
     )
+    void persistApprovalToCatalog(id, marketplace, true)
   }
 
   function handleUnapproveMarketplace(id: string, marketplace: Marketplace) {
     setDraftProducts((prev) =>
       prev.map((p) => (p.id === id ? { ...p, approved: { ...p.approved, [marketplace]: false } } : p))
     )
+    void persistApprovalToCatalog(id, marketplace, false)
   }
 
   // Approves every marketplace that actually has content, for every product
@@ -1694,13 +1996,22 @@ export default function CatalogueWorkspace() {
   // marketplace, or a 'partial' product's still-pending retry, keeps the
   // product in the queue: generated content (and the credit it cost) is
   // never silently discarded just because a different marketplace shipped.
-  async function handleDownloadApproved() {
+  // Button-facing entry point: runs the existing sign-in/marketplace gates,
+  // then opens the pre-download confirmation surface instead of downloading
+  // immediately. performExport() below (called only from that modal's
+  // "Export Listings" button) does the actual download — same gates,
+  // same eligibility rule, just a confirmation step inserted between them.
+  function handleOpenExportSummary() {
     if (!hasSession) {
       setShowExportGateModal(true)
       return
     }
     if (!requireMarketplace()) return
+    setExportError(null)
+    setShowExportSummary(true)
+  }
 
+  async function performExport() {
     const flattenedRows: { id: string; marketplace: Marketplace; row: Record<string, string> }[] = []
     for (const p of draftProducts) {
       for (const marketplace of SUPPORTED_MARKETPLACES) {
@@ -1711,7 +2022,7 @@ export default function CatalogueWorkspace() {
     }
 
     if (flattenedRows.length === 0) {
-      alert('No approved products have a supported export shape for their marketplace.')
+      setExportError('No approved listings have a supported export shape for their marketplace.')
       return
     }
 
@@ -1770,6 +2081,43 @@ export default function CatalogueWorkspace() {
         a.download = 'approved-listings-export.zip'
         a.click()
         window.URL.revokeObjectURL(url)
+      }
+
+      // Milestone 23 (Step C3) — one recordExport() per marketplace batch
+      // actually downloaded above, fire-and-forget (never awaited into the
+      // download path). Only rows with an already-resolved
+      // catalog_listings.id are included; a row whose C2 write never
+      // succeeded (guest-era draft, failed dual-write) is excluded rather
+      // than given a fabricated id, and a marketplace batch left with zero
+      // persisted ids after that filtering is skipped entirely — never an
+      // empty recordExport() call. The CSV/ZIP above has already downloaded
+      // by this point regardless of any of this.
+      if (hasSession) {
+        for (const [marketplace, rows] of rowsByMarketplace) {
+          const listingIds: string[] = []
+          for (const r of flattenedRows) {
+            if (r.marketplace !== marketplace) continue
+            const listingId = draftProducts.find((p) => p.id === r.id)?.listingServerIds?.[marketplace]
+            if (listingId) {
+              listingIds.push(listingId)
+            } else {
+              console.error(
+                `Catalog persistence: export of ${marketplace} includes draft product ${r.id} with no persisted catalog_listings id — excluded from the catalog export record.`
+              )
+            }
+          }
+
+          if (listingIds.length === 0) {
+            console.error(
+              `Catalog persistence: skipped recordExport for ${marketplace} — no persisted listing ids among the ${rows.length} exported row(s).`
+            )
+            continue
+          }
+
+          void recordExport(marketplace, listingIds, `${marketplace}-listings.csv`).catch((err: any) => {
+            console.error(`Catalog persistence: failed to record export for ${marketplace}:`, err?.message ?? err)
+          })
+        }
       }
 
       const exportedByProduct = new Map<string, Marketplace[]>()
@@ -1851,8 +2199,9 @@ export default function CatalogueWorkspace() {
 
       const summary = `Exported ${flattenedRows.length} ${exportedLabel}`
       setDownloadMessage(detailParts.length > 0 ? `${summary} — ${detailParts.join('; ')}` : summary)
+      setShowExportSummary(false)
     } catch {
-      alert('Download failed - approved products were not cleared. Please try again.')
+      setExportError('Export failed - approved listings were not cleared. Please try again.')
     }
   }
 
@@ -2102,7 +2451,7 @@ export default function CatalogueWorkspace() {
                   pendingCount={pendingCount}
                   onGenerateAll={handleGenerateAll}
                   onBulkApprove={handleBulkApprove}
-                  onDownloadApproved={handleDownloadApproved}
+                  onDownloadApproved={handleOpenExportSummary}
                   onView={(id, marketplace) => setViewingTarget({ productId: id, marketplace })}
                   onEdit={handleEditProduct}
                   onDelete={handleDeleteProduct}
@@ -2137,6 +2486,18 @@ export default function CatalogueWorkspace() {
             handleSignInFromExportGate()
             setShowExportGateModal(false)
           }}
+        />
+      )}
+      {showExportSummary && (
+        <ExportSummaryModal
+          exportableCounts={computeExportableCounts(draftProducts)}
+          summary={listingSummary}
+          exportError={exportError}
+          onClose={() => {
+            setShowExportSummary(false)
+            setExportError(null)
+          }}
+          onConfirm={performExport}
         />
       )}
     </div>

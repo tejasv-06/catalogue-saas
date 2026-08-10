@@ -174,27 +174,34 @@ function getSupabaseAdminClient() {
 
 async function isUnderGuestLimit(anonId: string): Promise<boolean> {
   const admin = getSupabaseAdminClient()
-  const { data } = await admin
+  // Milestone 12: the real column is `anonymous_id`, not `anon_id` — the old
+  // name errored on every call (confirmed live), and since only `data` was
+  // destructured here, that error was silently discarded and treated as "no
+  // row" -> allowed. Now surfaced so the caller can fail closed on it.
+  const { data, error } = await admin
     .from('guest_usage')
     .select('generation_count')
-    .eq('anon_id', anonId)
+    .eq('anonymous_id', anonId)
     .maybeSingle()
 
+  if (error) throw error
   return !data || data.generation_count < GUEST_GENERATION_LIMIT
 }
 
 async function incrementGuestUsage(anonId: string) {
   const admin = getSupabaseAdminClient()
-  const { data } = await admin
+  const { data, error } = await admin
     .from('guest_usage')
     .select('generation_count')
-    .eq('anon_id', anonId)
+    .eq('anonymous_id', anonId)
     .maybeSingle()
 
+  if (error) throw error
+
   if (data) {
-    await admin.from('guest_usage').update({ generation_count: data.generation_count + 1 }).eq('anon_id', anonId)
+    await admin.from('guest_usage').update({ generation_count: data.generation_count + 1 }).eq('anonymous_id', anonId)
   } else {
-    await admin.from('guest_usage').insert({ anon_id: anonId, generation_count: 1 })
+    await admin.from('guest_usage').insert({ anonymous_id: anonId, generation_count: 1 })
   }
 }
 
@@ -234,10 +241,15 @@ export async function POST(request: Request) {
         )
       }
     } catch (err: any) {
-      // If the guest-limit check itself fails (missing service_role key, missing
-      // guest_usage table, transient Supabase error), don't take down generation
-      // for every guest over an infra/config issue — fail open for this request.
-      console.error('Guest usage check failed, allowing generation:', err.message)
+      // Milestone 12: previously failed open here (logged and let generation
+      // proceed) — that's exactly how the anon_id/anonymous_id column-name
+      // bug made the guest limit unenforceable in practice despite looking
+      // implemented. Guest generation carries a real, uncredited LLM cost,
+      // so an inability to verify the limit must block the request, matching
+      // the signed-in credit-check's existing fail-closed behavior below
+      // rather than diverging from it.
+      console.error('Guest usage check failed, blocking generation:', err.message)
+      return NextResponse.json({ error: 'Could not verify guest usage limit. Please try again.' }, { status: 500 })
     }
   } else if (userId) {
     // Unlike the guest check above, this fails CLOSED on infra errors — this
@@ -471,7 +483,7 @@ CRITICAL: Output ONLY valid, raw JSON. Do NOT wrap output in markdown fences (no
       }
     } else if (userId) {
       try {
-        await deductCredits(userId, CREDIT_COSTS.listingGeneration)
+        await deductCredits(userId, CREDIT_COSTS.listingGeneration, 'generation')
       } catch (err: any) {
         // Same reasoning as the guest-usage increment above: the generation
         // already succeeded and shipped to the client — a bookkeeping write

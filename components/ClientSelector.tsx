@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabaseClient'
+import { createClient } from '@/lib/supabase/client'
 import { buttonSecondaryClass, cardClass, inputClass, selectClass } from '@/lib/uiClasses'
 
 export type Client = {
@@ -27,6 +27,12 @@ export default function ClientSelector({
 
   useEffect(() => {
     async function fetchClients() {
+      // Milestone 18: must be the same @supabase/ssr browser client the login
+      // flow uses (see app/login/page.tsx) — a plain @supabase/supabase-js
+      // client (the old lib/supabaseClient.ts import this replaced) never
+      // carries the signed-in session, so every request landed here as
+      // effectively anonymous and clients' owner-scoped RLS returned nothing.
+      const supabase = createClient()
       const { data, error } = await supabase.from('clients').select('*').order('client_name')
       if (!error && data) {
         setClients(data)
@@ -61,9 +67,25 @@ export default function ClientSelector({
     }
 
     setSaving(true)
+    const supabase = createClient()
+    // Milestone 18: clients' INSERT policy requires auth.uid() = user_id — the
+    // id must come from the session itself (supabase.auth.getUser(), server-
+    // verified), never from anything already sitting in component state, so
+    // there's no way for this to be spoofed via client-side input.
+    const { data: userData } = await supabase.auth.getUser()
+    if (!userData.user) {
+      setSaving(false)
+      alert('You must be signed in to save a brand.')
+      return
+    }
+
     const { data, error } = await supabase
       .from('clients')
-      .insert({ client_name: newClientName.trim(), brand_guidelines: newClientGuidelines.trim() })
+      .insert({
+        client_name: newClientName.trim(),
+        brand_guidelines: newClientGuidelines.trim(),
+        user_id: userData.user.id
+      })
       .select()
       .single()
     setSaving(false)

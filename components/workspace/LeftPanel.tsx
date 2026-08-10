@@ -13,7 +13,8 @@ import {
   inputClass,
   cardClass,
   warningBannerClass,
-  warningTextClass
+  warningTextClass,
+  bodyTextClass
 } from '@/lib/uiClasses'
 
 export default function LeftPanel({
@@ -96,6 +97,11 @@ export default function LeftPanel({
       <div className="flex flex-col gap-2">
         {activeTab === 'manual' ? (
           <>
+            {/* One-line purpose statement, matching the same pattern
+                ImageOnlyPanel already uses — the tab label alone ("Manual
+                Entry") named the mechanism but not the purpose; this closes
+                that gap for consistency across all three methods. */}
+            <p className={bodyTextClass}>Add a product manually.</p>
             <input
               type="text"
               placeholder="Brand name"
@@ -175,6 +181,11 @@ export default function LeftPanel({
           </>
         ) : (
           <>
+            {/* Same purpose-statement pattern as Manual Entry above and
+                ImageOnlyPanel's existing intro line — Bulk Upload's own
+                purpose ("add many at once") isn't obvious from the tab
+                label alone. */}
+            <p className={bodyTextClass}>Add hundreds of products at once.</p>
             <a
               href="/sample-products.csv"
               download

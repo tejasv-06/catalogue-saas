@@ -22,6 +22,20 @@ export type MarketplaceMetaMap = Record<Marketplace, GenerationMeta | null>
 
 export type DraftProduct = {
   id: string
+  // Milestone 22 (Step C2) — the server-side catalog_products.id once a
+  // catalog dual-write has actually created one, additive and optional so
+  // every existing read site (including a session restored from before this
+  // field existed) stays correct without a schema-version bump. `id` above
+  // remains the sole client-local identity used everywhere in the UI; this
+  // is never used as a React key or for any existing lookup/comparison.
+  serverId?: string
+  // Milestone 23 (Step C3) — per-marketplace catalog_listings.id, populated
+  // once the corresponding C2 upsertListing() call has actually succeeded.
+  // Sparse/optional like serverId above, for the same reason: a marketplace
+  // with no entry here means "no persisted listing yet" (dual-write never
+  // ran, hasn't succeeded yet, or predates C2) — approval/export persistence
+  // (CatalogueWorkspace) must treat that as "skip," never invent an id.
+  listingServerIds?: Partial<Record<Marketplace, string>>
   brandName: string
   description: string
   category: string
