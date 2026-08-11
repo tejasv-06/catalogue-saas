@@ -21,7 +21,13 @@ import ListingHealthBadge from '@/components/workspace/ListingHealthBadge'
 import { marketplaceChipFor, explainMissing, CHIP_TONE_CLASS } from '@/components/workspace/humanCopy'
 import { computeListingHealth, FIELD_SPECS, type GenerationMeta } from '@/lib/listingHealth'
 import { createClient } from '@/lib/supabase/client'
+<<<<<<< HEAD
 import { createProduct, upsertListing, setApproval, recordExport, getCatalog, deleteProduct } from '@/lib/catalog'
+=======
+import { createProduct, updateProduct, upsertListing, setApproval, recordExport, getCatalog } from '@/lib/catalog'
+import { recordProductHistoryEvent } from '@/lib/productHistory'
+import ProductHistory from '@/components/ProductHistory'
+>>>>>>> 39bc049 (Reverted back to C13 due to AI looping and complications)
 import { reconcileCatalog } from '@/lib/catalogReconciliation'
 import { PRODUCT_INTELLIGENCE_FIELD_KEYS, type ProductIntelligence, type ProductIntelligenceFieldKey } from '@/lib/productIntelligence'
 import { evaluateMarketplaceExportReadiness, readyMarketplaces, type MarketplaceExportReadiness, type ExportCandidateItem } from '@/lib/exportReadiness'
@@ -728,6 +734,8 @@ function GeneratedListingDrawer({
             )
           })}
         </div>
+
+        <ProductHistory productId={product.serverId} />
 
         <div className="mt-6 flex justify-end">
           <button onClick={onClose} className={buttonSecondaryClass}>
@@ -1692,13 +1700,26 @@ export default function CatalogueWorkspace() {
     // Manual Entry and then switched to this panel without clearing the
     // form, that leftover text must not silently end up on an "image only"
     // product.
-    commitAddProduct(true, uploadedImageUrl, '')
+    commitAddProduct(true, uploadedImageUrl, '', 'photo')
   }
 
-  function commitAddProduct(skipBrandVoice: boolean, uploadedImageUrl: string | null, descriptionOverride?: string) {
+  function commitAddProduct(
+    skipBrandVoice: boolean,
+    uploadedImageUrl: string | null,
+    descriptionOverride?: string,
+    // Milestone C14 — which create-panel tab this product actually came
+    // from, threaded through to ensureServerProduct so product_created's
+    // metadata.source is a real fact, not a guess. Defaults to 'manual'
+    // since that covers both handleAddProduct's own call and the
+    // mismatch-confirm callback AddProductsPanel invokes through the
+    // onCommitAddProduct prop (2-arg signature, unchanged by this
+    // milestone) — both are the manual-entry tab either way.
+    source: 'manual' | 'photo' = 'manual'
+  ) {
     const effectiveDescription = descriptionOverride ?? description
 
     if (editingId) {
+      const existing = draftProducts.find((p) => p.id === editingId)
       setDraftProducts((prev) =>
         prev.map((p) =>
           p.id === editingId
@@ -1712,6 +1733,27 @@ export default function CatalogueWorkspace() {
             : p
         )
       )
+      // Milestone C14 — persists the edit server-side (lib/catalog.ts's new,
+      // additive updateProduct — see that file's own comment for why it
+      // didn't exist before this milestone) and records product_updated
+      // only once that write actually succeeds. Same fire-and-forget,
+      // best-effort convention as every other catalog-persistence call in
+      // this file: never blocks the local edit, never surfaces as a
+      // user-facing error, and is skipped entirely for a product with no
+      // serverId yet (nothing persisted to update) or no session (guest).
+      if (hasSession && existing?.serverId) {
+        const serverId = existing.serverId
+        void updateProduct(serverId, {
+          brand_name: brandName || null,
+          description: effectiveDescription || null,
+          category: category || null,
+          ...(uploadedImageUrl ? { image_url: uploadedImageUrl } : {})
+        })
+          .then(() => recordProductHistoryEvent({ productId: serverId, eventType: 'product_updated' }))
+          .catch((err: any) => {
+            console.error(`Catalog persistence: failed to update catalog_products ${serverId}:`, err?.message ?? err)
+          })
+      }
       setEditingId(null)
       setDescription('')
       setImageFile(null)
@@ -1757,7 +1799,7 @@ export default function CatalogueWorkspace() {
     // write in this file; their products stay local-only, unchanged from
     // before this milestone.
     if (hasSession) {
-      void ensureServerProduct(newProduct).catch((err: any) => {
+      void ensureServerProduct(newProduct, source).catch((err: any) => {
         console.error(
           `Catalog persistence: failed to create catalog_products for newly added product ${newProduct.id}:`,
           err?.message ?? err
@@ -1914,7 +1956,7 @@ export default function CatalogueWorkspace() {
     // can't affect any other row in the same CSV batch.
     if (hasSession) {
       for (const product of products) {
-        void ensureServerProduct(product).catch((err: any) => {
+        void ensureServerProduct(product, 'csv').catch((err: any) => {
           console.error(
             `Catalog persistence: failed to create catalog_products for CSV row (product ${product.id}):`,
             err?.message ?? err
@@ -2163,7 +2205,16 @@ export default function CatalogueWorkspace() {
   // draft and generating independently — this map is per-tab, in-memory
   // only, and catalog_products has no column to put a database-level
   // uniqueness guarantee on without a schema change (out of scope here).
-  async function ensureServerProduct(product: DraftProduct): Promise<string> {
+  async function ensureServerProduct(
+    product: DraftProduct,
+    // Milestone C14 — only ever meaningful the one time this function
+    // actually calls createProduct (see below); ignored on every other
+    // path (early serverId return, in-flight-promise reuse), which is
+    // exactly why product_created can never double-fire for one product —
+    // those are the same two guards that already prevented a duplicate
+    // createProduct call.
+    source: 'manual' | 'csv' | 'photo' = 'manual'
+  ): Promise<string> {
     if (product.serverId) return product.serverId
 
     const existing = serverProductPromises.current.get(product.id)
@@ -2178,6 +2229,15 @@ export default function CatalogueWorkspace() {
         client_id: product.skipBrandVoice ? null : selectedClient?.id ?? null
       })
       setDraftProducts((prev) => prev.map((p) => (p.id === product.id ? { ...p, serverId: id } : p)))
+      // Milestone C14 — fire-and-forget, same convention as every other
+      // catalog-persistence call below: product creation has already fully
+      // succeeded by this point (id is real), so a history-recording
+      // failure must never be treated as a creation failure.
+      void recordProductHistoryEvent({ productId: id, eventType: 'product_created', metadata: { source } }).catch(
+        (err: any) => {
+          console.error(`Product history: failed to record product_created for ${id}:`, err?.message ?? err)
+        }
+      )
       return id
     })()
 
@@ -2209,6 +2269,16 @@ export default function CatalogueWorkspace() {
       return
     }
 
+    // Milestone C14 — captured BEFORE the upsert below, from the caller's
+    // own snapshot: a marketplace that already had a persisted
+    // catalog_listings row means this call is regenerating/overwriting
+    // existing content (listing_edited); no prior row means this is the
+    // first successful generation for this (product, marketplace) pair
+    // (listing_generated). upsertListing itself can't tell these apart —
+    // it's the same upsert either way — so the distinction is made here,
+    // the one place that already knows the "before" state.
+    const hadExistingListing = !!product.listingServerIds?.[marketplace]
+
     try {
       const listing = await upsertListing(serverId, marketplace, {
         shaped_content: shapedContent,
@@ -2227,6 +2297,18 @@ export default function CatalogueWorkspace() {
           p.id === product.id ? { ...p, listingServerIds: { ...p.listingServerIds, [marketplace]: listing.id } } : p
         )
       )
+      // Milestone C14 — fire-and-forget, same convention as every other
+      // catalog-persistence call in this function: the listing write above
+      // has already fully succeeded by this point, so a history-recording
+      // failure must never be treated as a generation failure.
+      void recordProductHistoryEvent({
+        productId: serverId,
+        eventType: hadExistingListing ? 'listing_edited' : 'listing_generated',
+        marketplace,
+        listingId: listing.id
+      }).catch((err: any) => {
+        console.error(`Product history: failed to record listing event for ${serverId}/${marketplace}:`, err?.message ?? err)
+      })
     } catch (err: any) {
       console.error(
         `Catalog persistence: failed to upsert catalog_listings for product ${serverId} / ${marketplace}:`,
@@ -2399,6 +2481,25 @@ export default function CatalogueWorkspace() {
     }
     try {
       await setApproval(listingId, approved)
+      // Milestone C14 — this codebase's approval workflow is a single
+      // boolean toggle (approved/unapproved), not a separate reject
+      // action, so "unapprove" is what maps to listing_rejected here —
+      // same existing workflow, no second approval mechanism, just the
+      // two event types the toggle's two states already correspond to.
+      // Fire-and-forget, same convention as every other catalog-
+      // persistence call: the approval write above already succeeded, so
+      // a history-recording failure must never be treated as an approval
+      // failure.
+      if (product?.serverId) {
+        void recordProductHistoryEvent({
+          productId: product.serverId,
+          eventType: approved ? 'listing_approved' : 'listing_rejected',
+          marketplace,
+          listingId
+        }).catch((err: any) => {
+          console.error(`Product history: failed to record approval event for listing ${listingId}:`, err?.message ?? err)
+        })
+      }
     } catch (err: any) {
       console.error(
         `Catalog persistence: failed to upsert catalog_listing_approvals for listing ${listingId}:`,
@@ -2776,11 +2877,18 @@ export default function CatalogueWorkspace() {
       if (hasSession) {
         for (const [marketplace, rows] of rowsByMarketplace) {
           const listingIds: string[] = []
+          // Milestone C14 — tracked alongside listingIds (not re-derived
+          // later) so the exported event recorded below points at exactly
+          // the same listings recordExport itself was just given, per
+          // product, for the product-centric timeline.
+          const exportedListings: { productServerId: string; listingId: string }[] = []
           for (const r of flattenedRows) {
             if (r.marketplace !== marketplace) continue
-            const listingId = draftProducts.find((p) => p.id === r.id)?.listingServerIds?.[marketplace]
+            const exportedProduct = draftProducts.find((p) => p.id === r.id)
+            const listingId = exportedProduct?.listingServerIds?.[marketplace]
             if (listingId) {
               listingIds.push(listingId)
+              if (exportedProduct.serverId) exportedListings.push({ productServerId: exportedProduct.serverId, listingId })
             } else {
               console.error(
                 `Catalog persistence: export of ${marketplace} includes draft product ${r.id} with no persisted catalog_listings id — excluded from the catalog export record.`
@@ -2795,9 +2903,32 @@ export default function CatalogueWorkspace() {
             continue
           }
 
-          void recordExport(marketplace, listingIds, `${marketplace}-listings.csv`).catch((err: any) => {
-            console.error(`Catalog persistence: failed to record export for ${marketplace}:`, err?.message ?? err)
-          })
+          // Milestone C14 — the product-centric `exported` event is
+          // recorded only AFTER recordExport (C7's own authoritative
+          // export record) actually succeeds, one per (product, listing)
+          // in this batch, each pointing at the SAME export row via
+          // metadata.export_id — never a duplicate export record, just a
+          // product-scoped pointer to the one C7 already created.
+          void recordExport(marketplace, listingIds, `${marketplace}-listings.csv`)
+            .then((exportRow) => {
+              for (const { productServerId, listingId } of exportedListings) {
+                void recordProductHistoryEvent({
+                  productId: productServerId,
+                  eventType: 'exported',
+                  marketplace,
+                  listingId,
+                  metadata: { export_id: exportRow.id, format: 'csv' }
+                }).catch((err: any) => {
+                  console.error(
+                    `Product history: failed to record exported event for ${productServerId}/${marketplace}:`,
+                    err?.message ?? err
+                  )
+                })
+              }
+            })
+            .catch((err: any) => {
+              console.error(`Catalog persistence: failed to record export for ${marketplace}:`, err?.message ?? err)
+            })
         }
       }
 

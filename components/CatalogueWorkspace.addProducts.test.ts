@@ -33,27 +33,30 @@ function bodyOf(fnSignature: string): string {
   // Grab a generous window after the signature — enough to contain the
   // whole function body for every function this file inspects, without
   // needing a real brace-matching parser for a source-pattern check.
-  return source.slice(start, start + 3000)
+  return source.slice(start, start + 5000)
 }
 
 test('Manual Entry / Photos Only (commitAddProduct) creates the server-side product for authenticated users', () => {
   const body = bodyOf('function commitAddProduct(')
   assert.match(body, /if \(hasSession\)/)
-  assert.match(body, /ensureServerProduct\(newProduct\)/)
+  // Milestone C14 — ensureServerProduct gained a second, additive `source`
+  // parameter (threaded through so product_history_events.metadata.source
+  // is a real fact) — same call, same product, still fire-and-forget below.
+  assert.match(body, /ensureServerProduct\(newProduct, source\)/)
 })
 
 test('CSV intake (commitCsvUpload) creates the server-side product for every row, for authenticated users', () => {
   const body = bodyOf('function commitCsvUpload(')
   assert.match(body, /if \(hasSession\)/)
   assert.match(body, /for \(const product of products\)/)
-  assert.match(body, /ensureServerProduct\(product\)/)
+  assert.match(body, /ensureServerProduct\(product, 'csv'\)/)
 })
 
 test('both new call sites are fire-and-forget (void + .catch), never awaited into the add flow', () => {
   const addBody = bodyOf('function commitAddProduct(')
   const csvBody = bodyOf('function commitCsvUpload(')
-  assert.match(addBody, /void ensureServerProduct\(newProduct\)\.catch\(/)
-  assert.match(csvBody, /void ensureServerProduct\(product\)\.catch\(/)
+  assert.match(addBody, /void ensureServerProduct\(newProduct, source\)\.catch\(/)
+  assert.match(csvBody, /void ensureServerProduct\(product, 'csv'\)\.catch\(/)
 })
 
 test('neither new call site invents a second product-creation path — both reuse the one existing ensureServerProduct', () => {
@@ -70,6 +73,6 @@ test('editing an existing product does not trigger a duplicate server-side creat
   // `const newProduct: DraftProduct = {`, not before it.
   const body = bodyOf('function commitAddProduct(')
   const newProductIdx = body.indexOf('const newProduct: DraftProduct = {')
-  const ensureCallIdx = body.indexOf('ensureServerProduct(newProduct)')
+  const ensureCallIdx = body.indexOf('ensureServerProduct(newProduct, source)')
   assert.ok(newProductIdx !== -1 && ensureCallIdx !== -1 && ensureCallIdx > newProductIdx)
 })

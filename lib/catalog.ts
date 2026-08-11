@@ -91,7 +91,11 @@ export type CatalogExportRow = {
   created_at: string
 }
 
-async function requireUserId(client: SupabaseClient): Promise<string> {
+// Exported (Milestone C14) so lib/productHistory.ts can reuse the exact
+// same "derive the session's own user id, never trust a caller-supplied
+// one" check instead of duplicating it — the only change this milestone
+// makes to this file.
+export async function requireUserId(client: SupabaseClient): Promise<string> {
   const { data, error } = await client.auth.getUser()
   if (error) throw error
   if (!data.user) throw new Error('catalog: an authenticated session is required')
@@ -317,6 +321,35 @@ export async function setProductIntelligence(
   const { data, error } = await client
     .from('catalog_products')
     .update({ product_intelligence: intelligence })
+    .eq('id', productId)
+    .select()
+    .single()
+
+  if (error) throw error
+  return data as CatalogProductRow
+}
+
+// Milestone C14 — additive. Before this, catalog_products had no way to
+// persist an edit to brand_name/description/category/image_url after
+// creation: commitAddProduct's `editingId` branch only ever called
+// setDraftProducts (local state), so an "edited" product was never
+// actually written back to the server at all. That made C14's own
+// required `product_updated` event impossible to record honestly (there
+// was nothing real to point it at). This mirrors setProductIntelligence's
+// exact pattern one field-set over — same ownership enforcement (RLS's
+// existing UPDATE policy, unchanged, no new policy needed), same
+// single-row .update().select().single() shape, only a partial field set
+// so a caller only ever writes the fields it actually has a new value for.
+export async function updateProduct(
+  productId: string,
+  fields: Partial<CatalogProductFields>,
+  client: SupabaseClient = createClient()
+): Promise<CatalogProductRow> {
+  await requireUserId(client)
+
+  const { data, error } = await client
+    .from('catalog_products')
+    .update(fields)
     .eq('id', productId)
     .select()
     .single()
