@@ -21,14 +21,10 @@ import ListingHealthBadge from '@/components/workspace/ListingHealthBadge'
 import { marketplaceChipFor, explainMissing, CHIP_TONE_CLASS } from '@/components/workspace/humanCopy'
 import { computeListingHealth, FIELD_SPECS, type GenerationMeta } from '@/lib/listingHealth'
 import { createClient } from '@/lib/supabase/client'
-<<<<<<< HEAD
-import { createProduct, upsertListing, setApproval, recordExport, getCatalog, deleteProduct } from '@/lib/catalog'
-=======
-import { createProduct, updateProduct, upsertListing, setApproval, recordExport, getCatalog } from '@/lib/catalog'
 import { recordProductHistoryEvent } from '@/lib/productHistory'
 import ProductHistory from '@/components/ProductHistory'
->>>>>>> 39bc049 (Reverted back to C13 due to AI looping and complications)
 import { reconcileCatalog } from '@/lib/catalogReconciliation'
+import { getCatalog, createProduct, upsertListing, setApproval, deleteProduct, recordExport, updateProduct } from '@/lib/catalog'
 import { PRODUCT_INTELLIGENCE_FIELD_KEYS, type ProductIntelligence, type ProductIntelligenceFieldKey } from '@/lib/productIntelligence'
 import { evaluateMarketplaceExportReadiness, readyMarketplaces, type MarketplaceExportReadiness, type ExportCandidateItem } from '@/lib/exportReadiness'
 import {
