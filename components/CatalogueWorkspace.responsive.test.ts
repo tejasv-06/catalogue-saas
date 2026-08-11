@@ -1,10 +1,12 @@
-// Milestone C16 — Responsive Workspace & UX Architecture. Same
+// Milestone C16 — Responsive Workspace & UX Architecture, updated for
+// Milestone C17's Seller Core Experience redesign (single-column,
+// product-card layout replacing the old two-column table). Same
 // source-inspection approach as the existing CatalogueWorkspace.*.test.ts
-// files: this is a layout/CSS-class milestone with no new business logic,
-// so these tests assert on the actual rendered className strings rather
-// than on behavior a headless DOM can't meaningfully exercise — real
-// reflow behavior is covered separately by live browser verification at
-// the required viewport widths.
+// files: this is a layout/CSS-class/IA milestone with no new business
+// logic, so these tests assert on the actual rendered className strings
+// rather than on behavior a headless DOM can't meaningfully exercise —
+// real reflow behavior is covered separately by live browser verification
+// at the required viewport widths.
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -13,42 +15,35 @@ import { join } from 'node:path'
 
 const workspaceSource = readFileSync(join(__dirname, 'CatalogueWorkspace.tsx'), 'utf8')
 const queueTableSource = readFileSync(join(__dirname, 'workspace', 'QueueTable.tsx'), 'utf8')
-const actionCenterSource = readFileSync(join(__dirname, 'workspace', 'ActionCenter.tsx'), 'utf8')
 const appHeaderSource = readFileSync(join(__dirname, 'AppHeader.tsx'), 'utf8')
 const emptyQueueSource = readFileSync(join(__dirname, 'workspace', 'EmptyQueueState.tsx'), 'utf8')
 
-// --- 1. Desktop layout classes remain intact ---
+// --- 1. Desktop layout: single column, centered, no competing-width columns ---
 
-test('1. the Add Products / Listings row is still a real desktop side-by-side layout (xl:flex-row)', () => {
-  assert.match(workspaceSource, /flex-1 flex flex-col xl:flex-row min-h-0/)
+test('1. the workspace is a single, centered column (C17 removed the old permanent two-column Add-Products/Listings split)', () => {
+  assert.match(workspaceSource, /max-w-5xl mx-auto flex flex-col gap-6/)
+  assert.ok(!/flex-1 flex flex-col xl:flex-row min-h-0/.test(workspaceSource), 'the old competing-width row must not come back')
 })
 
-test('AddProductsPanel keeps its fixed desktop width and independent scroll region at xl', () => {
-  assert.match(workspaceSource, /w-full xl:w-\[420px\] xl:shrink-0 xl:h-full xl:overflow-y-auto/)
+test('AddProductsPanel is a plain full-width card, mounted inline (not a fixed-width sidebar column)', () => {
+  assert.match(workspaceSource, /w-full p-6 \$\{cardClass\}/)
+  assert.ok(!/xl:w-\[420px\]/.test(workspaceSource), 'must not reintroduce a fixed sidebar width')
 })
 
-// --- 2. Narrow layout wraps/stacks (below xl, everything is flex-col by default — no narrow-specific override needed) ---
+// --- 2. Narrow layout: a single column has nothing extra to stack — verify no width-fighting classes exist ---
 
-test('2. below xl the Add Products / Listings row falls back to flex-col (the Tailwind default before the xl: prefix applies)', () => {
-  // flex-col with no md:/lg: override before xl: means every width below
-  // 1280px stacks — this is the actual fix for the "3-way row crushed
-  // Listings into ~350px at 1024px" problem found during the C16 audit.
-  const row = workspaceSource.match(/flex-1 flex flex-col xl:flex-row min-h-0/)
-  assert.ok(row)
-  assert.ok(!/flex-1 flex flex-col (sm|md|lg):flex-row/.test(workspaceSource), 'must not reintroduce a narrower row breakpoint')
+test('2. no responsive row-vs-stack breakpoint is needed anymore since there is only one column', () => {
+  assert.ok(!/flex-1 flex flex-col (sm|md|lg|xl):flex-row/.test(workspaceSource), 'no competing-width row should exist at any breakpoint')
 })
 
-test('QueueTable\'s scroll container remains overflow-auto (table-only horizontal scroll, never the whole page)', () => {
-  assert.match(queueTableSource, /overflow-auto rounded-xl border/)
-})
-
-test('QueueTable gives its columns a real minimum width so they scroll cleanly instead of shrinking arbitrarily', () => {
-  assert.match(queueTableSource, /min-w-\[680px\]/)
+test("QueueTable renders products as a responsive card grid (1/2/3 columns), not a <table>", () => {
+  assert.match(queueTableSource, /grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3/)
+  assert.ok(!/<table/.test(queueTableSource), 'C17 replaced the row-per-marketplace table with product cards')
 })
 
 // --- 3/9/10. No business logic changes — same handlers, same imports, no new state model ---
 
-test('3/10. C16 introduces no new recommendation, credit, or marketplace-validation logic — same C15/C10/C5 imports as before, untouched', () => {
+test('3/10. C17 introduces no new recommendation, credit, or marketplace-validation logic — same C15/C10/C5 imports as before, untouched', () => {
   assert.match(workspaceSource, /from '@\/lib\/catalogRecommendations'/)
   assert.match(workspaceSource, /computeCatalogRecommendations/)
   // No parallel/duplicate recommendation or readiness function defined in this file.
@@ -56,28 +51,30 @@ test('3/10. C16 introduces no new recommendation, credit, or marketplace-validat
   assert.ok(!/function evaluateMarketplaceExportReadiness/.test(workspaceSource))
 })
 
-// --- 4. Existing Action Center functionality remains intact ---
+// --- 4. C15 recommendations remain available, surfaced per-product instead of as a global hero ---
 
-test('4. ActionCenter is still wired with the exact same recommendations/onExecute contract', () => {
-  const start = workspaceSource.indexOf('<ActionCenter')
-  const callSite = workspaceSource.slice(start, start + 400)
+test('4. the global ActionCenter card-stack is no longer mounted; recommendations are passed into QueueTable for per-product hints instead', () => {
+  assert.ok(!/<ActionCenter/.test(workspaceSource), 'C17 removes the Action Center from the primary experience')
+  const start = workspaceSource.indexOf('<QueueTable')
+  const callSite = workspaceSource.slice(start, start + 900)
   assert.match(callSite, /recommendations=\{recommendations\}/)
-  assert.match(callSite, /onExecute=\{handleExecuteRecommendation\}/)
+  assert.match(callSite, /onExecuteRecommendation=\{handleExecuteRecommendation\}/)
 })
 
-test('ActionCenter shows the top recommendation prominently and renders the rest as a lighter, more compact variant', () => {
-  assert.match(actionCenterSource, /<RecommendationCard rec=\{topRecommendation\} onExecute=\{onExecute\} busy=\{busy\} \/>/)
-  assert.match(actionCenterSource, /<RecommendationCard key=\{rec\.id\} rec=\{rec\} onExecute=\{onExecute\} busy=\{busy\} compact \/>/)
+test('QueueTable shows at most one contextual recommendation per product card, reusing the already-sorted C15 list — never a second priority judgment', () => {
+  assert.match(queueTableSource, /recommendationByProduct\.set/)
+  assert.match(queueTableSource, /topRecommendation=\{recommendationByProduct\.get\(product\.id\) \?\? null\}/)
 })
 
-// --- 5. Existing filters remain intact ---
+// --- 5. Existing filters remain intact (now collapsed behind a toggle, not removed) ---
 
 test('5. CatalogFilterBar is still wired with the exact same C14 filter/sort state props', () => {
   const start = workspaceSource.indexOf('<CatalogFilterBar')
-  const callSite = workspaceSource.slice(start, start + 400)
+  const callSite = workspaceSource.slice(start, start + 700)
   assert.match(callSite, /filters=\{catalogFilters\}/)
   assert.match(callSite, /onFiltersChange=\{setCatalogFilters\}/)
   assert.match(callSite, /sortKey=\{sortKey\}/)
+  assert.match(callSite, /readinessFilter=\{readinessFilter\}/)
 })
 
 // --- 6. Existing bulk actions remain intact ---
@@ -114,9 +111,9 @@ test('AppHeader keeps its wrapping layout (marketplace pills + brand voice never
   assert.match(appHeaderSource, /flex flex-wrap gap-2 rounded-xl/)
 })
 
-// --- Empty state stays visible without requiring a horizontal scroll ---
+// --- Empty state stays visible and readable ---
 
-test('EmptyQueueState text is left-aligned so it is visible immediately in a horizontally-scrolled, min-width table, never centered off-screen', () => {
+test('EmptyQueueState renders as a plain readable div, not a table row (C17 replaced the table with cards)', () => {
   assert.match(emptyQueueSource, /text-left text-sm/)
-  assert.ok(!/text-center text-sm/.test(emptyQueueSource))
+  assert.match(emptyQueueSource, /<div className=/)
 })

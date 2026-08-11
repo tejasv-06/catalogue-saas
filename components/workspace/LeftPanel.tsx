@@ -253,35 +253,27 @@ export default function LeftPanel({
             )}
 
             {csvSummary && (
-              // table-fixed + a truncated File cell: without it, the browser's
-              // auto table layout gives File almost no width (the three
-              // number columns are just single digits) and wraps a real
-              // filename across five or six lines instead of letting it
-              // scroll or truncate — uglier than either alternative, and on
-              // an unbreakable filename (no hyphens/spaces) it would
-              // overflow the card horizontally instead. title= on the cell
-              // still shows the full name on hover.
-              <div className={`overflow-x-auto ${cardClass}`}>
-                <table className="w-full table-fixed border-collapse text-sm">
-                  <thead>
-                    <tr className="border-b border-[var(--row-border)] bg-[var(--table-head-bg)] text-left text-xs text-[var(--muted-text)]">
-                      <th className="py-3 px-4">File</th>
-                      <th className="py-3 px-4 w-16">Total</th>
-                      <th className="py-3 px-4 w-16">Added</th>
-                      <th className="py-3 px-4 w-16">Skipped</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr className="text-[var(--body-text)]">
-                      <td className="py-3 px-4 truncate" title={csvSummary.fileName}>
-                        {csvSummary.fileName}
-                      </td>
-                      <td className="py-3 px-4">{csvSummary.total}</td>
-                      <td className="py-3 px-4">{csvSummary.added}</td>
-                      <td className="py-3 px-4">{csvSummary.skipped}</td>
-                    </tr>
-                  </tbody>
-                </table>
+              // Milestone C17 — "give us your product data, we'll tell you
+              // what we can work with" instead of a File/Total/Added/
+              // Skipped data table. Same exact numbers csvSummary already
+              // carried (added = queued as a real draft product, skipped =
+              // missing what commitCsvUpload's own row validation requires
+              // — never a claim that intelligence/analysis has run, since
+              // that's still a separate, explicit "Analyze Product" step).
+              <div className={`p-4 flex flex-col gap-1.5 ${cardClass}`}>
+                <p className="text-sm font-medium text-[var(--heading-text)]" title={csvSummary.fileName}>
+                  {csvSummary.total} product{csvSummary.total === 1 ? '' : 's'} received
+                </p>
+                {csvSummary.added > 0 && (
+                  <p className="text-sm text-[var(--success-text)]">
+                    ✓ {csvSummary.added} ready to create
+                  </p>
+                )}
+                {csvSummary.skipped > 0 && (
+                  <p className="text-sm text-[var(--warn-text)]">
+                    ⚠ {csvSummary.skipped} need a brand name plus a description or photo before Tesolute can use them
+                  </p>
+                )}
               </div>
             )}
           </>

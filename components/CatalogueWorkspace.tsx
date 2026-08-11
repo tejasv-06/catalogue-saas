@@ -17,7 +17,8 @@ import AppSidebar, { type WorkspaceDestination } from '@/components/AppSidebar'
 import QueueTable from '@/components/workspace/QueueTable'
 import CatalogFilterBar from '@/components/workspace/CatalogFilterBar'
 import BulkActionBar from '@/components/workspace/BulkActionBar'
-import ListingHealthBadge, { healthStatusClassName, type RowHealthStatus } from '@/components/workspace/ListingHealthBadge'
+import ListingHealthBadge from '@/components/workspace/ListingHealthBadge'
+import { marketplaceChipFor, explainMissing, CHIP_TONE_CLASS } from '@/components/workspace/humanCopy'
 import { computeListingHealth, FIELD_SPECS, type GenerationMeta } from '@/lib/listingHealth'
 import { createClient } from '@/lib/supabase/client'
 import { createProduct, upsertListing, setApproval, recordExport, getCatalog } from '@/lib/catalog'
@@ -35,7 +36,11 @@ import {
   type ProductFilters,
   type ProductSortKey
 } from '@/lib/catalogOperations'
-import ActionCenter from '@/components/workspace/ActionCenter'
+// Milestone C17 — ActionCenter.tsx (the global "N actions need attention"
+// card-stack) is no longer mounted here; the recommendation engine it was
+// built on stays in active use, surfaced per-product instead (see
+// QueueTable's own `recommendations` prop and handleExecuteRecommendation
+// below).
 import { computeCatalogRecommendations, type CatalogActionRecommendation } from '@/lib/catalogRecommendations'
 import CreditsBalance, { notifyCreditsChanged } from '@/components/CreditsBalance'
 import { CREDIT_COSTS } from '@/lib/creditCosts'
@@ -124,13 +129,10 @@ const ADD_METHOD_TABS: { id: WorkspaceDestination; label: string }[] = [
 // one Ready and one Needs Review marketplace shows only the matching row
 // under either filter instead of both.
 export type ReadinessFilter = 'all' | 'ready' | 'needs-review' | 'missing-data' | 'error'
-const FILTER_OPTIONS: { id: ReadinessFilter; label: string }[] = [
-  { id: 'all', label: 'All' },
-  { id: 'ready', label: 'Ready' },
-  { id: 'needs-review', label: 'Needs Review' },
-  { id: 'missing-data', label: 'Missing Data' },
-  { id: 'error', label: 'Error' }
-]
+// Milestone C17 — the plain-language labels for these are now defined once,
+// in components/workspace/CatalogFilterBar.tsx's own STATUS_OPTIONS
+// (the only place this filter's UI renders since the Action Center's
+// removal from the primary experience).
 
 // Compact single-line summary, not a stat-card grid — counts real
 // (product, marketplace) pairs that have actually been attempted (content
@@ -373,9 +375,15 @@ function GeneratedListingDrawer({
         aria-label="Generated Listings"
         className="relative w-full max-w-md border-l h-full p-6 overflow-y-auto shadow-xl focus:outline-none bg-[var(--card-bg)] border-[var(--card-border)]"
       >
-        <div className="mb-4 flex items-center gap-2">
-          <h2 className={sectionHeadingClass}>Generated Listings</h2>
-          <StatusBadge status={product.status} />
+        {/* Milestone C17 — "Product Studio": the drawer is where the seller
+            goes deep on one product — what Tesolute understands about it,
+            its marketplace-ready content, and what's left to do. The old
+            draft/partial/generated progress badge is dropped here (that's
+            an internal generation-progress concept, not a seller-facing
+            one) in favor of the per-marketplace chips just below, which
+            already say more useful things in plain language. */}
+        <div className="mb-4">
+          <h2 className={sectionHeadingClass}>Product Studio</h2>
         </div>
 
         <div className="flex items-center gap-3 mb-4">
@@ -387,17 +395,19 @@ function GeneratedListingDrawer({
         </div>
 
         {/* Milestone C14 — marketplace status view / quick switch: every
-            marketplace this product could target, colored by its own real
-            health status, so the seller can see (and jump to) the whole
-            picture without leaving the drawer. */}
+            marketplace this product could target, so the seller can see
+            (and jump to) the whole picture without leaving the drawer.
+            Milestone C17 — the color AND label now come from the same
+            plain-language humanCopy translation the product cards use
+            (marketplaceChipFor), never the raw ready/needs-review/
+            missing-data/error vocabulary. */}
         <div className="mb-4 flex flex-wrap gap-1.5">
           {SUPPORTED_MARKETPLACES.map((m) => {
             const mContent = product.generatedContent[m]
             const mError = product.generationError[m]
             const attempted = mContent !== null || mError !== null
-            const mStatus: RowHealthStatus = attempted
-              ? computeListingHealth(m, mContent, mError, product.generationMeta[m]).status
-              : 'not-generated'
+            const mHealth = attempted ? computeListingHealth(m, mContent, mError, product.generationMeta[m]) : null
+            const chip = marketplaceChipFor(attempted, mHealth)
             const isActive = m === marketplace
             return (
               <button
@@ -405,25 +415,57 @@ function GeneratedListingDrawer({
                 type="button"
                 onClick={() => onSwitchMarketplace(m)}
                 aria-current={isActive}
-                className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${healthStatusClassName(mStatus)} ${
+                className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${CHIP_TONE_CLASS[chip.tone]} ${
                   isActive ? 'ring-2 ring-blue-500' : 'opacity-75 hover:opacity-100'
                 }`}
               >
-                {MARKETPLACE_LABELS[m]}
+                {MARKETPLACE_LABELS[m]} · {chip.label}
               </button>
             )
           })}
         </div>
 
-        {/* Milestone 32 (C9) — the canonical Product Intelligence section.
-            Content-first even here: the trigger/status/re-analyze action
-            sits on one compact header line, the fields themselves render as
-            plain label/value rows (same visual weight as "Detected from
-            image" below), and missing-information is a small warning list —
-            never a score dashboard preceding the product's own data. */}
+        {/* Milestone C17 — "What Tesolute Understands." Same C9
+            product_intelligence data, C14 visualAttributes, and the
+            seller's own typed-in fields as before — reorganized so the
+            seller can tell CONFIRMED (their own input) from OBSERVED
+            (detected in their photo) from INFERRED (the AI's own
+            reasoning, never presented as settled fact) at a glance, per
+            the explicit "never present an uncertain AI inference as a
+            confirmed product fact" requirement. */}
         <div className="mb-4 pb-4 border-b border-[var(--card-border)]">
+          <p className={`${labelClass} mb-2`}>What Tesolute Understands</p>
+
+          {/* Confirmed — verbatim from the seller's own form fields, never
+              re-derived. */}
+          {(product.brandName || product.category || product.description) && (
+            <div className="mb-3">
+              <p className="text-xs font-medium text-[var(--success-text)] mb-1">✓ Confirmed by you</p>
+              <div className="flex flex-col gap-0.5">
+                {product.brandName && (
+                  <p className="text-sm text-[var(--body-text)]">
+                    <span className="text-[var(--muted-text)]">Brand: </span>
+                    {product.brandName}
+                  </p>
+                )}
+                {product.category && (
+                  <p className="text-sm text-[var(--body-text)]">
+                    <span className="text-[var(--muted-text)]">Category: </span>
+                    {product.category}
+                  </p>
+                )}
+                {product.description && (
+                  <p className="text-sm text-[var(--body-text)]">
+                    <span className="text-[var(--muted-text)]">Description: </span>
+                    {product.description}
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+
           <div className="flex items-center justify-between mb-1">
-            <p className={labelClass}>Product Intelligence</p>
+            <p className="text-xs font-medium text-[var(--accent-sky-text)]">Inferred by Tesolute</p>
             <button
               onClick={() => onAnalyzeProduct(product.id)}
               disabled={isAnalyzing || !product.serverId}
@@ -441,7 +483,7 @@ function GeneratedListingDrawer({
           </div>
 
           {(!product.productIntelligence || product.productIntelligence.status === 'not_started') && !isAnalyzing && (
-            <p className="text-xs text-[var(--muted-text)]">Not analyzed yet.</p>
+            <p className="text-xs text-[var(--muted-text)]">Not analyzed yet — Tesolute hasn't looked at this product closely.</p>
           )}
 
           {product.productIntelligence?.status === 'failed' && (
@@ -452,20 +494,29 @@ function GeneratedListingDrawer({
 
           {product.productIntelligence?.data && (
             <div className="mt-1 flex flex-col gap-1">
+              {/* Every inferred fact is explicitly framed as AI reasoning
+                  with its own confidence, never stated as settled — a
+                  "low"/"unknown" confidence gets an extra nudge to verify
+                  before publishing, exactly per spec. */}
               {PRODUCT_INTELLIGENCE_FIELD_KEYS.map((key) => {
                 const field = product.productIntelligence!.data![key]
+                if (field.value == null || (Array.isArray(field.value) && field.value.length === 0)) return null
+                const needsVerification = field.confidence === 'low' || field.confidence === 'unknown'
                 return (
                   <p key={key} className="text-sm text-[var(--body-text)]">
                     <span className="text-[var(--muted-text)]">{INTELLIGENCE_FIELD_LABELS[key]}: </span>
                     {formatIntelligenceValue(field.value)}
-                    <span className="text-xs text-[var(--muted-text)]"> ({field.confidence} confidence)</span>
+                    <span className={`text-xs ${needsVerification ? 'text-[var(--warn-text)]' : 'text-[var(--muted-text)]'}`}>
+                      {' '}
+                      ({needsVerification ? 'unverified — worth checking' : `${field.confidence} confidence`})
+                    </span>
                   </p>
                 )
               })}
 
               {product.productIntelligence.missing_information.length > 0 && (
                 <div className={`mt-2 ${warningBannerClass}`}>
-                  <p className={`${warningTextClass} font-medium mb-1`}>Missing information</p>
+                  <p className={`${warningTextClass} font-medium mb-1`}>Tesolute needs more to work with:</p>
                   <ul className="list-disc list-inside">
                     {product.productIntelligence.missing_information.map((item, i) => (
                       <li key={i} className={warningTextClass}>
@@ -481,7 +532,7 @@ function GeneratedListingDrawer({
 
         {hasVisualAttributes && (
           <div className="mb-4 pb-4 border-b border-[var(--card-border)]">
-            <p className={labelClass}>Detected from image</p>
+            <p className="text-xs font-medium text-[var(--accent-sky-text)] mb-1">Observed in your photo</p>
             <div className="mt-1 grid grid-cols-2 gap-x-3 gap-y-1">
               {detectedAttributes.map(([key, value]) => (
                 <p key={key} className="text-sm text-[var(--body-text)] capitalize">
@@ -568,6 +619,11 @@ function GeneratedListingDrawer({
                 : undefined
             }
 
+            // Milestone C17 — the plain-language line every field-level
+            // annotation below already backs up with real detail; never a
+            // second, independent judgment about this listing's status.
+            const humanStatusLine = !isGenerating && (content || error) ? explainMissing(MARKETPLACE_LABELS[marketplace], health) : null
+
             return (
               <div key={marketplace} className="pt-4 border-t border-[var(--card-border)] first:pt-0 first:border-t-0">
                 <div className="flex items-center justify-between mb-2">
@@ -577,6 +633,11 @@ function GeneratedListingDrawer({
                     {(content || error) && <ListingHealthBadge status={isGenerating ? 'generating' : health.status} />}
                   </div>
                 </div>
+                {!isGenerating && content && !error && (
+                  <p className={`mb-2 text-sm ${humanStatusLine ? 'text-[var(--warn-text)]' : 'text-[var(--success-text)]'}`}>
+                    {humanStatusLine ?? `Your ${MARKETPLACE_LABELS[marketplace]} content is complete.`}
+                  </p>
+                )}
 
                 {/* True first-ever-attempt failure (no content exists yet) —
                     unchanged from before: full-width banner, generic retry. */}
@@ -679,11 +740,11 @@ function GeneratedListingDrawer({
 }
 
 // The three input methods (Bulk Upload / Manual Entry / Photos Only),
-// unchanged from Milestone 1's tab-strip — a persistent workspace column
-// now (sidebar → Add Products → Listings), not a modal/drawer: always
-// mounted, no backdrop, no focus trap, no close action. None of
-// LeftPanel/ImageOnlyPanel's own props, fields, or submit logic changed,
-// only where this whole block renders.
+// unchanged from Milestone 1's tab-strip. Milestone C17 — no longer a
+// permanent sidebar column: mounted inline inside the create hero only
+// while it's expanded (see CatalogueWorkspace's showCreatePanel state).
+// None of LeftPanel/ImageOnlyPanel's own props, fields, or submit logic
+// changed, only where and how this whole block is framed.
 function AddProductsPanel({
   activeTab,
   onActiveTabChange,
@@ -764,28 +825,11 @@ function AddProductsPanel({
   onCsvCancelMismatch: () => void
 }) {
   return (
-    // A normal flex column, not an overlay — no fixed positioning, no
-    // z-index, no backdrop, no focus trap. Sits between AppSidebar and the
-    // Listings column as a permanent part of the workspace layout.
-    // h-full/overflow-y-auto/border-r only apply at xl: below that the
-    // outer row switches to flex-col (see the call site), so this panel
-    // just takes its natural stacked height instead of each column
-    // fighting to be 100% of a row that no longer has a fixed cross-axis
-    // size — border moves from the right edge to the bottom edge to match.
-    //
-    // Milestone C16 — raised from lg (1024px) to xl (1280px). At 1024px
-    // with the sidebar's own default-expanded 256px rail, a three-way row
-    // (sidebar + this panel's fixed 420px + Listings) left Listings with as
-    // little as ~350px — exactly the "everything shrinks" symptom this
-    // milestone fixes. Below xl, this panel now stacks full-width above
-    // Listings instead, which gets the sidebar's ENTIRE remaining width for
-    // itself in the 1024-1279px "narrow desktop/tablet" range. The
-    // sidebar's own lg breakpoint (AppSidebar.tsx, unchanged) is
-    // intentionally independent of this one.
-    <aside
-      id="add-products-panel"
-      className="w-full xl:w-[420px] xl:shrink-0 xl:h-full xl:overflow-y-auto p-6 border-b xl:border-b-0 border-r-0 xl:border-r border-[var(--card-border)] bg-[var(--page-bg)]"
-    >
+    // Milestone C17 — a plain full-width card now, mounted inline within
+    // the create hero rather than a permanent sidebar column (the old
+    // lg→xl breakpoint tuning from C16 no longer applies since this never
+    // competes for row width with anything anymore).
+    <aside id="add-products-panel" className={`w-full p-6 ${cardClass}`}>
       <h2 className={sectionHeadingClass}>Add Products</h2>
       <p className={`${bodyTextClass} mb-4`}>How would you like to add products?</p>
 
@@ -1063,24 +1107,14 @@ function ExportSummaryModal({
 // its left is always visible, so a second entry point would be redundant.
 // Uses the same cardClass surface QueueTable itself sits in, so swapping
 // between the two doesn't change the page's visual rhythm.
-function WorkspaceEmptyState() {
-  // The Add Products panel is always visible on desktop, but stacks above
-  // Listings below the lg breakpoint — this scrolls it into view (and
-  // focuses its first field) rather than being a purely decorative button,
-  // since there's no show/hide state left to toggle.
-  function focusAddProducts() {
-    const panel = document.getElementById('add-products-panel')
-    panel?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    panel?.querySelector<HTMLElement>('input, textarea, button')?.focus()
-  }
-
+function WorkspaceEmptyState({ onOpenCreate }: { onOpenCreate: () => void }) {
   return (
     <div className="flex-1 flex items-center justify-center">
       <div className={`flex flex-col items-center text-center gap-2 px-8 py-8 max-w-sm ${cardClass}`}>
-        <p className={sectionHeadingClass}>Your listings are ready to be created</p>
-        <p className={bodyTextClass}>Add products using the panel on the left to start creating marketplace-ready listings.</p>
-        <button onClick={focusAddProducts} className={`mt-2 ${buttonPrimaryClass}`}>
-          + Add Products
+        <p className={sectionHeadingClass}>Your products will show up here</p>
+        <p className={bodyTextClass}>Give Tesolute a product to work with and it'll show up here, ready to review.</p>
+        <button onClick={onOpenCreate} className={`mt-2 ${buttonPrimaryClass}`}>
+          + Create your first listing
         </button>
       </div>
     </div>
@@ -1123,6 +1157,21 @@ export default function CatalogueWorkspace() {
   const [selectedClient, setSelectedClient] = useState<Client | null>(null)
   // Milestone C12 — Edit Brand Profile modal.
   const [showBrandProfile, setShowBrandProfile] = useState(false)
+  // Milestone C17 — the create hero starts expanded (a first visit has
+  // nothing to create FROM yet) and collapses once the seller has at least
+  // one product, unless they've explicitly opened it again. `createIntent`
+  // only changes which tab opens and the hint copy shown above the (100%
+  // unchanged) existing form — "Create," "Bulk Create," and "Improve" are
+  // three framings of the exact same AddProductsPanel/commitAddProduct
+  // pipeline, never three separate code paths.
+  const [showCreatePanel, setShowCreatePanel] = useState(true)
+  const [createIntent, setCreateIntent] = useState<'create' | 'bulk' | 'improve'>('create')
+
+  function openCreatePanel(intent: 'create' | 'bulk' | 'improve') {
+    setCreateIntent(intent)
+    setActiveTab(intent === 'bulk' ? 'csv' : 'manual')
+    setShowCreatePanel(true)
+  }
   // Saved session read from localStorage on mount, held here until we also know
   // whether the visitor is authenticated — that decides auto-restore vs. banner.
   const [savedSessionData, setSavedSessionData] = useState<any | null>(null)
@@ -2777,7 +2826,6 @@ export default function CatalogueWorkspace() {
   // unfiltered draftProducts (via pendingCount/hasApproved and their own
   // handlers), so a "Ready" filter never narrows what an action operates
   // on, only what the table currently shows.
-  const listingSummary = computeListingSummary(draftProducts)
   // Milestone C14 — Catalog Command Center derived view. All display-only
   // (see catalogFilters/sortKey's own comment above): Generate All/Bulk
   // Approve/Export above still read the full, unfiltered draftProducts.
@@ -2833,290 +2881,256 @@ export default function CatalogueWorkspace() {
           the page on mobile, where the nav bar adds its own height on top. */}
       <div className="pt-16 h-screen flex flex-col">
         <AppSidebar>
-          {/* Sidebar → Add Products → Listings: a normal three-column flex
-              row at xl: and above, not sidebar-plus-overlay. Add Products is
-              a fixed-width, always-mounted sibling of the Listings column,
-              each with its own independent overflow-y-auto (xl: only — see
-              AddProductsPanel) so a tall form and a long queue can each
-              scroll on their own without a page-level horizontal scrollbar.
-              Below xl, flex-col stacks Add Products above Listings instead
-              of squeezing both into a shrinking row — this is what keeps
-              the three-tab strip from ever fighting for width against the
-              Listings column at tablet/narrow-desktop sizes (Milestone
-              C16 — raised from lg to xl; see AddProductsPanel's own comment
-              for why 1024px specifically was too cramped for a 3-way row). */}
-          <div className="flex-1 flex flex-col xl:flex-row min-h-0">
-            <AddProductsPanel
-              activeTab={activeTab}
-              onActiveTabChange={setActiveTab}
-              brandName={brandName}
-              onBrandNameChange={handleBrandNameChange}
-              category={category}
-              onCategoryChange={handleCategoryChange}
-              description={description}
-              onDescriptionChange={handleDescriptionChange}
-              imageFile={imageFile}
-              onImageFileChange={setImageFile}
-              formPreviewUrl={formPreviewUrl}
-              fileInputRef={fileInputRef}
-              formError={formError}
-              guestLimitReached={guestLimitReached}
-              brandMismatchPending={brandMismatchPending}
-              selectedClient={selectedClient}
-              pendingImageUrl={pendingImageUrl}
-              onCommitAddProduct={commitAddProduct}
-              onCancelBrandMismatch={handleCancelBrandMismatch}
-              onAddProduct={handleAddProduct}
-              onAddImageOnlyProduct={handleAddImageOnlyProduct}
-              onClearForm={handleClearForm}
-              uploadingImage={uploadingImage}
-              editingId={editingId}
-              csvFile={csvFile}
-              onCsvFileChange={handleCsvFileChange}
-              csvFileInputRef={csvFileInputRef}
-              csvSummary={csvSummary}
-              isDragging={isDragging}
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
-              pendingCsvUpload={pendingCsvUpload}
-              onUploadCsv={handleUploadCsv}
-              onCsvAddWithoutBrandVoice={handleCsvAddWithoutBrandVoice}
-              onCsvAddOnlyMatching={handleCsvAddOnlyMatching}
-              onCsvAddAllWithBrandVoice={handleCsvAddAllWithBrandVoice}
-              onCsvCancelMismatch={handleCsvCancelMismatch}
-            />
-          {/* min-h-0/overflow-y-auto gated to xl: same reasoning as the row
-              above — below xl this column takes its natural stacked
-              height instead of competing with Add Products for a shared
-              row height it no longer has, and the page's own scroll
-              (this whole block's ancestor) takes over. */}
-          <div className="flex-1 flex flex-col xl:min-h-0 p-6 xl:overflow-y-auto">
-          {/* Compact — a heading and one line, not a page-header-sized
-              banner. Establishes "what am I working on" without taking
-              space from the catalog table below it. */}
-          <div className="mb-4">
-            <h1 className={sectionHeadingClass}>Listings</h1>
-            <p className={bodyTextClass}>Create, validate and prepare marketplace listings.</p>
-          </div>
-          <AppHeader
-            hasSession={hasSession}
-            selectedMarketplaces={selectedMarketplaces}
-            onToggleMarketplace={handleToggleMarketplace}
-            marketplaceError={marketplaceError}
-            marketplaceFlash={marketplaceFlash}
-            marketplaceGroupRef={marketplaceSelectRef}
-            selectedClientId={selectedClient?.id || ''}
-            onSelectClient={setSelectedClient}
-            onOpenBrandProfile={() => setShowBrandProfile(true)}
-          />
+          {/* Milestone C17 — Seller Core Experience redesign. One column,
+              product-centric flow (brand context -> create hero -> My
+              Products), replacing the old permanent Add-Products sidebar
+              column and the C15 Action Center's global card-stack. Every
+              handler either of those used is unchanged and reused (see
+              openCreatePanel above, handleExecuteRecommendation below,
+              QueueTable's per-card recommendation hint) — this is a
+              presentation/information-architecture change only, no new
+              business logic. */}
+          <div className="flex-1 min-h-0 overflow-y-auto p-6">
+            <div className="max-w-5xl mx-auto flex flex-col gap-6">
+              {outdatedSessionDiscarded && (
+                <div className={`flex items-center justify-between gap-4 ${warningBannerClass}`}>
+                  <p className={warningTextClass}>Previous session format outdated, please start fresh.</p>
+                  <button onClick={() => setOutdatedSessionDiscarded(false)} className={buttonSecondaryClass}>
+                    Dismiss
+                  </button>
+                </div>
+              )}
 
-          {outdatedSessionDiscarded && (
-            <div className={`mb-4 flex items-center justify-between gap-4 ${warningBannerClass}`}>
-              <p className={warningTextClass}>Previous session format outdated, please start fresh.</p>
-              <button onClick={() => setOutdatedSessionDiscarded(false)} className={buttonSecondaryClass}>
-                Dismiss
-              </button>
-            </div>
-          )}
+              {pendingRestoreCount !== null && (
+                <div className={`flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 ${warningBannerClass}`}>
+                  <p className={warningTextClass}>
+                    A previous session with {pendingRestoreCount} product{pendingRestoreCount === 1 ? '' : 's'} was found.
+                  </p>
+                  <div className="flex gap-2 shrink-0">
+                    <button onClick={handleRestoreSession} className={buttonSecondaryClass}>
+                      Restore
+                    </button>
+                    <button onClick={handleDiscardSession} className={buttonSecondaryClass}>
+                      Discard
+                    </button>
+                  </div>
+                </div>
+              )}
 
-          {pendingRestoreCount !== null && (
-            <div className={`mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 ${warningBannerClass}`}>
-              <p className={warningTextClass}>
-                A previous session with {pendingRestoreCount} product{pendingRestoreCount === 1 ? '' : 's'} was found.
-              </p>
-              <div className="flex gap-2 shrink-0">
-                <button onClick={handleRestoreSession} className={buttonSecondaryClass}>
-                  Restore
-                </button>
-                <button onClick={handleDiscardSession} className={buttonSecondaryClass}>
-                  Discard
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Top-level and impossible to miss, deliberately — distinct from
-              the per-row "One or more marketplaces failed" text in
-              QueueTable, which is a different, per-item concern (a bad
-              image, a transient error). Running out of credits mid-batch is
-              an account-level stop, not a per-row one, so it gets the same
-              prominent placement as the session banners above rather than
-              being buried inside the queue card. No purchase flow exists
-              yet, so "Buy more credits" goes to /contact (real, existing)
-              rather than a fabricated /billing route. */}
-          {creditsStoppedInfo && (
-            <div className={`mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 ${dangerBannerClass}`}>
-              <div>
-                <p className={`font-semibold ${dangerTextClass}`}>Generation stopped: you're out of credits.</p>
-                <p className={dangerTextClass}>
-                  {creditsStoppedInfo.completedPairs} of {creditsStoppedInfo.totalPairs} items completed.
-                </p>
-              </div>
-              <Link href="/contact" className={`${buttonPrimaryClass} shrink-0 text-center`}>
-                Buy more credits
-              </Link>
-            </div>
-          )}
-
-          {/* Grouped with the other transient status banners above (not
-              left trailing under whatever renders below it, which could be
-              the empty state right after a full export clears the queue) —
-              same bordered-banner shape as those, success-tinted with the
-              existing theme variables. */}
-          {downloadMessage && (
-            <div className={`mb-4 flex items-center gap-2 px-4 py-3 rounded-xl border border-[var(--success-border)] bg-[var(--success-bg)]`}>
-              <p className="text-sm text-[var(--success-text)]">✓ {downloadMessage}</p>
-            </div>
-          )}
-
-          {/* Milestone C11 — which marketplaces the readiness gate excluded
-              from the export the banner above just reported, and the real
-              reason for each (never a generic "skipped some marketplaces"). */}
-          {exportSkipped && exportSkipped.length > 0 && (
-            <div className={`mb-4 ${warningBannerClass}`}>
-              <p className={`${warningTextClass} font-medium mb-1`}>Skipped (not ready):</p>
-              <ul className="list-disc list-inside">
-                {exportSkipped.map(({ marketplace, reason }) => (
-                  <li key={marketplace} className={warningTextClass}>
-                    {MARKETPLACE_LABELS[marketplace]} — {reason}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {/* Milestone C15 — Action Center. Additive section above the
-              existing Listings table, not a new page/route. Purely a
-              read/present layer: computeCatalogRecommendations is pure and
-              synchronous (see its own header comment), and every button
-              here dispatches to handleExecuteRecommendation below, which
-              only ever calls an already-existing C9-C14 handler — nothing
-              here can fire a network/credit/mutation call on its own. */}
-          <ActionCenter
-            recommendations={recommendations}
-            hasProducts={draftProducts.length > 0}
-            loading={!sessionReady}
-            busy={generating || bulkRunning}
-            onExecute={handleExecuteRecommendation}
-          />
-
-          {/* Listings — the primary content of this column. Add Products is
-              the persistent sibling column to the left, not an action
-              triggered from here anymore. */}
-          <div className="flex-1 min-h-0 flex flex-col">
-            {sessionReady && draftProducts.length === 0 ? (
-              <WorkspaceEmptyState />
-            ) : (
-              <>
-                {draftProducts.length > 0 && (
-                  <CatalogFilterBar
-                    filters={catalogFilters}
-                    onFiltersChange={setCatalogFilters}
-                    sortKey={sortKey}
-                    onSortKeyChange={setSortKey}
-                    availableBrands={availableBrands}
-                    availableCategories={availableCategories}
-                    needsAttention={needsAttention}
-                    onClearFilters={() => setCatalogFilters(DEFAULT_PRODUCT_FILTERS)}
-                  />
-                )}
-                <BulkActionBar
-                  selectedCount={selectedCount}
-                  onClear={clearSelection}
-                  onAnalyze={handleBulkAnalyzeSelected}
-                  onGenerate={handleBulkGenerateSelected}
-                  onApprove={handleBulkApproveSelected}
-                  onExport={handleBulkExportSelected}
-                  canAnalyze={canBulkAnalyze}
-                  canGenerate={canBulkGenerate}
-                  canApprove={canBulkApprove}
-                  canExport={canBulkExport}
-                  busy={bulkRunning || generating}
-                  progressLabel={bulkProgressLabel}
-                />
-                {draftProducts.length > 0 && (
-                  <div className="mb-3 flex flex-wrap items-center gap-4">
-                    {/* Real counts of attempted (product, marketplace) pairs
-                        from computeListingSummary — the same per-row health
-                        computation QueueTable itself uses, just tallied.
-                        Never shown as a percentage or score. */}
-                    <p className={bodyTextClass}>
-                      <span className="font-semibold text-[var(--heading-text)]">{listingSummary.total}</span>{' '}
-                      Listing{listingSummary.total === 1 ? '' : 's'}
-                      {listingSummary.ready > 0 && (
-                        <>
-                          {' '}
-                          · <span className="text-[var(--success-text)]">{listingSummary.ready} Ready</span>
-                        </>
-                      )}
-                      {listingSummary.needsReview > 0 && (
-                        <>
-                          {' '}
-                          · <span className="text-[var(--warn-text)]">{listingSummary.needsReview} Needs Review</span>
-                        </>
-                      )}
-                      {listingSummary.missingData > 0 && (
-                        <>
-                          {' '}
-                          · <span className="text-[var(--warn-text)]">{listingSummary.missingData} Missing Data</span>
-                        </>
-                      )}
-                      {listingSummary.error > 0 && (
-                        <>
-                          {' '}
-                          · <span className="text-[var(--danger-text)]">{listingSummary.error} Error{listingSummary.error === 1 ? '' : 's'}</span>
-                        </>
-                      )}
+              {/* Top-level and impossible to miss, deliberately — running
+                  out of credits mid-batch is an account-level stop. No
+                  purchase flow exists yet, so "Buy more credits" goes to
+                  /contact (real, existing) rather than a fabricated route. */}
+              {creditsStoppedInfo && (
+                <div className={`flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 ${dangerBannerClass}`}>
+                  <div>
+                    <p className={`font-semibold ${dangerTextClass}`}>Generation stopped: you're out of credits.</p>
+                    <p className={dangerTextClass}>
+                      {creditsStoppedInfo.completedPairs} of {creditsStoppedInfo.totalPairs} items completed.
                     </p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {FILTER_OPTIONS.map((option) => {
-                        const isActive = readinessFilter === option.id
-                        return (
-                          <button
-                            key={option.id}
-                            type="button"
-                            onClick={() => setReadinessFilter(option.id)}
-                            aria-pressed={isActive}
-                            className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[var(--page-bg)] focus:ring-blue-500 ${
-                              isActive
-                                ? 'bg-blue-600 border-blue-600 text-white'
-                                : 'bg-[var(--secondary-btn-bg)] border-[var(--secondary-btn-border)] text-[var(--secondary-btn-text)] hover:bg-[var(--secondary-btn-bg-hover)]'
-                            }`}
-                          >
-                            {option.label}
-                          </button>
-                        )
-                      })}
-                    </div>
+                  </div>
+                  <Link href="/contact" className={`${buttonPrimaryClass} shrink-0 text-center`}>
+                    Buy more credits
+                  </Link>
+                </div>
+              )}
+
+              {downloadMessage && (
+                <div className={`flex items-center gap-2 px-4 py-3 rounded-xl border border-[var(--success-border)] bg-[var(--success-bg)]`}>
+                  <p className="text-sm text-[var(--success-text)]">✓ {downloadMessage}</p>
+                </div>
+              )}
+
+              {/* Milestone C11 — which marketplaces the readiness gate
+                  excluded from the export the banner above just reported,
+                  and the real reason for each. */}
+              {exportSkipped && exportSkipped.length > 0 && (
+                <div className={warningBannerClass}>
+                  <p className={`${warningTextClass} font-medium mb-1`}>Skipped (not ready):</p>
+                  <ul className="list-disc list-inside">
+                    {exportSkipped.map(({ marketplace, reason }) => (
+                      <li key={marketplace} className={warningTextClass}>
+                        {MARKETPLACE_LABELS[marketplace]} — {reason}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* CREATE HERO — "What do you want to create?" Three framings
+                  of the exact same AddProductsPanel/commitAddProduct
+                  pipeline (see openCreatePanel above): Create Product,
+                  Bulk Create, and Improve Existing Listing are not three
+                  separate features. */}
+              <div className={`p-6 flex flex-col gap-4 ${cardClass}`}>
+                <div>
+                  <h1 className={sectionHeadingClass}>Create your next listing</h1>
+                  <p className={bodyTextClass}>
+                    Give Tesolute whatever you already have — photos, a description, or an existing listing — and it'll turn
+                    it into marketplace-ready content
+                    {selectedClient ? (
+                      <>
+                        {' '}
+                        for <span className="font-medium text-[var(--heading-text)]">{selectedClient.client_name}</span>
+                      </>
+                    ) : null}
+                    .
+                  </p>
+                </div>
+
+                <AppHeader
+                  hasSession={hasSession}
+                  selectedMarketplaces={selectedMarketplaces}
+                  onToggleMarketplace={handleToggleMarketplace}
+                  marketplaceError={marketplaceError}
+                  marketplaceFlash={marketplaceFlash}
+                  marketplaceGroupRef={marketplaceSelectRef}
+                  selectedClientId={selectedClient?.id || ''}
+                  onSelectClient={setSelectedClient}
+                  onOpenBrandProfile={() => setShowBrandProfile(true)}
+                />
+
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => openCreatePanel('create')}
+                    className={showCreatePanel && createIntent === 'create' ? buttonPrimaryClass : buttonSecondaryClass}
+                  >
+                    Create Product
+                  </button>
+                  <button
+                    onClick={() => openCreatePanel('bulk')}
+                    className={showCreatePanel && createIntent === 'bulk' ? buttonPrimaryClass : buttonSecondaryClass}
+                  >
+                    Bulk Create
+                  </button>
+                  <button
+                    onClick={() => openCreatePanel('improve')}
+                    className={showCreatePanel && createIntent === 'improve' ? buttonPrimaryClass : buttonSecondaryClass}
+                  >
+                    Improve Existing Listing
+                  </button>
+                  {showCreatePanel && (
+                    <button onClick={() => setShowCreatePanel(false)} className={linkButtonClass}>
+                      Close
+                    </button>
+                  )}
+                </div>
+
+                {showCreatePanel && (
+                  <div className="flex flex-col gap-3">
+                    {createIntent === 'improve' && activeTab === 'manual' && (
+                      <p className={`${warningTextClass} px-3 py-2 rounded-lg ${warningBannerClass}`}>
+                        Paste your existing listing's title, bullets, or description below — Tesolute will analyze it and
+                        create improved, marketplace-ready content.
+                      </p>
+                    )}
+                    <AddProductsPanel
+                      activeTab={activeTab}
+                      onActiveTabChange={setActiveTab}
+                      brandName={brandName}
+                      onBrandNameChange={handleBrandNameChange}
+                      category={category}
+                      onCategoryChange={handleCategoryChange}
+                      description={description}
+                      onDescriptionChange={handleDescriptionChange}
+                      imageFile={imageFile}
+                      onImageFileChange={setImageFile}
+                      formPreviewUrl={formPreviewUrl}
+                      fileInputRef={fileInputRef}
+                      formError={formError}
+                      guestLimitReached={guestLimitReached}
+                      brandMismatchPending={brandMismatchPending}
+                      selectedClient={selectedClient}
+                      pendingImageUrl={pendingImageUrl}
+                      onCommitAddProduct={commitAddProduct}
+                      onCancelBrandMismatch={handleCancelBrandMismatch}
+                      onAddProduct={handleAddProduct}
+                      onAddImageOnlyProduct={handleAddImageOnlyProduct}
+                      onClearForm={handleClearForm}
+                      uploadingImage={uploadingImage}
+                      editingId={editingId}
+                      csvFile={csvFile}
+                      onCsvFileChange={handleCsvFileChange}
+                      csvFileInputRef={csvFileInputRef}
+                      csvSummary={csvSummary}
+                      isDragging={isDragging}
+                      onDragOver={handleDragOver}
+                      onDragLeave={handleDragLeave}
+                      onDrop={handleDrop}
+                      pendingCsvUpload={pendingCsvUpload}
+                      onUploadCsv={handleUploadCsv}
+                      onCsvAddWithoutBrandVoice={handleCsvAddWithoutBrandVoice}
+                      onCsvAddOnlyMatching={handleCsvAddOnlyMatching}
+                      onCsvAddAllWithBrandVoice={handleCsvAddAllWithBrandVoice}
+                      onCsvCancelMismatch={handleCsvCancelMismatch}
+                    />
                   </div>
                 )}
-                <QueueTable
-                  draftProducts={visibleProducts}
-                  totalProductCount={draftProducts.length}
-                  readinessFilter={readinessFilter}
-                  currentlyGenerating={currentlyGenerating}
-                  selectedMarketplaces={selectedMarketplaces}
-                  generating={generating}
-                  hasApproved={hasApproved}
-                  loading={!sessionReady}
-                  hasSession={hasSession}
-                  pendingCount={pendingCount}
-                  selectedIds={selectedProductIds}
-                  onToggleSelect={toggleSelectProduct}
-                  onToggleSelectAll={toggleSelectAllVisible}
-                  onGenerateAll={handleGenerateAll}
-                  onBulkApprove={handleBulkApprove}
-                  onDownloadApproved={handleOpenExportSummary}
-                  onView={(id, marketplace) => setViewingTarget({ productId: id, marketplace })}
-                  onEdit={handleEditProduct}
-                  onDelete={handleDeleteProduct}
-                  onRetry={handleRetryProductMarketplace}
-                />
-              </>
-            )}
-          </div>
-        </div>
+              </div>
+
+              {/* MY PRODUCTS — the primary object the seller thinks in
+                  terms of, not "my marketplace tasks." */}
+              <div className="flex flex-col gap-3">
+                <h2 className={sectionHeadingClass}>My Products</h2>
+                {sessionReady && draftProducts.length === 0 ? (
+                  <WorkspaceEmptyState onOpenCreate={() => openCreatePanel('create')} />
+                ) : (
+                  <>
+                    {draftProducts.length > 0 && (
+                      <CatalogFilterBar
+                        filters={catalogFilters}
+                        onFiltersChange={setCatalogFilters}
+                        sortKey={sortKey}
+                        onSortKeyChange={setSortKey}
+                        availableBrands={availableBrands}
+                        availableCategories={availableCategories}
+                        needsAttention={needsAttention}
+                        onClearFilters={() => setCatalogFilters(DEFAULT_PRODUCT_FILTERS)}
+                        readinessFilter={readinessFilter}
+                        onReadinessFilterChange={setReadinessFilter}
+                      />
+                    )}
+                    <BulkActionBar
+                      selectedCount={selectedCount}
+                      onClear={clearSelection}
+                      onAnalyze={handleBulkAnalyzeSelected}
+                      onGenerate={handleBulkGenerateSelected}
+                      onApprove={handleBulkApproveSelected}
+                      onExport={handleBulkExportSelected}
+                      canAnalyze={canBulkAnalyze}
+                      canGenerate={canBulkGenerate}
+                      canApprove={canBulkApprove}
+                      canExport={canBulkExport}
+                      busy={bulkRunning || generating}
+                      progressLabel={bulkProgressLabel}
+                    />
+                    <QueueTable
+                      draftProducts={visibleProducts}
+                      totalProductCount={draftProducts.length}
+                      readinessFilter={readinessFilter}
+                      currentlyGenerating={currentlyGenerating}
+                      selectedMarketplaces={selectedMarketplaces}
+                      generating={generating}
+                      hasApproved={hasApproved}
+                      loading={!sessionReady}
+                      hasSession={hasSession}
+                      pendingCount={pendingCount}
+                      selectedIds={selectedProductIds}
+                      onToggleSelect={toggleSelectProduct}
+                      onToggleSelectAll={toggleSelectAllVisible}
+                      recommendations={recommendations}
+                      onExecuteRecommendation={handleExecuteRecommendation}
+                      onGenerateAll={handleGenerateAll}
+                      onBulkApprove={handleBulkApprove}
+                      onDownloadApproved={handleOpenExportSummary}
+                      onView={(id, marketplace) => setViewingTarget({ productId: id, marketplace })}
+                      onEdit={handleEditProduct}
+                      onDelete={handleDeleteProduct}
+                    />
+                  </>
+                )}
+              </div>
+            </div>
           </div>
         </AppSidebar>
       </div>
