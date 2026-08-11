@@ -1,5 +1,6 @@
 import { SUPPORTED_MARKETPLACES } from './platformShapers'
 import type { GenerationMeta } from './listingHealth'
+import type { ProductIntelligence } from './productIntelligence'
 
 export type Marketplace = (typeof SUPPORTED_MARKETPLACES)[number]
 
@@ -67,6 +68,14 @@ export type DraftProduct = {
   // generation actually returns attributes (see computeGenerationMeta's
   // sibling `visualAttributes` in the API response).
   visualAttributes: Record<string, string | null> | null
+  // Milestone 32 (C9) — canonical Product Intelligence, additive/optional
+  // like serverId above: absent entirely for a product added before this
+  // shipped (until it's re-hydrated from the server or explicitly
+  // analyzed), present-but-null-status only after being fetched/reconciled.
+  // Distinct from visualAttributes above — that's a narrow, 4-key byproduct
+  // of ONE marketplace's generation call; this is the richer, pre-generation
+  // canonical layer, set via a dedicated "Analyze Product" action.
+  productIntelligence?: ProductIntelligence | null
 }
 
 function emptyMarketplaceRecord<T>(fill: T): Record<Marketplace, T> {

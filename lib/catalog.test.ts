@@ -8,7 +8,8 @@
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { createProduct, upsertListing, setApproval, recordExport, getCatalog, getExportHistory } from './catalog'
+import { createProduct, upsertListing, setApproval, recordExport, getCatalog, getExportHistory, getProductById, setProductIntelligence } from './catalog'
+import { buildCompletedIntelligence, PRODUCT_INTELLIGENCE_FIELD_KEYS } from './productIntelligence'
 
 // Minimal fake of the subset of the Supabase client's fluent query builder
 // these functions actually call. Records every call so tests can assert on
@@ -287,4 +288,120 @@ test('getExportHistory surfaces a Supabase error rather than swallowing it', asy
   const dbError = { message: 'permission denied', code: '42501' }
   const client = makeExportHistoryMockClient({ userId: 'user-a', result: { data: null, error: dbError } })
   await assert.rejects(() => getExportHistory(client), (err: any) => err === dbError)
+})
+
+// Milestone 32 (C9) — getProductById's mock: select().eq().maybeSingle().
+function makeProductByIdMockClient(opts: { userId: string | null; result?: { data: any; error: any } }) {
+  return {
+    from(_table: string) {
+      return {
+        select(_columns?: any) {
+          return {
+            eq(_column: string, _value: any) {
+              return {
+                maybeSingle() {
+                  return Promise.resolve(opts.result ?? { data: null, error: null })
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    auth: {
+      getUser: () =>
+        Promise.resolve(
+          opts.userId ? { data: { user: { id: opts.userId } }, error: null } : { data: { user: null }, error: null }
+        )
+    }
+  } as any
+}
+
+test('getProductById returns the row when it exists and is owned (RLS-scoped)', async () => {
+  const row = { id: 'product-1', owner_user_id: 'user-a', brand_name: 'Acme', product_intelligence: null }
+  const client = makeProductByIdMockClient({ userId: 'user-a', result: { data: row, error: null } })
+
+  const result = await getProductById('product-1', client)
+  assert.deepEqual(result, row)
+})
+
+test('getProductById returns null for a product that does not exist or is not owned — RLS makes these indistinguishable, which is the point', async () => {
+  const client = makeProductByIdMockClient({ userId: 'user-a', result: { data: null, error: null } })
+  const result = await getProductById('someone-elses-product', client)
+  assert.equal(result, null)
+})
+
+test('getProductById rejects when there is no authenticated session', async () => {
+  const client = makeProductByIdMockClient({ userId: null })
+  await assert.rejects(() => getProductById('product-1', client))
+})
+
+// Milestone 32 (C9) — setProductIntelligence's mock: update().eq().select().single().
+function makeSetIntelligenceMockClient(opts: { userId: string | null; result?: { data: any; error: any } }) {
+  const calls: { op: string; payload?: any }[] = []
+  return {
+    from(_table: string) {
+      return {
+        update(payload: any) {
+          calls.push({ op: 'update', payload })
+          return {
+            eq(_column: string, value: any) {
+              calls.push({ op: 'eq', payload: value })
+              return {
+                select() {
+                  return {
+                    single() {
+                      return Promise.resolve(opts.result ?? { data: null, error: null })
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    auth: {
+      getUser: () =>
+        Promise.resolve(
+          opts.userId ? { data: { user: { id: opts.userId } }, error: null } : { data: { user: null }, error: null }
+        )
+    },
+    __calls: calls
+  } as any
+}
+
+function fullIntelligenceData() {
+  const data: Record<string, any> = {}
+  for (const key of PRODUCT_INTELLIGENCE_FIELD_KEYS) data[key] = { value: 'x', confidence: 'high' }
+  return data as any
+}
+
+test('setProductIntelligence updates exactly product_intelligence, targeting the given product id, never a caller-supplied owner', async () => {
+  const intelligence = buildCompletedIntelligence(fullIntelligenceData(), [])
+  const row = { id: 'product-1', owner_user_id: 'user-a', product_intelligence: intelligence }
+  const client = makeSetIntelligenceMockClient({ userId: 'user-a', result: { data: row, error: null } })
+
+  const result = await setProductIntelligence('product-1', intelligence, client)
+
+  assert.deepEqual(result, row)
+  const updateCall = client.__calls.find((c: any) => c.op === 'update')
+  assert.deepEqual(updateCall.payload, { product_intelligence: intelligence })
+  assert.deepEqual(Object.keys(updateCall.payload), ['product_intelligence']) // never owner_user_id
+  const eqCall = client.__calls.find((c: any) => c.op === 'eq')
+  assert.equal(eqCall.payload, 'product-1')
+})
+
+test('setProductIntelligence rejects when there is no authenticated session', async () => {
+  const client = makeSetIntelligenceMockClient({ userId: null })
+  await assert.rejects(() => setProductIntelligence('product-1', buildCompletedIntelligence(fullIntelligenceData(), []), client))
+})
+
+test('setProductIntelligence surfaces a Supabase error (e.g. RLS rejecting an unowned product) rather than swallowing it', async () => {
+  const dbError = { message: 'no rows returned', code: 'PGRST116' }
+  const client = makeSetIntelligenceMockClient({ userId: 'user-a', result: { data: null, error: dbError } })
+  await assert.rejects(
+    () => setProductIntelligence('not-mine', buildCompletedIntelligence(fullIntelligenceData(), []), client),
+    (err: any) => err === dbError
+  )
 })

@@ -6,6 +6,7 @@ import JSZip from 'jszip'
 import { pick } from '@/lib/csvMapping'
 import { exportColumns, flattenRow } from '@/lib/exportShapers'
 import { type Client } from '@/components/ClientSelector'
+import BrandProfileModal from '@/components/BrandProfileModal'
 import StatusBadge from '@/components/StatusBadge'
 import ProductThumbnail from '@/components/ProductThumbnail'
 import AppHeader from '@/components/AppHeader'
@@ -19,6 +20,8 @@ import { computeListingHealth, FIELD_SPECS, type GenerationMeta } from '@/lib/li
 import { createClient } from '@/lib/supabase/client'
 import { createProduct, upsertListing, setApproval, recordExport, getCatalog } from '@/lib/catalog'
 import { reconcileCatalog } from '@/lib/catalogReconciliation'
+import { PRODUCT_INTELLIGENCE_FIELD_KEYS, type ProductIntelligence, type ProductIntelligenceFieldKey } from '@/lib/productIntelligence'
+import { evaluateMarketplaceExportReadiness, readyMarketplaces, type MarketplaceExportReadiness, type ExportCandidateItem } from '@/lib/exportReadiness'
 import CreditsBalance, { notifyCreditsChanged } from '@/components/CreditsBalance'
 import { CREDIT_COSTS } from '@/lib/creditCosts'
 import { useFocusTrap } from '@/lib/useFocusTrap'
@@ -157,6 +160,23 @@ function computeExportableCounts(draftProducts: DraftProduct[]): { marketplace: 
   }))
 }
 
+// Milestone C11 — the exact inputs lib/exportReadiness.ts's
+// evaluateMarketplaceExportReadiness() needs for one marketplace, gathered
+// from every approved row for that marketplace (same eligibility rule
+// computeExportableCounts above already uses — approved[marketplace], not
+// health/Ready status). Pure extraction, no marketplace-rule logic lives
+// here; that's entirely inside the C10 adapter this data gets handed to.
+function gatherExportCandidateItems(draftProducts: DraftProduct[], marketplace: Marketplace): ExportCandidateItem[] {
+  return draftProducts
+    .filter((p) => p.approved[marketplace])
+    .map((p) => ({
+      productId: p.id,
+      content: p.generatedContent[marketplace],
+      generationError: p.generationError[marketplace],
+      meta: p.generationMeta[marketplace]
+    }))
+}
+
 type FieldGroup = 'title' | 'bullets' | 'description'
 const FIELD_GROUPS: Record<Marketplace, Partial<Record<FieldGroup, string[]>>> = {
   amazon: { title: ['title'], bullets: ['bullets'], description: ['description'] },
@@ -273,26 +293,52 @@ function FieldSection({
 // derived from the product as a whole), so every per-marketplace read below
 // — content, error, health, regenerate, approve — reads that one
 // marketplace's own state and nothing else.
+// Milestone 32 (C9) — small formatting helper for a ProductIntelligenceField
+// value (string | string[] | null) shared by every row in the Product
+// Intelligence section below. Never fabricates a value for null — renders
+// the same "—" placeholder convention already used elsewhere in this file.
+function formatIntelligenceValue(value: string | string[] | null): string {
+  if (value == null) return '—'
+  if (Array.isArray(value)) return value.length > 0 ? value.join(', ') : '—'
+  return value.trim() || '—'
+}
+
+const INTELLIGENCE_FIELD_LABELS: Record<ProductIntelligenceFieldKey, string> = {
+  product_type: 'Product type',
+  material: 'Material',
+  pattern: 'Pattern',
+  colors: 'Colors',
+  style: 'Style',
+  occasion: 'Occasion',
+  target_customer: 'Target customer',
+  key_selling_points: 'Key selling points',
+  search_keywords: 'Search keywords'
+}
+
 function GeneratedListingDrawer({
   product,
   marketplace,
   currentlyGenerating,
   failedRegenFieldGroup,
+  isAnalyzing,
   onClose,
   onApproveMarketplace,
   onUnapproveMarketplace,
   onRetryMarketplace,
-  onRegenerateField
+  onRegenerateField,
+  onAnalyzeProduct
 }: {
   product: DraftProduct
   marketplace: Marketplace
   currentlyGenerating: { productId: string; marketplace: Marketplace } | null
   failedRegenFieldGroup: Record<string, FieldGroup | 'full'>
+  isAnalyzing: boolean
   onClose: () => void
   onApproveMarketplace: (id: string, marketplace: Marketplace) => void
   onUnapproveMarketplace: (id: string, marketplace: Marketplace) => void
   onRetryMarketplace: (id: string, marketplace: Marketplace) => void
   onRegenerateField: (id: string, marketplace: Marketplace, fieldGroup?: FieldGroup) => void
+  onAnalyzeProduct: (id: string) => void
 }) {
   const attemptedMarketplaces = [marketplace]
 
@@ -329,6 +375,70 @@ function GeneratedListingDrawer({
             <p className="font-medium text-[var(--heading-text)]">{product.brandName}</p>
             <p className="text-sm text-[var(--muted-text)]">{product.category}</p>
           </div>
+        </div>
+
+        {/* Milestone 32 (C9) — the canonical Product Intelligence section.
+            Content-first even here: the trigger/status/re-analyze action
+            sits on one compact header line, the fields themselves render as
+            plain label/value rows (same visual weight as "Detected from
+            image" below), and missing-information is a small warning list —
+            never a score dashboard preceding the product's own data. */}
+        <div className="mb-4 pb-4 border-b border-[var(--card-border)]">
+          <div className="flex items-center justify-between mb-1">
+            <p className={labelClass}>Product Intelligence</p>
+            <button
+              onClick={() => onAnalyzeProduct(product.id)}
+              disabled={isAnalyzing || !product.serverId}
+              title={!product.serverId ? 'Product is still being saved — try again in a moment' : undefined}
+              className={buttonSecondarySmallClass}
+            >
+              {isAnalyzing
+                ? 'Analyzing…'
+                : product.productIntelligence?.status === 'completed'
+                  ? 'Re-analyze'
+                  : product.productIntelligence?.status === 'failed'
+                    ? 'Retry Analysis'
+                    : 'Analyze Product'}
+            </button>
+          </div>
+
+          {(!product.productIntelligence || product.productIntelligence.status === 'not_started') && !isAnalyzing && (
+            <p className="text-xs text-[var(--muted-text)]">Not analyzed yet.</p>
+          )}
+
+          {product.productIntelligence?.status === 'failed' && (
+            <p className="text-xs text-[var(--danger-text)]">
+              Analysis failed{product.productIntelligence.error ? `: ${product.productIntelligence.error}` : '.'}
+            </p>
+          )}
+
+          {product.productIntelligence?.data && (
+            <div className="mt-1 flex flex-col gap-1">
+              {PRODUCT_INTELLIGENCE_FIELD_KEYS.map((key) => {
+                const field = product.productIntelligence!.data![key]
+                return (
+                  <p key={key} className="text-sm text-[var(--body-text)]">
+                    <span className="text-[var(--muted-text)]">{INTELLIGENCE_FIELD_LABELS[key]}: </span>
+                    {formatIntelligenceValue(field.value)}
+                    <span className="text-xs text-[var(--muted-text)]"> ({field.confidence} confidence)</span>
+                  </p>
+                )
+              })}
+
+              {product.productIntelligence.missing_information.length > 0 && (
+                <div className={`mt-2 ${warningBannerClass}`}>
+                  <p className={`${warningTextClass} font-medium mb-1`}>Missing information</p>
+                  <ul className="list-disc list-inside">
+                    {product.productIntelligence.missing_information.map((item, i) => (
+                      <li key={i} className={warningTextClass}>
+                        {item}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {hasVisualAttributes && (
@@ -756,22 +866,42 @@ function ExportGateModal({ onClose, onSignIn }: { onClose: () => void; onSignIn:
 // exportable. The Ready/Needs Review/Missing Data/Error breakdown shown here
 // is purely informational context (via the same computeListingSummary()
 // QueueTable's own filters use), not a second eligibility rule.
+// Milestone C11 — one readiness row's icon/color, derived purely from the
+// same status the gate already computed (never a second judgment made
+// here). MISSING_FIELDS reads as an amber warning, NOT_READY as a hard
+// error, matching the same severity distinction lib/exportReadiness.ts
+// already carried over from C10's adapter.validate().
+function readinessStatusDisplay(status: MarketplaceExportReadiness['status']): { icon: string; label: string; className: string } {
+  if (status === 'READY') return { icon: '✓', label: 'Ready', className: 'text-[var(--success-text)]' }
+  if (status === 'MISSING_FIELDS') return { icon: '⚠', label: 'Fields missing', className: 'text-[var(--warn-text)]' }
+  return { icon: '✕', label: 'Not ready', className: 'text-[var(--danger-text)]' }
+}
+
 function ExportSummaryModal({
   exportableCounts,
   summary,
   exportError,
+  readiness,
   onClose,
-  onConfirm
+  onConfirmReady
 }: {
   exportableCounts: { marketplace: Marketplace; count: number }[]
   summary: { total: number; ready: number; needsReview: number; missingData: number; error: number }
   exportError: string | null
+  readiness: MarketplaceExportReadiness[] | null
   onClose: () => void
-  onConfirm: () => void
+  onConfirmReady: (marketplaces: Marketplace[]) => void
 }) {
   const containerRef = useRef<HTMLDivElement>(null)
   useFocusTrap(containerRef, onClose)
   const totalExportable = exportableCounts.reduce((sum, c) => sum + c.count, 0)
+  // Milestone C11 — §11/§21/§22 (C11-AC21/AC22): readiness is recomputed
+  // fresh every time this modal opens (see the effect in the parent) and is
+  // null until that finishes, which is what drives the loading state and
+  // keeps Export All Ready disabled until real results exist — never a
+  // fabricated delay for something that already resolved.
+  const isCheckingReadiness = totalExportable > 0 && readiness === null
+  const ready = readiness ? readyMarketplaces(readiness) : []
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center">
@@ -782,14 +912,16 @@ function ExportSummaryModal({
         role="dialog"
         aria-modal="true"
         aria-label="Export listings"
-        className={`relative p-6 max-w-sm w-full mx-4 focus:outline-none ${cardClass}`}
+        className={`relative p-6 max-w-sm w-full mx-4 max-h-[85vh] overflow-y-auto focus:outline-none ${cardClass}`}
       >
         <h2 className={`${sectionHeadingClass} mb-3`}>Export Listings</h2>
 
         {totalExportable === 0 ? (
           <>
             <p className={`${bodyTextClass} mb-1`}>No listings are ready to export yet.</p>
-            <p className="mb-4 text-sm text-[var(--muted-text)]">Generate and review your listings before exporting.</p>
+            <p className="mb-4 text-sm text-[var(--muted-text)]">
+              Generate, review, and approve at least one marketplace's listing before exporting.
+            </p>
           </>
         ) : (
           <>
@@ -814,6 +946,41 @@ function ExportSummaryModal({
                 Data, {summary.error} Error.
               </p>
             )}
+
+            {/* Milestone C11 — the readiness gate itself: one row per
+                marketplace that has at least one approved listing, backed
+                entirely by the C10 adapter (lib/exportReadiness.ts calls
+                getMarketplaceAdapter(...).validate() — no marketplace rule
+                is re-derived here). */}
+            <div className="mb-4 pb-4 border-b border-[var(--card-border)]">
+              <p className={`${labelClass} mb-1`}>Marketplace readiness</p>
+              {isCheckingReadiness ? (
+                <p className={bodyTextClass}>Checking marketplace readiness…</p>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {(readiness ?? []).map((r) => {
+                    const display = readinessStatusDisplay(r.status)
+                    return (
+                      <div key={r.marketplace} className="text-sm">
+                        <p className="font-medium text-[var(--heading-text)]">
+                          {MARKETPLACE_LABELS[r.marketplace]}{' '}
+                          <span className={display.className}>
+                            {display.icon} {r.status === 'MISSING_FIELDS' ? `${r.issues.length} field${r.issues.length === 1 ? '' : 's'} missing` : display.label}
+                          </span>
+                        </p>
+                        {r.issues.length > 0 && (
+                          <ul className="ml-4 list-disc list-inside text-xs text-[var(--muted-text)]">
+                            {r.issues.map((issue, i) => (
+                              <li key={i}>{issue.field}{issue.message ? ` — ${issue.message}` : ''}</li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
           </>
         )}
 
@@ -828,8 +995,12 @@ function ExportSummaryModal({
             {totalExportable === 0 ? 'Close' : 'Cancel'}
           </button>
           {totalExportable > 0 && (
-            <button onClick={onConfirm} className={buttonPrimaryClass}>
-              Export Listings
+            <button
+              onClick={() => onConfirmReady(ready)}
+              disabled={isCheckingReadiness || ready.length === 0}
+              className={buttonPrimaryClass}
+            >
+              Export All Ready
             </button>
           )}
         </div>
@@ -886,6 +1057,8 @@ export default function CatalogueWorkspace() {
   const [pendingRestoreCount, setPendingRestoreCount] = useState<number | null>(null)
   const [sessionReady, setSessionReady] = useState(false)
   const [selectedClient, setSelectedClient] = useState<Client | null>(null)
+  // Milestone C12 — Edit Brand Profile modal.
+  const [showBrandProfile, setShowBrandProfile] = useState(false)
   // Saved session read from localStorage on mount, held here until we also know
   // whether the visitor is authenticated — that decides auto-restore vs. banner.
   const [savedSessionData, setSavedSessionData] = useState<any | null>(null)
@@ -920,6 +1093,13 @@ export default function CatalogueWorkspace() {
   const [currentlyGenerating, setCurrentlyGenerating] = useState<{ productId: string; marketplace: Marketplace } | null>(
     null
   )
+  // Milestone 32 (C9) — client-side single-flight guard, same purpose as
+  // currentlyGenerating above: disables the "Analyze Product" button for the
+  // one product currently being enriched, so a double-click can't fire two
+  // concurrent requests for the same product from this tab. The server route
+  // has its own independent 'processing'-status check for the same reason
+  // (a second tab/device, or a request that outlives this component).
+  const [enrichingProductId, setEnrichingProductId] = useState<string | null>(null)
   // Milestone 22 (Step C2) — memoizes the in-flight/completed catalog_products
   // creation per DraftProduct.id, keyed by the stable client-local `id` (never
   // the possibly-stale `serverId` snapshot a caller might be holding). A ref,
@@ -969,6 +1149,15 @@ export default function CatalogueWorkspace() {
   // existing sign-in/marketplace gates pass, before the real download runs.
   const [showExportSummary, setShowExportSummary] = useState(false)
   const [exportError, setExportError] = useState<string | null>(null)
+  // Milestone C11 — Export Readiness Gate. null means "not yet computed for
+  // this modal opening" (renders as a brief loading state, matches §11);
+  // recomputed fresh every time the modal opens so approving/regenerating a
+  // listing between two export attempts is always reflected.
+  const [exportReadiness, setExportReadiness] = useState<MarketplaceExportReadiness[] | null>(null)
+  // Set once, right after a successful export, alongside the existing
+  // downloadMessage banner — which marketplaces the readiness gate excluded
+  // from that specific export and why. Cleared on the next export attempt.
+  const [exportSkipped, setExportSkipped] = useState<{ marketplace: Marketplace; reason: string }[] | null>(null)
 
   // Client-side only, purely for UI: /workspace is public, so this never gates
   // access — it just decides whether to show the Brand/Clients dropdown at all,
@@ -1084,7 +1273,23 @@ export default function CatalogueWorkspace() {
 
     getCatalog()
       .then((server) => {
-        setDraftProducts((prev) => reconcileCatalog(prev, server, computeProductStatus))
+        setDraftProducts((prev) => {
+          const reconciled = reconcileCatalog(prev, server, computeProductStatus)
+          // Milestone 32 (C9) — product_intelligence is deliberately NOT part
+          // of C4's reconciliation contract (lib/catalogReconciliation.ts is
+          // untouched by this milestone, same as every prior C-file). This is
+          // a separate, thin pass applied after it: matches each reconciled
+          // product to its already-fetched server row by serverId and
+          // carries product_intelligence through so an earlier enrichment
+          // survives a reload, instead of only living in this session's
+          // in-memory state.
+          const intelligenceByServerId = new Map(server.products.map((p) => [p.id, p.product_intelligence]))
+          return reconciled.map((p) =>
+            p.serverId && intelligenceByServerId.has(p.serverId)
+              ? { ...p, productIntelligence: intelligenceByServerId.get(p.serverId) }
+              : p
+          )
+        })
       })
       .catch((err: any) => {
         // Rule 14 — fail open to whatever the existing local-restore flow
@@ -1409,6 +1614,26 @@ export default function CatalogueWorkspace() {
 
     setDraftProducts((prev) => [...prev, newProduct])
 
+    // Milestone 30 (C8) — same fire-and-forget, best-effort persistence
+    // convention already established for generation (persistGenerationToCatalog
+    // below): never awaited, a failure here must never block adding the
+    // product locally or surface as a user-facing error. Routes through the
+    // exact same ensureServerProduct used at generation time (Step C2), so a
+    // product added here and later generated never double-creates its
+    // catalog_products row — ensureServerProduct's own serverId/in-flight-map
+    // checks (see its definition below) already de-dupe that race. Guests
+    // are skipped entirely, matching every other hasSession-gated catalog
+    // write in this file; their products stay local-only, unchanged from
+    // before this milestone.
+    if (hasSession) {
+      void ensureServerProduct(newProduct).catch((err: any) => {
+        console.error(
+          `Catalog persistence: failed to create catalog_products for newly added product ${newProduct.id}:`,
+          err?.message ?? err
+        )
+      })
+    }
+
     setDescription('')
     setImageFile(null)
     if (fileInputRef.current) {
@@ -1512,6 +1737,23 @@ export default function CatalogueWorkspace() {
 
   function commitCsvUpload(products: DraftProduct[], fileName: string, total: number) {
     setDraftProducts((prev) => [...prev, ...products])
+
+    // Milestone 30 (C8) — same convention as commitAddProduct above, applied
+    // per row: fire-and-forget, best-effort, guests skipped. Each row goes
+    // through its own independent ensureServerProduct call/promise (keyed by
+    // that row's own id in serverProductPromises), so one row's failure
+    // can't affect any other row in the same CSV batch.
+    if (hasSession) {
+      for (const product of products) {
+        void ensureServerProduct(product).catch((err: any) => {
+          console.error(
+            `Catalog persistence: failed to create catalog_products for CSV row (product ${product.id}):`,
+            err?.message ?? err
+          )
+        })
+      }
+    }
+
     setCsvSummary({
       fileName,
       total,
@@ -1675,6 +1917,39 @@ export default function CatalogueWorkspace() {
     await runGeneration(id, marketplace)
   }
 
+  // Milestone 32 (C9) — "Analyze Product" in the review drawer. Requires
+  // serverId (a catalog_products row must already exist — true for every
+  // authenticated add since C8's eager creation, never true for a guest,
+  // matching the fact that the enrichment API operates on a persisted row
+  // and derives ownership from the session, not from anything in this
+  // request body). Does not block or affect generation in any way if it
+  // fails — errors are surfaced via draftProducts' own productIntelligence
+  // status field (rendered in the drawer), never a thrown/alerted error.
+  async function handleAnalyzeProduct(id: string) {
+    const product = draftProducts.find((p) => p.id === id)
+    if (!product?.serverId || enrichingProductId) return
+
+    setEnrichingProductId(id)
+    try {
+      const res = await fetch('/api/enrich-product', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ productId: product.serverId })
+      })
+      const data = await res.json().catch(() => null)
+      const intelligence: ProductIntelligence | undefined = data?.productIntelligence
+      if (intelligence) {
+        setDraftProducts((prev) => prev.map((p) => (p.id === id ? { ...p, productIntelligence: intelligence } : p)))
+      } else if (!res.ok) {
+        console.error(`Product intelligence: enrichment request failed for product ${id}:`, data?.error ?? res.status)
+      }
+    } catch (err: any) {
+      console.error(`Product intelligence: enrichment request failed for product ${id}:`, err?.message ?? err)
+    } finally {
+      setEnrichingProductId(null)
+    }
+  }
+
   // Drawer's Regenerate Title/Bullets/Description/Entire Listing buttons —
   // fieldGroup undefined means "entire listing," same call as a normal
   // retry above, just exposed with a name that matches what the button says.
@@ -1800,7 +2075,14 @@ export default function CatalogueWorkspace() {
           // marketplace-specific constraint) instead of the generic
           // full-listing one — undefined means "entire listing," same as
           // every other caller of this function.
-          fieldGroup
+          fieldGroup,
+          // Milestone 32 (C9) — only ever sent when a completed analysis
+          // exists; omitted (undefined, dropped by JSON.stringify) for
+          // 'not_started'/'processing'/'failed' or when the product has
+          // never been analyzed at all, so the route's existing behavior is
+          // completely unchanged whenever intelligence isn't available
+          // (C9-AC14).
+          productIntelligence: product.productIntelligence?.status === 'completed' ? product.productIntelligence.data : undefined
         })
       })
       const data = await res.json()
@@ -2008,13 +2290,43 @@ export default function CatalogueWorkspace() {
     }
     if (!requireMarketplace()) return
     setExportError(null)
+    // Milestone C11 — null until the effect below computes it fresh for
+    // this opening; the modal shows a brief "Checking marketplace
+    // readiness…" state and keeps Export All Ready disabled until then
+    // (§11/§21, C11-AC21/AC22).
+    setExportReadiness(null)
+    setExportSkipped(null)
     setShowExportSummary(true)
   }
 
-  async function performExport() {
+  // Milestone C11 — computed once per modal opening, from whichever
+  // marketplaces currently have at least one approved row (the same set
+  // computeExportableCounts already surfaces). Pure, synchronous,
+  // local-data-only — no network/AI call, so this always resolves on the
+  // very next render after the modal opens; modeled as an effect (rather
+  // than computed inline during render) specifically so the "checking"
+  // state in the modal is a real, honest render frame and not a fabricated
+  // spinner for work that already finished.
+  useEffect(() => {
+    if (!showExportSummary) return
+    const marketplacesInPlay = computeExportableCounts(draftProducts).map((c) => c.marketplace)
+    const results = marketplacesInPlay.map((m) =>
+      evaluateMarketplaceExportReadiness(m, gatherExportCandidateItems(draftProducts, m))
+    )
+    setExportReadiness(results)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showExportSummary])
+
+  // Milestone C11 — `marketplaces` is the READY subset from the readiness
+  // gate (never the full SUPPORTED_MARKETPLACES list) — a NOT_READY or
+  // MISSING_FIELDS marketplace's approved rows are simply never visited by
+  // this loop, so they can't reach flattenRow/recordExport/the
+  // queue-clearing logic below no matter what. This is the one and only
+  // call site; there is no path that bypasses the gate.
+  async function performExport(marketplaces: Marketplace[]) {
     const flattenedRows: { id: string; marketplace: Marketplace; row: Record<string, string> }[] = []
     for (const p of draftProducts) {
-      for (const marketplace of SUPPORTED_MARKETPLACES) {
+      for (const marketplace of marketplaces) {
         if (!p.approved[marketplace]) continue
         const row = flattenRow(marketplace, p.generatedContent[marketplace])
         if (row) flattenedRows.push({ id: p.id, marketplace, row })
@@ -2199,6 +2511,14 @@ export default function CatalogueWorkspace() {
 
       const summary = `Exported ${flattenedRows.length} ${exportedLabel}`
       setDownloadMessage(detailParts.length > 0 ? `${summary} — ${detailParts.join('; ')}` : summary)
+      // Milestone C11 — everything the readiness gate excluded from THIS
+      // export, with its actual reason (first issue's message, matching
+      // what the gate showed before the user clicked Export All Ready) —
+      // not a generic "some marketplaces were skipped."
+      const skipped = (exportReadiness ?? [])
+        .filter((r) => r.status !== 'READY')
+        .map((r) => ({ marketplace: r.marketplace, reason: r.issues[0]?.message ?? 'not ready' }))
+      setExportSkipped(skipped.length > 0 ? skipped : null)
       setShowExportSummary(false)
     } catch {
       setExportError('Export failed - approved listings were not cleared. Please try again.')
@@ -2314,6 +2634,7 @@ export default function CatalogueWorkspace() {
             marketplaceGroupRef={marketplaceSelectRef}
             selectedClientId={selectedClient?.id || ''}
             onSelectClient={setSelectedClient}
+            onOpenBrandProfile={() => setShowBrandProfile(true)}
           />
 
           {outdatedSessionDiscarded && (
@@ -2372,6 +2693,22 @@ export default function CatalogueWorkspace() {
           {downloadMessage && (
             <div className={`mb-4 flex items-center gap-2 px-4 py-3 rounded-xl border border-[var(--success-border)] bg-[var(--success-bg)]`}>
               <p className="text-sm text-[var(--success-text)]">✓ {downloadMessage}</p>
+            </div>
+          )}
+
+          {/* Milestone C11 — which marketplaces the readiness gate excluded
+              from the export the banner above just reported, and the real
+              reason for each (never a generic "skipped some marketplaces"). */}
+          {exportSkipped && exportSkipped.length > 0 && (
+            <div className={`mb-4 ${warningBannerClass}`}>
+              <p className={`${warningTextClass} font-medium mb-1`}>Skipped (not ready):</p>
+              <ul className="list-disc list-inside">
+                {exportSkipped.map(({ marketplace, reason }) => (
+                  <li key={marketplace} className={warningTextClass}>
+                    {MARKETPLACE_LABELS[marketplace]} — {reason}
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
 
@@ -2471,11 +2808,27 @@ export default function CatalogueWorkspace() {
           marketplace={viewingTarget.marketplace}
           currentlyGenerating={currentlyGenerating}
           failedRegenFieldGroup={failedRegenFieldGroup}
+          isAnalyzing={enrichingProductId === viewingProduct.id}
           onClose={() => setViewingTarget(null)}
           onApproveMarketplace={handleApproveMarketplace}
           onUnapproveMarketplace={handleUnapproveMarketplace}
           onRetryMarketplace={handleRetryProductMarketplace}
           onRegenerateField={handleRegenerateField}
+          onAnalyzeProduct={handleAnalyzeProduct}
+        />
+      )}
+
+      {showBrandProfile && selectedClient && (
+        <BrandProfileModal
+          brand={selectedClient}
+          onClose={() => setShowBrandProfile(false)}
+          onSaved={(updated) => {
+            // Milestone C12 — keeps this session's selectedClient (used
+            // directly as brandGuidelines in generation, see
+            // generateForProductMarketplace) in sync with the just-saved
+            // profile, without requiring a reload.
+            setSelectedClient(updated)
+          }}
         />
       )}
 
@@ -2493,11 +2846,12 @@ export default function CatalogueWorkspace() {
           exportableCounts={computeExportableCounts(draftProducts)}
           summary={listingSummary}
           exportError={exportError}
+          readiness={exportReadiness}
           onClose={() => {
             setShowExportSummary(false)
             setExportError(null)
           }}
-          onConfirm={performExport}
+          onConfirmReady={(marketplaces) => performExport(marketplaces)}
         />
       )}
     </div>

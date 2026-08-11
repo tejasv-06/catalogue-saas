@@ -3,11 +3,27 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { buttonSecondaryClass, cardClass, inputClass, selectClass } from '@/lib/uiClasses'
+import type { MarketplacePreferences } from '@/lib/brands'
 
+// Milestone C12 — widened to the brand profile fields added to `clients`
+// (supabase/migrations/20260810_07_brand_profile.sql). Purely a type
+// change: fetchClients() below already does select('*'), so these fields
+// were already arriving over the wire — only their type was previously
+// narrower than the real row shape. All new fields are optional so a row
+// fetched before this migration was applied (impossible in practice once
+// applied, but matches this codebase's existing defensive convention for
+// additive columns) still type-checks.
 export type Client = {
   id: string
   client_name: string
   brand_guidelines: string | null
+  brand_identity?: string | null
+  brand_voice?: string | null
+  target_audience?: string | null
+  product_categories?: string[] | null
+  positioning?: string | null
+  marketplace_preferences?: MarketplacePreferences | null
+  updated_at?: string
 }
 
 const NEW_CLIENT_VALUE = '__new__'

@@ -4,7 +4,7 @@ import type { RefObject } from 'react'
 import ClientSelector, { type Client } from '@/components/ClientSelector'
 import { SUPPORTED_MARKETPLACES, MARKETPLACE_LABELS } from '@/lib/platformShapers'
 import type { Marketplace } from '@/lib/types'
-import { labelClass } from '@/lib/uiClasses'
+import { labelClass, linkButtonClass } from '@/lib/uiClasses'
 
 // Slim top bar for the right panel — logo, usage/credits, theme, and logout
 // all live in AppSidebar now (shared with /audit). This keeps only what's
@@ -20,7 +20,8 @@ export default function AppHeader({
   marketplaceFlash,
   marketplaceGroupRef,
   selectedClientId,
-  onSelectClient
+  onSelectClient,
+  onOpenBrandProfile
 }: {
   hasSession: boolean
   selectedMarketplaces: Marketplace[]
@@ -30,6 +31,10 @@ export default function AppHeader({
   marketplaceGroupRef: RefObject<HTMLDivElement | null>
   selectedClientId: string
   onSelectClient: (client: Client | null) => void
+  // Milestone C12 — only ever called for an already-selected brand; the
+  // button below doesn't render at all otherwise, so this is never invoked
+  // with no active brand.
+  onOpenBrandProfile: () => void
 }) {
   return (
     <div className="mb-6 flex flex-wrap items-end gap-6">
@@ -68,7 +73,17 @@ export default function AppHeader({
       {hasSession && (
         <div className="flex flex-col gap-1">
           <p className={labelClass}>Brand Voice</p>
-          <ClientSelector selectedClientId={selectedClientId} onSelectClient={onSelectClient} />
+          <div className="flex items-center gap-3">
+            <ClientSelector selectedClientId={selectedClientId} onSelectClient={onSelectClient} />
+            {/* Milestone C12 — only shown once a real brand is active, so
+                "which brand is active" is never ambiguous: the button
+                itself names it. */}
+            {selectedClientId && (
+              <button type="button" onClick={onOpenBrandProfile} className={linkButtonClass}>
+                Edit Brand Profile
+              </button>
+            )}
+          </div>
         </div>
       )}
     </div>

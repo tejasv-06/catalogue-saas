@@ -1,0 +1,38 @@
+-- Milestone 32 (C9 / Phase 10J) — Product Intelligence & Enrichment Engine.
+--
+-- One additive, nullable JSONB column on catalog_products (created in
+-- 20260810_02_catalog_foundation.sql). Nullable and additive so every
+-- existing read/write path (C1-C8, all already live-verified) is completely
+-- unaffected by this migration — no existing row's raw fields are touched.
+--
+-- Structure written/read by lib/productIntelligence.ts and
+-- app/api/enrich-product/route.ts (not enforced by a DB constraint — kept
+-- as plain jsonb, validated in application code before every write, per
+-- C9-AC6):
+--   {
+--     "status": "not_started" | "processing" | "completed" | "failed",
+--     "updated_at": string | null,
+--     "error": string | null,
+--     "missing_information": string[],
+--     "data": {
+--       "product_type": { "value": ..., "confidence": ..., "evidence": ... },
+--       "material": { ... }, "pattern": { ... }, "colors": { ... },
+--       "style": { ... }, "occasion": { ... }, "target_customer": { ... },
+--       "key_selling_points": { ... }, "search_keywords": { ... }
+--     } | null
+--   }
+-- A NULL column value (the default for every pre-existing row) is treated
+-- by the application as "not_started" — no backfill write is needed or
+-- performed here.
+--
+-- No RLS policy change. catalog_products already has full owner-scoped
+-- SELECT/INSERT/UPDATE/DELETE policies (auth.uid() = owner_user_id) from
+-- the original foundation migration, and those policies are not
+-- column-scoped — they already cover reads/writes of this new column for
+-- exactly the same owner, with no cross-user access, with zero additional
+-- policy statements required. This satisfies C9-AC17 ("no changes to C6
+-- ownership/RLS semantics except strictly necessary additive... work") by
+-- requiring none.
+
+alter table catalog_products
+  add column if not exists product_intelligence jsonb;

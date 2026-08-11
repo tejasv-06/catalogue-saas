@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/client'
 import type { Marketplace } from '@/lib/types'
 import type { GenerationMeta } from '@/lib/listingHealth'
+import type { ProductIntelligence } from '@/lib/productIntelligence'
 
 // Milestone 21 (Step C1 of the Milestone 20 audit) — a thin, session-aware
 // wrapper around the catalog tables created in
@@ -41,6 +42,14 @@ export type CatalogProductRow = {
   image_url: string | null
   created_at: string
   updated_at: string
+  // Milestone 32 (C9) — additive and optional, same convention as every
+  // other field added to a shared type after C1-C8 shipped (DraftProduct's
+  // serverId/visualAttributes etc.): nullable in the DB (supabase/
+  // migrations/20260810_06_product_intelligence.sql), and optional here too
+  // so existing C4 test fixtures (lib/catalogReconciliation.test.ts, e.g.
+  // makeServerProduct) that predate this column keep compiling unchanged.
+  // null/undefined are both treated as "not analyzed."
+  product_intelligence?: ProductIntelligence | null
 }
 
 export type CatalogListingFields = {
@@ -242,4 +251,51 @@ export async function getExportHistory(client: SupabaseClient = createClient()):
 
   if (error) throw error
   return (data ?? []) as CatalogExportRow[]
+}
+
+// Milestone 32 (C9) — single-row read for the enrichment engine. No
+// owner_user_id filter here either, same RLS-only reasoning as getCatalog/
+// getExportHistory above: catalog_products' existing SELECT policy
+// (auth.uid() = owner_user_id, from C1's foundation migration, unchanged)
+// already returns nothing for a product this session doesn't own — that's
+// what makes .maybeSingle() correctly resolve to null for "not found OR not
+// yours" without this function ever needing to know or check which case it
+// is. Callers (app/api/enrich-product/route.ts) must treat a null result as
+// "cannot enrich," never distinguish it further.
+export async function getProductById(
+  productId: string,
+  client: SupabaseClient = createClient()
+): Promise<CatalogProductRow | null> {
+  await requireUserId(client)
+
+  const { data, error } = await client.from('catalog_products').select('*').eq('id', productId).maybeSingle()
+
+  if (error) throw error
+  return data as CatalogProductRow | null
+}
+
+// Milestone 32 (C9) — persists a full ProductIntelligence object (not a
+// partial patch) onto an existing catalog_products row. Ownership is
+// enforced the same way every other write in this module is: RLS's existing
+// UPDATE policy (auth.uid() = owner_user_id, both USING and WITH CHECK) —
+// this function never receives or checks an owner id itself. If the row
+// isn't owned by the session, RLS returns zero rows updated, .single() then
+// throws (PGRST116), and the caller's own try/catch treats that as a
+// failure — never a silent no-op that could be mistaken for success.
+export async function setProductIntelligence(
+  productId: string,
+  intelligence: ProductIntelligence,
+  client: SupabaseClient = createClient()
+): Promise<CatalogProductRow> {
+  await requireUserId(client)
+
+  const { data, error } = await client
+    .from('catalog_products')
+    .update({ product_intelligence: intelligence })
+    .eq('id', productId)
+    .select()
+    .single()
+
+  if (error) throw error
+  return data as CatalogProductRow
 }

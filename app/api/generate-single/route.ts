@@ -14,6 +14,8 @@ import {
 } from '@/lib/marketplaceRules'
 import { GUEST_GENERATION_LIMIT } from '@/lib/limits'
 import { CREDIT_COSTS, InsufficientCreditsError, assertSufficientCredits, deductCredits } from '@/lib/credits'
+import { PRODUCT_INTELLIGENCE_FIELD_KEYS } from '@/lib/productIntelligence'
+import { getMarketplaceAdapter } from '@/lib/marketplaceAdapters'
 
 type FieldGroup = 'title' | 'bullets' | 'description'
 
@@ -35,6 +37,33 @@ function formatDirectImageUrl(url: string): string {
   }
 
   return url
+}
+
+// Milestone 32 (C9) — Generation Integration. Turns an already-persisted,
+// completed Product Intelligence object (see lib/productIntelligence.ts)
+// into a short factual block appended to the prompt this route already
+// builds. Only fields with a real, non-null value are included — an
+// "unknown"/null field contributes nothing here, same as it contributes
+// nothing to a human writer. Returns '' (no-op) for anything not shaped
+// like the real intelligence data object, so a missing/malformed/absent
+// value never changes this route's existing behavior (C9-AC14) — this
+// function is intentionally forgiving on input shape precisely because it
+// must never be the thing that breaks generation.
+function buildIntelligenceSummary(intelligence: unknown): string {
+  if (!intelligence || typeof intelligence !== 'object') return ''
+
+  const lines: string[] = []
+  for (const key of PRODUCT_INTELLIGENCE_FIELD_KEYS) {
+    const field = (intelligence as Record<string, any>)[key]
+    if (!field || field.value == null) continue
+    const value = Array.isArray(field.value) ? field.value.join(', ') : field.value
+    if (!value || (typeof value === 'string' && !value.trim())) continue
+    lines.push(`- ${key.replace(/_/g, ' ')}: ${value}`)
+  }
+
+  if (lines.length === 0) return ''
+
+  return `\n\nCanonical product intelligence has already been determined for this product by a separate analysis step — treat the following as established fact and do not re-guess or contradict it (you may still phrase it however fits the listing):\n${lines.join('\n')}`
 }
 
 class EmptyContentError extends Error {
@@ -207,7 +236,7 @@ async function incrementGuestUsage(anonId: string) {
 
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null)
-  const { brandName, description, category, targetMarketplace, imageBase64, imageUrl, brandGuidelines, fieldGroup } = body || {}
+  const { brandName, description, category, targetMarketplace, imageBase64, imageUrl, brandGuidelines, fieldGroup, productIntelligence } = body || {}
   const scopedFieldGroup: FieldGroup | undefined =
     fieldGroup === 'title' || fieldGroup === 'bullets' || fieldGroup === 'description' ? fieldGroup : undefined
 
@@ -275,9 +304,11 @@ export async function POST(request: Request) {
     // (image-only mode), the raw-description line is swapped for a plain
     // statement of that fact — there's no "Raw description: undefined" or
     // similar leaking into the prompt.
-    const promptText = hasDescription
-      ? `Brand: ${brandName || 'N/A'}\nCategory: ${category || 'unspecified'}\nRaw description: ${description}`
-      : `Brand: ${brandName || 'N/A'}\nCategory: ${category || 'unspecified'}\nNo raw description was provided for this product.`
+    const promptText =
+      (hasDescription
+        ? `Brand: ${brandName || 'N/A'}\nCategory: ${category || 'unspecified'}\nRaw description: ${description}`
+        : `Brand: ${brandName || 'N/A'}\nCategory: ${category || 'unspecified'}\nNo raw description was provided for this product.`) +
+      buildIntelligenceSummary(productIntelligence)
 
     const resolvedImageUrl = imageBase64
       ? imageBase64
@@ -460,11 +491,36 @@ CRITICAL: Output ONLY valid, raw JSON. Do NOT wrap output in markdown fences (no
       }
     }
 
-    const generatedContent = shapeForPlatform(targetMarketplace, aiResult, { brand_name: brandName })
+    // Milestone C10 — shaping now goes through the marketplace adapter
+    // (lib/marketplaceAdapters.ts) instead of calling shapeForPlatform
+    // directly. The adapter's shape() is shapeForPlatform itself under the
+    // hood (same call, same arguments, same return value) — this is a
+    // routing change, not a behavior change. getMarketplaceAdapter is
+    // guaranteed to resolve here: targetMarketplace was already validated
+    // upstream of this route by the client's own marketplace-selection UI
+    // (§8 of TESOLUTE_PRODUCT_FOUNDATION.md), and every value that UI can
+    // send is one of SUPPORTED_MARKETPLACES, which is exactly the set this
+    // module builds an adapter for.
+    const adapter = getMarketplaceAdapter(targetMarketplace)
+    const generatedContent = adapter
+      ? adapter.shape(aiResult, { brandName, description, category, imageUrl: resolvedImageUrl, intelligence: productIntelligence ?? null })
+      : shapeForPlatform(targetMarketplace, aiResult, { brand_name: brandName })
     // Additive fields, computed alongside the existing shaping call rather
     // than changing shapeForPlatform's own return shape — see the comment
     // on computeGenerationMeta in lib/platformShapers.ts for why.
     const meta = computeGenerationMeta(targetMarketplace, aiResult)
+    // Milestone C10 — adapter-level readiness (§7/§8), additive to the
+    // response, never required by any existing client caller (the client
+    // already computes an equivalent, richer result itself via
+    // computeListingHealth once it has generatedContent/meta — see
+    // lib/listingHealth.ts and GeneratedListingDrawer in
+    // CatalogueWorkspace.tsx). Only computed for a full generation, never a
+    // field-scoped regenerate: a field-scoped response's generatedContent
+    // deliberately contains only the requested field's key(s) (the client
+    // merges it into the existing full content afterward), so validating it
+    // in isolation here would misreport every field the client hasn't
+    // merged in yet as missing.
+    const readiness = adapter && !scopedFieldGroup ? adapter.validate(generatedContent, null, meta) : null
     // Only ever non-empty when an image was actually analyzed — the model is
     // instructed to return {} otherwise, so a text-only generation doesn't
     // carry stale/invented visual attributes.
@@ -492,7 +548,7 @@ CRITICAL: Output ONLY valid, raw JSON. Do NOT wrap output in markdown fences (no
       }
     }
 
-    return NextResponse.json({ generatedContent, meta, visualAttributes })
+    return NextResponse.json({ generatedContent, meta, visualAttributes, readiness })
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 })
   }
