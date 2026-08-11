@@ -18,8 +18,8 @@ import { verifyStripeWebhookSignature, isSupportedFulfillmentEvent, WebhookSigna
 
 // Not a real Stripe secret — never used for a network call anywhere in
 // this file, only to satisfy the SDK constructor.
-const stripe = new Stripe('sk_test_0000000000000000000000000000000000000000000000000000000000000000')
-const WEBHOOK_SECRET = 'whsec_test_fake_secret_for_local_signature_tests_only'
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'mock_sk_test_key_for_testing_only');
+const WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || 'mock_whsec_key_for_testing_only';
 
 function makeCheckoutCompletedPayload(overrides: Record<string, any> = {}) {
   return JSON.stringify({
