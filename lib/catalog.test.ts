@@ -8,7 +8,7 @@
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { createProduct, upsertListing, setApproval, recordExport, getCatalog, getExportHistory, getProductById, setProductIntelligence } from './catalog'
+import { createProduct, upsertListing, setApproval, recordExport, getCatalog, getExportHistory, getProductById, setProductIntelligence, deleteProduct } from './catalog'
 import { buildCompletedIntelligence, PRODUCT_INTELLIGENCE_FIELD_KEYS } from './productIntelligence'
 
 // Minimal fake of the subset of the Supabase client's fluent query builder
@@ -404,4 +404,68 @@ test('setProductIntelligence surfaces a Supabase error (e.g. RLS rejecting an un
     () => setProductIntelligence('not-mine', buildCompletedIntelligence(fullIntelligenceData(), []), client),
     (err: any) => err === dbError
   )
+})
+
+// Milestone C17 — regression coverage for the confirmed delete-doesn't-persist
+// bug: deleteProduct's mock: delete().eq().select() awaited directly (no
+// .single()), matching the real .select('id') call that turns "RLS matched
+// zero rows" into a real thrown error instead of a silent no-op.
+function makeDeleteProductMockClient(opts: { userId: string | null; result?: { data: any; error: any } }) {
+  const calls: { op: string; payload?: any }[] = []
+  return {
+    from(table: string) {
+      calls.push({ op: 'from', payload: table })
+      return {
+        delete() {
+          calls.push({ op: 'delete' })
+          return {
+            eq(column: string, value: any) {
+              calls.push({ op: 'eq', payload: { column, value } })
+              return {
+                select(columns?: any) {
+                  calls.push({ op: 'select', payload: columns })
+                  return Promise.resolve(opts.result ?? { data: [], error: null })
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    auth: {
+      getUser: () =>
+        Promise.resolve(
+          opts.userId ? { data: { user: { id: opts.userId } }, error: null } : { data: { user: null }, error: null }
+        )
+    },
+    __calls: calls
+  } as any
+}
+
+test('deleteProduct issues a real DELETE against catalog_products, filtered by the given id', async () => {
+  const client = makeDeleteProductMockClient({ userId: 'user-a', result: { data: [{ id: 'product-1' }], error: null } })
+
+  await deleteProduct('product-1', client)
+
+  const fromCall = client.__calls.find((c: any) => c.op === 'from')
+  assert.equal(fromCall.payload, 'catalog_products')
+  assert.ok(client.__calls.some((c: any) => c.op === 'delete'))
+  const eqCall = client.__calls.find((c: any) => c.op === 'eq')
+  assert.deepEqual(eqCall.payload, { column: 'id', value: 'product-1' })
+})
+
+test('deleteProduct throws when the delete affects zero rows (product not found, or not owned by this session) — never a silent no-op', async () => {
+  const client = makeDeleteProductMockClient({ userId: 'user-a', result: { data: [], error: null } })
+  await assert.rejects(() => deleteProduct('someone-elses-product', client))
+})
+
+test('deleteProduct surfaces a genuine Supabase error rather than swallowing it', async () => {
+  const dbError = { message: 'permission denied', code: '42501' }
+  const client = makeDeleteProductMockClient({ userId: 'user-a', result: { data: null, error: dbError } })
+  await assert.rejects(() => deleteProduct('product-1', client), (err: any) => err === dbError)
+})
+
+test('deleteProduct rejects when there is no authenticated session (guest) — never attempts an unauthenticated delete', async () => {
+  const client = makeDeleteProductMockClient({ userId: null })
+  await assert.rejects(() => deleteProduct('product-1', client))
 })

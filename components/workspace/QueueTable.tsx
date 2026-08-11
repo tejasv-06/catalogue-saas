@@ -8,7 +8,6 @@ import { computeListingHealth } from '@/lib/listingHealth'
 import { marketplaceChipFor, explainMissing, CHIP_TONE_CLASS } from '@/components/workspace/humanCopy'
 import ProductThumbnail from '@/components/ProductThumbnail'
 import EmptyQueueState from '@/components/workspace/EmptyQueueState'
-import { CREDIT_COSTS } from '@/lib/creditCosts'
 import {
   buttonPrimaryClass,
   buttonSecondaryClass,
@@ -69,7 +68,26 @@ function ProductCard({
   const attemptedMarketplaces = SUPPORTED_MARKETPLACES.filter(
     (m) => product.generatedContent[m] !== null || product.generationError[m] !== null
   )
+  // Milestone C17 (corrected) — only marketplaces this product has actually
+  // been worked on for get a chip; an untouched marketplace the seller
+  // never asked Tesolute to create simply isn't shown at all (no "Not
+  // Started" clutter for all four every time). The in-flight marketplace
+  // is folded in too so a "Creating…" chip appears the instant generation
+  // starts, even before it has content/error of its own yet.
+  const visibleMarketplaces = generatingMarketplace && !attemptedMarketplaces.includes(generatingMarketplace)
+    ? [...attemptedMarketplaces, generatingMarketplace]
+    : attemptedMarketplaces
   const firstOpenTarget = attemptedMarketplaces[0] ?? SUPPORTED_MARKETPLACES[0]
+
+  const understoodStatus = product.productIntelligence?.status
+  const understandingLabel =
+    understoodStatus === 'completed'
+      ? '✓ Product understood'
+      : understoodStatus === 'processing'
+        ? 'Understanding your product…'
+        : understoodStatus === 'failed'
+          ? 'Needs more information'
+          : null
 
   return (
     <div className={`p-4 flex flex-col gap-3 ${cardClass}`}>
@@ -85,33 +103,42 @@ function ProductCard({
         <div className="min-w-0 flex-1">
           <p className="font-medium text-sm text-[var(--heading-text)] truncate">{product.brandName || 'Untitled product'}</p>
           <p className="text-xs text-[var(--muted-text)] truncate">{product.category || 'No category yet'}</p>
+          {understandingLabel && (
+            <p className={`text-xs mt-0.5 ${understoodStatus === 'completed' ? 'text-[var(--success-text)]' : 'text-[var(--muted-text)]'}`}>
+              {understandingLabel}
+            </p>
+          )}
         </div>
       </div>
 
-      {/* Marketplace versions of this one product, in plain language — never
-          the raw ready/needs-review/missing-data/error vocabulary. Clicking
+      {/* Only the marketplace(s) actually worked on for this product, in
+          plain language — never the raw ready/needs-review/missing-data/
+          error vocabulary, and never a "Not Started" badge for a
+          marketplace the seller hasn't asked Tesolute about yet. Clicking
           a chip opens this product's studio at exactly that marketplace. */}
-      <div className="flex flex-wrap gap-1.5">
-        {SUPPORTED_MARKETPLACES.map((m) => {
-          const attempted = attemptedMarketplaces.includes(m)
-          const isGenerating = m === generatingMarketplace
-          const health = attempted && !isGenerating
-            ? computeListingHealth(m, product.generatedContent[m], product.generationError[m], product.generationMeta[m])
-            : null
-          const chip = isGenerating ? { tone: 'attention' as const, label: 'Creating…' } : marketplaceChipFor(attempted, health)
-          return (
-            <button
-              key={m}
-              type="button"
-              onClick={() => onView(product.id, m)}
-              className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors hover:opacity-90 ${CHIP_TONE_CLASS[chip.tone]}`}
-              title={health ? explainMissing(MARKETPLACE_LABELS[m], health) ?? undefined : undefined}
-            >
-              {MARKETPLACE_LABELS[m]} · {chip.label}
-            </button>
-          )
-        })}
-      </div>
+      {visibleMarketplaces.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {visibleMarketplaces.map((m) => {
+            const isGenerating = m === generatingMarketplace
+            const attempted = attemptedMarketplaces.includes(m)
+            const health = attempted && !isGenerating
+              ? computeListingHealth(m, product.generatedContent[m], product.generationError[m], product.generationMeta[m])
+              : null
+            const chip = isGenerating ? { tone: 'attention' as const, label: 'Creating…' } : marketplaceChipFor(attempted, health)
+            return (
+              <button
+                key={m}
+                type="button"
+                onClick={() => onView(product.id, m)}
+                className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors hover:opacity-90 ${CHIP_TONE_CLASS[chip.tone]}`}
+                title={health ? explainMissing(MARKETPLACE_LABELS[m], health) ?? undefined : undefined}
+              >
+                {MARKETPLACE_LABELS[m]} · {chip.label}
+              </button>
+            )
+          })}
+        </div>
+      )}
 
       {/* One contextual next step, reusing C15's already-computed,
           already-sorted recommendation for this exact product — never a
@@ -161,10 +188,10 @@ export default function QueueTable({
   currentlyGenerating,
   selectedMarketplaces,
   generating,
+  pendingGenerationCount,
+  hasUnapprovedContent,
   hasApproved,
   loading,
-  hasSession,
-  pendingCount,
   selectedIds,
   onToggleSelect,
   onToggleSelectAll,
@@ -183,10 +210,14 @@ export default function QueueTable({
   currentlyGenerating: { productId: string; marketplace: Marketplace } | null
   selectedMarketplaces: Marketplace[]
   generating: boolean
+  // Milestone C17 (corrected) — count (not filtered-view-scoped) of
+  // never-yet-generated products across the WHOLE current batch, driving
+  // both "Generate Listings"'s enabled state and its "Uses N credits"
+  // preview text.
+  pendingGenerationCount: number
+  hasUnapprovedContent: boolean
   hasApproved: boolean
   loading: boolean
-  hasSession: boolean
-  pendingCount: number
   selectedIds: Set<string>
   onToggleSelect: (id: string) => void
   onToggleSelectAll: () => void
@@ -195,6 +226,12 @@ export default function QueueTable({
   // execution still goes through the caller's existing dispatcher.
   recommendations: CatalogActionRecommendation[]
   onExecuteRecommendation: (rec: CatalogActionRecommendation) => void
+  // Milestone C17 (corrected) — restored as the PRIMARY, zero-selection
+  // actions: "selection is not the primary workflow." Generate Listings
+  // acts on every draft product in the current batch; Approve All acts on
+  // every eligible generated/partial product. Select all + the (still
+  // available, now explicitly secondary) Bulk Action Bar remains for
+  // narrowing either action to a subset.
   onGenerateAll: () => void
   onBulkApprove: () => void
   onDownloadApproved: () => void
@@ -207,19 +244,18 @@ export default function QueueTable({
   )
   const allVisibleSelected = visibleProducts.length > 0 && visibleProducts.every((p) => selectedIds.has(p.id))
   const hasSelectedMarketplaces = selectedMarketplaces.length > 0
+  const hasDraft = pendingGenerationCount > 0
 
-  const hasDraft = draftProducts.some((p) => p.status === 'draft')
-  const hasUnapprovedContent = draftProducts.some((p) =>
-    SUPPORTED_MARKETPLACES.some((m) => p.generatedContent[m] !== null && !p.approved[m])
-  )
+  // Milestone C17 (corrected) — pipeline-position primary: whichever
+  // zero-selection action the CURRENT batch is actually ready for next
+  // gets the one blue "primary" treatment, mirroring the original C14
+  // pattern (generate -> approve -> export). The other two stay visible
+  // but secondary, never hidden — the whole point is these three are
+  // ALWAYS on screen, not conjured only once selection happens.
   const generateIsPrimary = hasDraft
-  const bulkApproveIsPrimary = !generating && !hasDraft && hasUnapprovedContent
-  const downloadIsPrimary = !generating && !hasDraft && !hasUnapprovedContent && hasApproved
-
-  const totalGenerations = pendingCount * selectedMarketplaces.length
-  const creditCost = totalGenerations * CREDIT_COSTS.listingGeneration
-  const generateLabel = generating ? 'Creating…' : 'Create All'
-  const showCreditCost = !generating && hasSession && pendingCount > 0 && hasSelectedMarketplaces
+  const bulkApproveIsPrimary = !generateIsPrimary && hasUnapprovedContent
+  const downloadIsPrimary = !generateIsPrimary && !bulkApproveIsPrimary && hasApproved
+  const creditCost = pendingGenerationCount * selectedMarketplaces.length
 
   const recommendationByProduct = new Map(recommendations.filter((r) => r.productId).map((r) => [r.productId!, r] as const))
   // Only the FIRST (highest-priority, since recommendations arrives
@@ -231,54 +267,61 @@ export default function QueueTable({
 
   return (
     <div className="w-full min-w-0 flex flex-col gap-3">
-      {/* Slim, secondary strip — bulk "act on everything" shortcuts, not
-          the headline of this section (that's the create hero above and
-          the products themselves below). Same handlers/disabled-state
-          logic as before, just visually quieter. */}
-      <div className="flex flex-row flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-row flex-wrap items-start gap-3">
-          <div>
-            <button
-              onClick={onGenerateAll}
-              disabled={!hasDraft || generating}
-              className={generateIsPrimary ? buttonSecondaryClass : buttonSecondaryClass}
-            >
-              {generateLabel}
-            </button>
-            {showCreditCost && (
-              <p className="text-xs text-[var(--muted-text)] mt-1">
-                Uses {creditCost} credit{creditCost === 1 ? '' : 's'}
-              </p>
-            )}
-          </div>
-          <button
-            onClick={onBulkApprove}
-            disabled={!hasSelectedMarketplaces || !hasUnapprovedContent}
-            className={buttonSecondaryClass}
-          >
-            Approve All
-          </button>
-        </div>
-        <button
-          onClick={onDownloadApproved}
-          disabled={!hasSelectedMarketplaces || !hasApproved}
-          className={downloadIsPrimary ? buttonPrimaryClass : buttonSecondaryClass}
-        >
-          Download
-        </button>
-      </div>
-
+      {/* Milestone C17 (corrected) — the PRIMARY workflow toolbar: three
+          always-visible, zero-selection actions covering the whole current
+          batch (Generate Listings -> Approve All -> Export Listings), each
+          individually enabled by real batch eligibility, with exactly one
+          highlighted as primary based on pipeline position. "Select all" +
+          the Bulk Action Bar (rendered by the caller above this component)
+          remains available underneath as the SECONDARY, subset-narrowing
+          mechanism — selection is never a prerequisite for these. */}
       {draftProducts.length > 0 && (
-        <label className="flex items-center gap-2 text-xs text-[var(--muted-text)]">
-          <input
-            type="checkbox"
-            checked={allVisibleSelected}
-            onChange={onToggleSelectAll}
-            aria-label="Select all visible products"
-            className="w-4 h-4 rounded border-[var(--card-border)]"
-          />
-          Select all
-        </label>
+        <div className="flex flex-col gap-2">
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="flex items-center gap-2 text-xs text-[var(--muted-text)]">
+              <input
+                type="checkbox"
+                checked={allVisibleSelected}
+                onChange={onToggleSelectAll}
+                aria-label="Select all visible products"
+                className="w-4 h-4 rounded border-[var(--card-border)]"
+              />
+              Select all
+            </label>
+            <div className="flex-1" />
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-col items-end">
+                <button
+                  onClick={onGenerateAll}
+                  disabled={!hasSelectedMarketplaces || !hasDraft || generating}
+                  className={generateIsPrimary ? buttonPrimaryClass : buttonSecondaryClass}
+                >
+                  Generate Listings
+                </button>
+                {hasDraft && hasSelectedMarketplaces && (
+                  <span className="text-[11px] text-[var(--muted-text)] mt-0.5">Uses {creditCost} credits</span>
+                )}
+              </div>
+              <button
+                onClick={onBulkApprove}
+                disabled={!hasUnapprovedContent || generating}
+                className={bulkApproveIsPrimary ? buttonPrimaryClass : buttonSecondaryClass}
+              >
+                Approve All
+              </button>
+              <button
+                onClick={onDownloadApproved}
+                disabled={!hasSelectedMarketplaces || !hasApproved || generating}
+                className={downloadIsPrimary ? buttonPrimaryClass : buttonSecondaryClass}
+              >
+                Export Listings
+              </button>
+            </div>
+          </div>
+          {!hasSelectedMarketplaces && hasDraft && (
+            <p className="text-xs text-[var(--muted-text)] text-right">Choose where to sell above to generate listings.</p>
+          )}
+        </div>
       )}
 
       {loading ? (

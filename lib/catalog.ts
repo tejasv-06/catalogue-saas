@@ -274,6 +274,31 @@ export async function getProductById(
   return data as CatalogProductRow | null
 }
 
+// Milestone C17 — fixes a confirmed persistence bug: handleDeleteProduct in
+// CatalogueWorkspace.tsx only ever removed a product from LOCAL React
+// state, never called any server-side delete, so a reload's own
+// reconciliation (getCatalog + reconcileCatalog) pulled the still-present
+// catalog_products row straight back in. This is the one and only server
+// delete path — RLS's existing "catalog_products_owner_delete" policy
+// (auth.uid() = owner_user_id, from the C1 foundation migration, unchanged)
+// is the sole ownership check; catalog_listings/catalog_listing_approvals
+// need no separate delete call here since both already cascade
+// (`references catalog_products(id) on delete cascade`, same migration).
+// `.select('id')` on the delete turns "RLS matched zero rows" (not found,
+// or a product id this session doesn't own) into a real thrown error
+// instead of a silent no-op that could be mistaken for a genuine delete —
+// the exact ambiguity that let this bug hide undetected before.
+export async function deleteProduct(productId: string, client: SupabaseClient = createClient()): Promise<void> {
+  await requireUserId(client)
+
+  const { data, error } = await client.from('catalog_products').delete().eq('id', productId).select('id')
+
+  if (error) throw error
+  if (!data || data.length === 0) {
+    throw new Error('catalog: delete affected no rows (product not found, or not owned by this session)')
+  }
+}
+
 // Milestone 32 (C9) — persists a full ProductIntelligence object (not a
 // partial patch) onto an existing catalog_products row. Ownership is
 // enforced the same way every other write in this module is: RLS's existing

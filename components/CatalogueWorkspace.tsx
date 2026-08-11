@@ -21,7 +21,7 @@ import ListingHealthBadge from '@/components/workspace/ListingHealthBadge'
 import { marketplaceChipFor, explainMissing, CHIP_TONE_CLASS } from '@/components/workspace/humanCopy'
 import { computeListingHealth, FIELD_SPECS, type GenerationMeta } from '@/lib/listingHealth'
 import { createClient } from '@/lib/supabase/client'
-import { createProduct, upsertListing, setApproval, recordExport, getCatalog } from '@/lib/catalog'
+import { createProduct, upsertListing, setApproval, recordExport, getCatalog, deleteProduct } from '@/lib/catalog'
 import { reconcileCatalog } from '@/lib/catalogReconciliation'
 import { PRODUCT_INTELLIGENCE_FIELD_KEYS, type ProductIntelligence, type ProductIntelligenceFieldKey } from '@/lib/productIntelligence'
 import { evaluateMarketplaceExportReadiness, readyMarketplaces, type MarketplaceExportReadiness, type ExportCandidateItem } from '@/lib/exportReadiness'
@@ -829,7 +829,10 @@ function AddProductsPanel({
     // the create hero rather than a permanent sidebar column (the old
     // lg→xl breakpoint tuning from C16 no longer applies since this never
     // competes for row width with anything anymore).
-    <aside id="add-products-panel" className={`w-full p-6 ${cardClass}`}>
+    // Milestone C17 — max-w-2xl (not the full hero-card width): a focused
+    // creation task reads better as a centered ~672px form than a
+    // full-bleed field stretching the entire workspace width.
+    <aside id="add-products-panel" className={`w-full max-w-2xl mx-auto p-6 ${cardClass}`}>
       <h2 className={sectionHeadingClass}>Add Products</h2>
       <p className={`${bodyTextClass} mb-4`}>How would you like to add products?</p>
 
@@ -1123,9 +1126,10 @@ function WorkspaceEmptyState({ onOpenCreate }: { onOpenCreate: () => void }) {
 
 export default function CatalogueWorkspace() {
   // Global/session-scoped, same as the old single-value dropdown — not
-  // frozen onto individual products at add time. The generation loop always
-  // reads whatever's currently selected here, applied to every product it
-  // touches in that run (see handleGenerateAll).
+  // frozen onto individual products at add time. Every batch generation
+  // path (runGenerationBatch, driven by handleBulkGenerateSelected) reads
+  // whatever's currently selected here, applied to every product it
+  // touches in that run.
   const [selectedMarketplaces, setSelectedMarketplaces] = useState<Marketplace[]>([])
   const [draftProducts, setDraftProducts] = useState<DraftProduct[]>([])
   const [activeTab, setActiveTab] = useState<WorkspaceDestination>('manual')
@@ -1157,19 +1161,24 @@ export default function CatalogueWorkspace() {
   const [selectedClient, setSelectedClient] = useState<Client | null>(null)
   // Milestone C12 — Edit Brand Profile modal.
   const [showBrandProfile, setShowBrandProfile] = useState(false)
-  // Milestone C17 — the create hero starts expanded (a first visit has
-  // nothing to create FROM yet) and collapses once the seller has at least
-  // one product, unless they've explicitly opened it again. `createIntent`
-  // only changes which tab opens and the hint copy shown above the (100%
-  // unchanged) existing form — "Create," "Bulk Create," and "Improve" are
-  // three framings of the exact same AddProductsPanel/commitAddProduct
-  // pipeline, never three separate code paths.
-  const [showCreatePanel, setShowCreatePanel] = useState(true)
-  const [createIntent, setCreateIntent] = useState<'create' | 'bulk' | 'improve'>('create')
+  // Milestone C17 (corrected) — the create panel now starts COLLAPSED,
+  // always. A previous pass had it auto-expanded by default, which is
+  // exactly the "form inside form" / "already-expanded giant form"
+  // complaint this correction fixes: the workspace should open calm, with
+  // one obvious entry point, never a form the seller didn't ask for yet.
+  // `createIntent` only changes the hint copy shown above the (100%
+  // unchanged) existing AddProductsPanel form — "Create" and "Improve" are
+  // two framings of the exact same commitAddProduct pipeline, never two
+  // separate code paths. Bulk Upload is reached from WITHIN the opened
+  // panel via its own existing tab strip (see ADD_METHOD_TABS) — it is an
+  // INPUT METHOD inside the one Create Product flow, not a third
+  // competing top-level entry point.
+  const [showCreatePanel, setShowCreatePanel] = useState(false)
+  const [createIntent, setCreateIntent] = useState<'create' | 'improve'>('create')
 
-  function openCreatePanel(intent: 'create' | 'bulk' | 'improve') {
+  function openCreatePanel(intent: 'create' | 'improve') {
     setCreateIntent(intent)
-    setActiveTab(intent === 'bulk' ? 'csv' : 'manual')
+    setActiveTab('manual')
     setShowCreatePanel(true)
   }
   // Saved session read from localStorage on mount, held here until we also know
@@ -1240,6 +1249,11 @@ export default function CatalogueWorkspace() {
   const [creditsStoppedInfo, setCreditsStoppedInfo] = useState<{ completedPairs: number; totalPairs: number } | null>(null)
   const [formError, setFormError] = useState<string | null>(null)
   const [downloadMessage, setDownloadMessage] = useState<string | null>(null)
+  // Milestone C17 — surfaced only when a server-side delete genuinely
+  // fails (see handleDeleteProduct below); a product is never removed from
+  // local state until the server confirms the delete, so this is the one
+  // and only case where a delete attempt visibly doesn't "stick."
+  const [deleteError, setDeleteError] = useState<string | null>(null)
   const marketplaceSelectRef = useRef<HTMLDivElement>(null)
   const [marketplaceError, setMarketplaceError] = useState<string | null>(null)
   const [marketplaceFlash, setMarketplaceFlash] = useState(false)
@@ -1615,8 +1629,8 @@ export default function CatalogueWorkspace() {
 
   async function handleAddProduct() {
     // Marketplace selection is not required to add a product — it's only
-    // relevant to generation (see handleGenerateAll's requireMarketplace()
-    // check). A product can exist in the catalog before any marketplace has
+    // relevant to generation (see requireMarketplace()). A product can
+    // exist in the catalog before any marketplace has
     // been chosen; it just sits there ungenerated until one is.
     if (!brandName.trim() || !category.trim() || !description.trim()) {
       setFormError('Brand Name, Category, and Description are required.')
@@ -1722,7 +1736,11 @@ export default function CatalogueWorkspace() {
       generationError: emptyGenerationError(),
       generationMeta: emptyGenerationMeta(),
       visualAttributes: null,
-      skipBrandVoice
+      skipBrandVoice,
+      // Milestone C17 — identical expression to ensureServerProduct's own
+      // client_id, computed here too so "My Products" can scope to the
+      // active brand immediately, without waiting on a server round-trip.
+      clientId: skipBrandVoice ? null : selectedClient?.id ?? null
     }
 
     setDraftProducts((prev) => [...prev, newProduct])
@@ -1754,6 +1772,13 @@ export default function CatalogueWorkspace() {
     }
     setBrandMismatchPending(false)
     setPendingImageUrl(null)
+    // Milestone C17 — collapse the creation panel and bring the seller's
+    // attention back to their product library once a product has actually
+    // been added, instead of leaving them stranded above/below an
+    // already-done form (the CSV bulk-import path has its own separate
+    // commitCsvUpload and is intentionally unaffected — adding many
+    // products at once shouldn't auto-close mid-batch).
+    setShowCreatePanel(false)
   }
 
   function handleEditProduct(product: DraftProduct) {
@@ -1765,13 +1790,41 @@ export default function CatalogueWorkspace() {
       fileInputRef.current.value = ''
     }
     setEditingId(product.id)
-    // Switches the always-visible Add Products panel to Manual Entry so
-    // the pre-filled form is immediately visible — the panel itself never
-    // needs to be shown/hidden anymore, it's already on screen.
+    // Milestone C17 — the create panel is collapsed by default now, so
+    // editing an existing product must explicitly reopen it (on Manual
+    // Entry, with the pre-filled form) rather than assuming it's already
+    // on screen.
     setActiveTab('manual')
+    setCreateIntent('create')
+    setShowCreatePanel(true)
   }
 
-  function handleDeleteProduct(id: string) {
+  // Milestone C17 — fixes the confirmed delete-doesn't-persist bug: this
+  // used to only ever call setDraftProducts, never any server call, so the
+  // next reconcileCatalog (on reload) pulled the still-present row straight
+  // back in. Now the local removal only ever happens AFTER lib/catalog.ts's
+  // deleteProduct() confirms the row is actually gone (RLS-owner-scoped,
+  // cascades to catalog_listings/catalog_listing_approvals) — a failed
+  // server delete leaves the product visibly in place with deleteError set,
+  // rather than silently showing a "deleted" state that isn't real.
+  async function handleDeleteProduct(id: string) {
+    const product = draftProducts.find((p) => p.id === id)
+    setDeleteError(null)
+
+    // Guests, and any product whose server row was never created (no
+    // generation attempt has run for it yet — see ensureServerProduct),
+    // have nothing to delete server-side; removing local state is already
+    // the complete, correct action for those.
+    if (hasSession && product?.serverId) {
+      try {
+        await deleteProduct(product.serverId)
+      } catch (err: any) {
+        console.error(`Catalog persistence: failed to delete catalog_products row ${product.serverId}:`, err?.message ?? err)
+        setDeleteError(`Couldn't delete "${product.brandName || 'this product'}" — please try again.`)
+        return
+      }
+    }
+
     setDraftProducts((prev) => prev.filter((p) => p.id !== id))
     if (viewingTarget?.productId === id) setViewingTarget(null)
     if (editingId === id) handleClearForm()
@@ -1826,7 +1879,10 @@ export default function CatalogueWorkspace() {
         generationError: emptyGenerationError(),
         generationMeta: emptyGenerationMeta(),
         visualAttributes: null,
-        skipBrandVoice: false
+        skipBrandVoice: false,
+        // Milestone C17 — same brand association a CSV row's own
+        // ensureServerProduct call already sends server-side.
+        clientId: selectedClient?.id ?? null
       })
     }
 
@@ -1889,7 +1945,8 @@ export default function CatalogueWorkspace() {
     if (!pendingCsvUpload) return
     const all = [...pendingCsvUpload.matchingProducts, ...pendingCsvUpload.mismatchedProducts].map((p) => ({
       ...p,
-      skipBrandVoice: true
+      skipBrandVoice: true,
+      clientId: null
     }))
     commitCsvUpload(all, pendingCsvUpload.fileName, pendingCsvUpload.total)
   }
@@ -1948,12 +2005,12 @@ export default function CatalogueWorkspace() {
   // all-products-for-marketplace-2). Each (product, marketplace) pair is one
   // full-price generate-single call — total cost for a batch is simply the
   // count of successful calls, not a separate bulk formula.
-  // Milestone C14 — extracted from handleGenerateAll unchanged (same loop,
-  // same credit-stop semantics) so Bulk Generate (scoped to a selection)
-  // can share it instead of re-implementing the batch/credit-stop logic a
-  // second time. `products` is a snapshot, same reasoning as the old
-  // `pending` local — see computeProductStatus above for why runMarketplaces
-  // must stay fixed for the whole run rather than re-reading live state.
+  // Milestone C14 — the shared batch-generation loop (same credit-stop
+  // semantics either way), used by BOTH handleGenerateAll (the whole
+  // current batch, zero selection needed) and handleBulkGenerateSelected
+  // (a selected subset) — see computeProductStatus above for why
+  // runMarketplaces must stay fixed for the whole run rather than
+  // re-reading live state.
   async function runGenerationBatch(products: DraftProduct[], runMarketplaces: Marketplace[]) {
     if (products.length === 0) return
 
@@ -1997,6 +2054,13 @@ export default function CatalogueWorkspace() {
     setGenerating(false)
   }
 
+  // Milestone C17 (corrected) — restored as the PRIMARY, zero-selection
+  // generation action: "selection is not the primary workflow" — a seller
+  // who just added N products wants Tesolute to work on all of them, not
+  // to select each one first. Operates on every current-batch draft
+  // product (status === 'draft'); handleBulkGenerateSelected (below)
+  // remains available as the secondary, selection-scoped variant for
+  // narrowing to a subset.
   async function handleGenerateAll() {
     if (selectedMarketplaces.length === 0) {
       flagMissingMarketplace()
@@ -2361,20 +2425,6 @@ export default function CatalogueWorkspace() {
   // that has at least one — including 'partial' products, so a product that
   // only half-finished (see computeProductStatus) still gets its successful
   // marketplaces approved rather than being held back by the ones that failed.
-  function handleBulkApprove() {
-    if (!requireMarketplace()) return
-    setDraftProducts((prev) =>
-      prev.map((p) => {
-        if (p.status !== 'generated' && p.status !== 'partial') return p
-        const approved = { ...p.approved }
-        for (const marketplace of SUPPORTED_MARKETPLACES) {
-          if (p.generatedContent[marketplace] !== null) approved[marketplace] = true
-        }
-        return { ...p, approved }
-      })
-    )
-  }
-
   // --- Milestone C14 — bulk selection + orchestration -----------------
   // Every handler below operates on the CURRENT selection and reuses an
   // already-existing per-item operation (never a second implementation of
@@ -2428,27 +2478,51 @@ export default function CatalogueWorkspace() {
     setBulkRunning(false)
   }
 
-  // Reuses runGenerationBatch (the exact loop handleGenerateAll runs),
-  // scoped to selected products that haven't been generated for the
-  // currently-selected marketplaces yet — same credit-authority/stop
-  // behavior, same generateForProductMarketplace call, no new billing path.
+  // Reuses runGenerationBatch, scoped to whatever's currently selected —
+  // doubles as "Bulk Regenerate" per the C17 correction (selecting already-
+  // generated products and running this re-runs generation for them, the
+  // same way the single-product "Regenerate" button already overwrites
+  // that one marketplace's content via generateForProductMarketplace's own
+  // spread). No status filter: a selected draft product generates for the
+  // first time, a selected generated/partial product regenerates — same
+  // call, same credit-authority/stop behavior, no new billing path.
   async function handleBulkGenerateSelected() {
     if (selectedMarketplaces.length === 0) {
       flagMissingMarketplace()
       return
     }
-    const targets = draftProducts.filter((p) => selectedProductIds.has(p.id) && p.status === 'draft')
+    const targets = draftProducts.filter((p) => selectedProductIds.has(p.id))
     if (targets.length === 0 || bulkRunning) return
     setBulkRunning(true)
     await runGenerationBatch(targets, selectedMarketplaces)
     setBulkRunning(false)
   }
 
-  // Mirrors handleBulkApprove's own existing behavior exactly (same
-  // generated-content-implies-approvable rule, same lack of a
-  // persistApprovalToCatalog call — that's an existing C1-C13 property of
-  // bulk approval this milestone doesn't change), just scoped to the
-  // selected ids instead of every product.
+  // Milestone C17 (corrected) — restored as the PRIMARY, zero-selection
+  // approval action: "Bulk Approve means approve all eligible generated
+  // listings" when nothing is selected. Every draft product with
+  // status 'generated' or 'partial' gets every marketplace it actually
+  // has content for marked approved. handleBulkApproveSelected (below)
+  // remains the secondary, selection-scoped variant for approving a
+  // narrower subset.
+  function handleBulkApprove() {
+    if (!requireMarketplace()) return
+    setDraftProducts((prev) =>
+      prev.map((p) => {
+        if (p.status !== 'generated' && p.status !== 'partial') return p
+        const approved = { ...p.approved }
+        for (const marketplace of SUPPORTED_MARKETPLACES) {
+          if (p.generatedContent[marketplace] !== null) approved[marketplace] = true
+        }
+        return { ...p, approved }
+      })
+    )
+  }
+
+  // Secondary, selection-scoped approval — same generated-content-implies-
+  // approvable rule as handleBulkApprove, narrowed to selectedProductIds.
+  // Same lack of a persistApprovalToCatalog call — that's an existing
+  // C1-C13 property of bulk approval this milestone doesn't change.
   function handleBulkApproveSelected() {
     if (!requireMarketplace()) return
     setDraftProducts((prev) =>
@@ -2821,26 +2895,51 @@ export default function CatalogueWorkspace() {
   }
 
   const hasApproved = draftProducts.some((p) => SUPPORTED_MARKETPLACES.some((m) => p.approved[m]))
-  const pendingCount = draftProducts.filter((p) => p.status === 'draft').length
-  // Display-only — Generate/Bulk Approve/Export above still read the full,
-  // unfiltered draftProducts (via pendingCount/hasApproved and their own
+  // Display-only — Bulk Approve/Export above still read the full,
+  // unfiltered draftProducts (via hasApproved and their own
   // handlers), so a "Ready" filter never narrows what an action operates
   // on, only what the table currently shows.
   // Milestone C14 — Catalog Command Center derived view. All display-only
   // (see catalogFilters/sortKey's own comment above): Generate All/Bulk
   // Approve/Export above still read the full, unfiltered draftProducts.
-  const needsAttention = computeNeedsAttention(draftProducts)
-  const availableBrands = getAvailableBrands(draftProducts)
-  const availableCategories = getAvailableCategories(draftProducts)
-  const visibleProducts = sortProducts(filterProducts(draftProducts, catalogFilters), sortKey)
+  // Milestone C17 — brand-first scoping: a specific selected brand (the
+  // same selectedClient that already drives brand voice at creation time)
+  // narrows "My Products" to only that brand's own products, via the
+  // client_id association mirrored locally as DraftProduct.clientId (see
+  // lib/types.ts's own comment). "No brand selected" (selectedClient ===
+  // null) is the "All Brands" state — nothing is hidden. A product added
+  // before this milestone shipped (clientId undefined) simply has no
+  // brand association yet, same as any other additive field's honest
+  // default — it shows under "All Brands," not under a specific one.
+  const brandScopedProducts = selectedClient ? draftProducts.filter((p) => p.clientId === selectedClient.id) : draftProducts
+  const needsAttention = computeNeedsAttention(brandScopedProducts)
+  const availableBrands = getAvailableBrands(brandScopedProducts)
+  const availableCategories = getAvailableCategories(brandScopedProducts)
+  const visibleProducts = sortProducts(filterProducts(brandScopedProducts, catalogFilters), sortKey)
   const selectedCount = selectedProductIds.size
   const canBulkAnalyze = hasSession && draftProducts.some((p) => selectedProductIds.has(p.id) && p.serverId)
-  const canBulkGenerate = draftProducts.some((p) => selectedProductIds.has(p.id) && p.status === 'draft')
+  // Milestone C17 (corrected) — no status filter: a selected draft product
+  // generates for the first time, a selected already-generated product
+  // regenerates. Any selected product makes this "Bulk Generate"/"Bulk
+  // Regenerate" available (see handleBulkGenerateSelected's own comment).
+  const canBulkGenerate = draftProducts.some((p) => selectedProductIds.has(p.id))
+  const isBulkRegenerate = draftProducts.some((p) => selectedProductIds.has(p.id) && (p.status === 'generated' || p.status === 'partial'))
   const canBulkApprove = draftProducts.some(
     (p) => selectedProductIds.has(p.id) && (p.status === 'generated' || p.status === 'partial')
   )
   const canBulkExport = draftProducts.some(
     (p) => selectedProductIds.has(p.id) && SUPPORTED_MARKETPLACES.some((m) => p.approved[m])
+  )
+  // Milestone C17 (corrected) — drives the primary/enabled states AND the
+  // credit-cost preview text of QueueTable's zero-selection toolbar
+  // (Generate Listings/Approve All/Export Listings), the actual primary
+  // workflow now that selection is confirmed secondary. A count, not just
+  // a boolean, so the toolbar can say "Uses N credits" honestly.
+  const pendingGenerationCount = draftProducts.filter((p) => p.status === 'draft').length
+  const hasUnapprovedContent = draftProducts.some(
+    (p) =>
+      (p.status === 'generated' || p.status === 'partial') &&
+      SUPPORTED_MARKETPLACES.some((m) => p.generatedContent[m] !== null && !p.approved[m])
   )
   // Milestone C15 — pure, synchronous, side-effect-free derivation (see
   // lib/catalogRecommendations.ts's own header comment). useMemo here is
@@ -2941,6 +3040,15 @@ export default function CatalogueWorkspace() {
                 </div>
               )}
 
+              {deleteError && (
+                <div className={`flex items-center justify-between gap-4 ${dangerBannerClass}`}>
+                  <p className={dangerTextClass}>{deleteError}</p>
+                  <button onClick={() => setDeleteError(null)} className={buttonSecondaryClass}>
+                    Dismiss
+                  </button>
+                </div>
+              )}
+
               {/* Milestone C11 — which marketplaces the readiness gate
                   excluded from the export the banner above just reported,
                   and the real reason for each. */}
@@ -2957,11 +3065,15 @@ export default function CatalogueWorkspace() {
                 </div>
               )}
 
-              {/* CREATE HERO — "What do you want to create?" Three framings
+              {/* CREATE HERO — ONE canonical creation entry point. "Create
+                  Product" and "Improve Existing Listing" are two framings
                   of the exact same AddProductsPanel/commitAddProduct
-                  pipeline (see openCreatePanel above): Create Product,
-                  Bulk Create, and Improve Existing Listing are not three
-                  separate features. */}
+                  pipeline (see openCreatePanel above); Bulk Upload is an
+                  input method reached from the tab strip INSIDE the panel
+                  once it's open, never a third competing top-level button
+                  — that was the exact "form inside form" / "Create
+                  Product -> Bulk Create -> Create Product" confusion this
+                  correction removes. */}
               <div className={`p-6 flex flex-col gap-4 ${cardClass}`}>
                 <div>
                   <h1 className={sectionHeadingClass}>Create your next listing</h1>
@@ -2978,6 +3090,12 @@ export default function CatalogueWorkspace() {
                   </p>
                 </div>
 
+                {/* Brand/marketplace context — persistent and always
+                    visible (never buried inside the collapsible form
+                    below), since it's genuinely lightweight (a handful of
+                    pills + one dropdown) and other flows (bulk actions on
+                    already-existing products) also depend on knowing which
+                    marketplaces are currently selected. */}
                 <AppHeader
                   hasSession={hasSession}
                   selectedMarketplaces={selectedMarketplaces}
@@ -2996,12 +3114,6 @@ export default function CatalogueWorkspace() {
                     className={showCreatePanel && createIntent === 'create' ? buttonPrimaryClass : buttonSecondaryClass}
                   >
                     Create Product
-                  </button>
-                  <button
-                    onClick={() => openCreatePanel('bulk')}
-                    className={showCreatePanel && createIntent === 'bulk' ? buttonPrimaryClass : buttonSecondaryClass}
-                  >
-                    Bulk Create
                   </button>
                   <button
                     onClick={() => openCreatePanel('improve')}
@@ -3072,11 +3184,11 @@ export default function CatalogueWorkspace() {
                   terms of, not "my marketplace tasks." */}
               <div className="flex flex-col gap-3">
                 <h2 className={sectionHeadingClass}>My Products</h2>
-                {sessionReady && draftProducts.length === 0 ? (
+                {sessionReady && brandScopedProducts.length === 0 ? (
                   <WorkspaceEmptyState onOpenCreate={() => openCreatePanel('create')} />
                 ) : (
                   <>
-                    {draftProducts.length > 0 && (
+                    {brandScopedProducts.length > 0 && (
                       <CatalogFilterBar
                         filters={catalogFilters}
                         onFiltersChange={setCatalogFilters}
@@ -3101,20 +3213,21 @@ export default function CatalogueWorkspace() {
                       canGenerate={canBulkGenerate}
                       canApprove={canBulkApprove}
                       canExport={canBulkExport}
+                      isRegenerate={isBulkRegenerate}
                       busy={bulkRunning || generating}
                       progressLabel={bulkProgressLabel}
                     />
                     <QueueTable
                       draftProducts={visibleProducts}
-                      totalProductCount={draftProducts.length}
+                      totalProductCount={brandScopedProducts.length}
                       readinessFilter={readinessFilter}
                       currentlyGenerating={currentlyGenerating}
                       selectedMarketplaces={selectedMarketplaces}
                       generating={generating}
+                      pendingGenerationCount={pendingGenerationCount}
+                      hasUnapprovedContent={hasUnapprovedContent}
                       hasApproved={hasApproved}
                       loading={!sessionReady}
-                      hasSession={hasSession}
-                      pendingCount={pendingCount}
                       selectedIds={selectedProductIds}
                       onToggleSelect={toggleSelectProduct}
                       onToggleSelectAll={toggleSelectAllVisible}

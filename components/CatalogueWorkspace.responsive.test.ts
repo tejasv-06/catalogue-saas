@@ -25,8 +25,11 @@ test('1. the workspace is a single, centered column (C17 removed the old permane
   assert.ok(!/flex-1 flex flex-col xl:flex-row min-h-0/.test(workspaceSource), 'the old competing-width row must not come back')
 })
 
-test('AddProductsPanel is a plain full-width card, mounted inline (not a fixed-width sidebar column)', () => {
-  assert.match(workspaceSource, /w-full p-6 \$\{cardClass\}/)
+test('AddProductsPanel is a focused, max-width-capped card, mounted inline (not a fixed-width sidebar column)', () => {
+  // Milestone C17 — narrowed further to max-w-2xl (a focused ~672px
+  // creation task, per the "no giant horizontal forms" requirement),
+  // still not a fixed-width sidebar column.
+  assert.match(workspaceSource, /w-full max-w-2xl mx-auto p-6 \$\{cardClass\}/)
   assert.ok(!/xl:w-\[420px\]/.test(workspaceSource), 'must not reintroduce a fixed sidebar width')
 })
 
@@ -56,7 +59,7 @@ test('3/10. C17 introduces no new recommendation, credit, or marketplace-validat
 test('4. the global ActionCenter card-stack is no longer mounted; recommendations are passed into QueueTable for per-product hints instead', () => {
   assert.ok(!/<ActionCenter/.test(workspaceSource), 'C17 removes the Action Center from the primary experience')
   const start = workspaceSource.indexOf('<QueueTable')
-  const callSite = workspaceSource.slice(start, start + 900)
+  const callSite = workspaceSource.slice(start, start + 1200)
   assert.match(callSite, /recommendations=\{recommendations\}/)
   assert.match(callSite, /onExecuteRecommendation=\{handleExecuteRecommendation\}/)
 })

@@ -118,6 +118,10 @@ export function buildDraftFromServer(
     category: serverProduct.category ?? '',
     imageFile: null,
     imageUrl: serverProduct.image_url,
+    // Milestone C17 — mirrors the server's own client_id so a product
+    // hydrated fresh from the server (no local match) is still correctly
+    // scoped to its brand for "My Products" filtering.
+    clientId: serverProduct.client_id,
     generatedContent,
     approved,
     status: computeStatus(generatedContent, attemptedMarketplacesOf(generatedContent, generationError)),

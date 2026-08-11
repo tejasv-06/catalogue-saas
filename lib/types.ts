@@ -76,6 +76,17 @@ export type DraftProduct = {
   // of ONE marketplace's generation call; this is the richer, pre-generation
   // canonical layer, set via a dedicated "Analyze Product" action.
   productIntelligence?: ProductIntelligence | null
+  // Milestone C17 — the same value already sent to the server as
+  // catalog_products.client_id (see ensureServerProduct's own
+  // `product.skipBrandVoice ? null : selectedClient?.id ?? null`
+  // expression), mirrored locally so "My Products" can be scoped to the
+  // currently-selected brand without a network round-trip. Additive/
+  // optional like serverId/productIntelligence above; undefined/null both
+  // mean "no brand association," identical to how the server column
+  // already treats them. No new database column — client_id already
+  // existed (C12's brand_profile migration), this just surfaces it
+  // client-side too.
+  clientId?: string | null
 }
 
 function emptyMarketplaceRecord<T>(fill: T): Record<Marketplace, T> {
