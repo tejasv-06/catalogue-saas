@@ -18,7 +18,7 @@ import {
   cardClass
 } from '@/lib/uiClasses'
 
-const COLUMN_COUNT = 5
+const COLUMN_COUNT = 6
 
 // One row per (product, marketplace) pair that's actually been attempted —
 // answers "is this specific listing ready to upload," which a single
@@ -94,6 +94,8 @@ function QueueRows({
   product,
   generatingMarketplace,
   filter,
+  selected,
+  onToggleSelect,
   onView,
   onEdit,
   onDelete,
@@ -106,6 +108,8 @@ function QueueRows({
   // the same product is still in flight.
   generatingMarketplace: Marketplace | null
   filter: ReadinessFilter
+  selected: boolean
+  onToggleSelect: (id: string) => void
   onView: (id: string, marketplace: Marketplace) => void
   onEdit: (product: DraftProduct) => void
   onDelete: (id: string) => void
@@ -121,6 +125,17 @@ function QueueRows({
 
         return (
           <tr key={`${product.id}-${marketplace ?? 'none'}`} className="border-b border-[var(--row-border)]">
+            {i === 0 && (
+              <td className="py-3 px-4 align-top" rowSpan={marketplaceRows.length}>
+                <input
+                  type="checkbox"
+                  checked={selected}
+                  onChange={() => onToggleSelect(product.id)}
+                  aria-label={`Select ${product.brandName || 'product'}`}
+                  className="w-4 h-4 rounded border-[var(--card-border)]"
+                />
+              </td>
+            )}
             {i === 0 && (
               <td className="py-3 px-4 align-top" rowSpan={marketplaceRows.length}>
                 <div className="flex items-center gap-3">
@@ -180,6 +195,13 @@ function QueueRows({
 
 export default function QueueTable({
   draftProducts,
+  // Milestone C14 — the real, unfiltered product count, used only to tell
+  // "you have zero products at all" apart from "your filters/search matched
+  // zero of your real products" — CatalogueWorkspace itself already renders
+  // WorkspaceEmptyState for the former case, so this only ever disambiguates
+  // the latter (filtered-to-nothing) from QueueTable's own default empty
+  // copy, which would otherwise be misleading once filters exist.
+  totalProductCount,
   readinessFilter,
   currentlyGenerating,
   selectedMarketplaces,
@@ -188,6 +210,9 @@ export default function QueueTable({
   loading,
   hasSession,
   pendingCount,
+  selectedIds,
+  onToggleSelect,
+  onToggleSelectAll,
   onGenerateAll,
   onBulkApprove,
   onDownloadApproved,
@@ -197,6 +222,7 @@ export default function QueueTable({
   onRetry
 }: {
   draftProducts: DraftProduct[]
+  totalProductCount: number
   // Filtering happens here, at the same (product, marketplace) granularity
   // the rows themselves render at (see filterRowData/productHasVisibleRow
   // above) — draftProducts is passed in unfiltered so a product with, say,
@@ -213,6 +239,12 @@ export default function QueueTable({
   loading: boolean
   hasSession: boolean
   pendingCount: number
+  // Milestone C14 — bulk-selection state, at product granularity (one
+  // checkbox per product row-group, not per marketplace row) — selection
+  // scope for BulkActionBar's Analyze/Generate/Approve/Export actions.
+  selectedIds: Set<string>
+  onToggleSelect: (id: string) => void
+  onToggleSelectAll: () => void
   onGenerateAll: () => void
   onBulkApprove: () => void
   onDownloadApproved: () => void
@@ -221,6 +253,7 @@ export default function QueueTable({
   onDelete: (id: string) => void
   onRetry: (id: string, marketplace: Marketplace) => void
 }) {
+  const allVisibleSelected = draftProducts.length > 0 && draftProducts.every((p) => selectedIds.has(p.id))
   const hasSelectedMarketplaces = selectedMarketplaces.length > 0
 
   // Sequential "what's next" highlight: exactly one of the three actions is
@@ -309,10 +342,27 @@ export default function QueueTable({
           short queue instead of leaving empty space beneath the table, and
           scroll internally (rather than growing the page) once the queue
           outgrows the available height. */}
+      {/* Milestone C16 — min-w-[680px] gives every column a sane floor
+          (checkbox/Product/Marketplace/Health/Issues/Actions each keep a
+          readable width) instead of shrinking arbitrarily as the viewport
+          narrows. Below that floor this container (already overflow-auto)
+          scrolls horizontally on its own — the table/data region, never the
+          whole page — exactly the existing, correct pattern; this just
+          gives it a real floor to kick in at instead of letting `table-auto`
+          layout squeeze every column to its bare minimum content width. */}
       <div className="flex-1 min-h-0 overflow-auto rounded-xl border border-[var(--card-border)]">
-        <table className="w-full border-collapse">
+        <table className="w-full min-w-[680px] border-collapse">
           <thead>
             <tr className="border-b border-[var(--row-border)] bg-[var(--table-head-bg)] text-left text-xs text-[var(--muted-text)]">
+              <th className="py-3 px-4">
+                <input
+                  type="checkbox"
+                  checked={allVisibleSelected}
+                  onChange={onToggleSelectAll}
+                  aria-label="Select all visible products"
+                  className="w-4 h-4 rounded border-[var(--card-border)]"
+                />
+              </th>
               <th className="py-3 px-4">Product</th>
               <th className="py-3 px-4">Marketplace</th>
               <th className="py-3 px-4">Health</th>
@@ -324,7 +374,10 @@ export default function QueueTable({
             {loading ? (
               <TableSkeleton columns={COLUMN_COUNT} />
             ) : draftProducts.length === 0 ? (
-              <EmptyQueueState colSpan={COLUMN_COUNT} />
+              <EmptyQueueState
+                colSpan={COLUMN_COUNT}
+                message={totalProductCount > 0 ? 'No listings match your filters or search.' : undefined}
+              />
             ) : !draftProducts.some((p) =>
                 productHasVisibleRow(
                   p,
@@ -340,6 +393,8 @@ export default function QueueTable({
                   product={product}
                   generatingMarketplace={currentlyGenerating?.productId === product.id ? currentlyGenerating.marketplace : null}
                   filter={readinessFilter}
+                  selected={selectedIds.has(product.id)}
+                  onToggleSelect={onToggleSelect}
                   onView={onView}
                   onEdit={onEdit}
                   onDelete={onDelete}

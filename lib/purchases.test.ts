@@ -6,7 +6,6 @@ import assert from 'node:assert/strict'
 import {
   createPendingPurchase,
   getPurchaseByCheckoutSessionId,
-  markPurchasePaid,
   markPurchaseFailed,
   markPurchaseCancelled,
   awardPurchaseCredits
@@ -90,20 +89,6 @@ test('getPurchaseByCheckoutSessionId returns null for a nonexistent session — 
   assert.equal(result, null)
 })
 
-test('markPurchasePaid sets status "paid" and records Stripe identifiers, nothing else', async () => {
-  const client = makeMockClient({ result: { data: null, error: null } })
-  await markPurchasePaid(
-    'pur-1',
-    { stripePaymentIntentId: 'pi_1', stripeEventId: 'evt_1', stripeCustomerId: 'cus_1' },
-    client
-  )
-  const updateCall = client.__calls.find((c: any) => c.op === 'update')
-  assert.equal(updateCall.payload.status, 'paid')
-  assert.equal(updateCall.payload.stripe_payment_intent_id, 'pi_1')
-  assert.equal(updateCall.payload.stripe_event_id, 'evt_1')
-  assert.ok(!('credits_remaining' in updateCall.payload), 'markPurchasePaid must never touch credits directly')
-})
-
 test('markPurchaseFailed / markPurchaseCancelled only ever set their own status — zero credit-related fields', async () => {
   const failedClient = makeMockClient({ result: { data: null, error: null } })
   await markPurchaseFailed('pur-1', failedClient)
@@ -114,16 +99,43 @@ test('markPurchaseFailed / markPurchaseCancelled only ever set their own status 
   assert.deepEqual(cancelledClient.__calls.find((c: any) => c.op === 'update').payload, { status: 'cancelled' })
 })
 
+// C13 follow-up — markPurchasePaid() was removed after live testing proved
+// a real double-credit bug: it unconditionally reset an already-'fulfilled'
+// purchase's status back to 'paid' on every webhook replay, erasing
+// award_purchase_credits()'s own idempotency guard. This test locks in its
+// absence so it can't be silently reintroduced.
+test('lib/purchases.ts no longer exports markPurchasePaid (removed — see the atomicity-fix migration and this file\'s own history)', async () => {
+  const purchasesModule = await import('./purchases')
+  assert.equal('markPurchasePaid' in purchasesModule, false)
+})
+
 // --- awardPurchaseCredits: the atomic, idempotent RPC call ---
 
-test('awardPurchaseCredits calls the award_purchase_credits RPC with exactly purchaseId/userId/credits', async () => {
+test('awardPurchaseCredits calls the award_purchase_credits RPC with purchaseId/userId/credits AND the Stripe identifiers, all in ONE call', async () => {
   const client = makeMockClient({ rpcResult: { data: [{ credits_remaining: 250, already_fulfilled: false }], error: null } })
 
-  const result = await awardPurchaseCredits('pur-1', 'user-a', 200, client)
+  const result = await awardPurchaseCredits(
+    {
+      purchaseId: 'pur-1',
+      userId: 'user-a',
+      credits: 200,
+      stripePaymentIntentId: 'pi_1',
+      stripeEventId: 'evt_1',
+      stripeCustomerId: 'cus_1'
+    },
+    client
+  )
 
   const rpcCall = client.__calls.find((c: any) => c.op === 'rpc')
   assert.equal(rpcCall.table, 'award_purchase_credits')
-  assert.deepEqual(rpcCall.payload, { p_purchase_id: 'pur-1', p_user_id: 'user-a', p_credits: 200 })
+  assert.deepEqual(rpcCall.payload, {
+    p_purchase_id: 'pur-1',
+    p_user_id: 'user-a',
+    p_credits: 200,
+    p_stripe_payment_intent_id: 'pi_1',
+    p_stripe_event_id: 'evt_1',
+    p_stripe_customer_id: 'cus_1'
+  })
   assert.equal(result.creditsRemaining, 250)
   assert.equal(result.alreadyFulfilled, false)
 })
@@ -134,7 +146,10 @@ test('awardPurchaseCredits reports alreadyFulfilled: true for a purchase the RPC
   // null (nothing was credited this call) and already_fulfilled is true.
   const client = makeMockClient({ rpcResult: { data: [{ credits_remaining: null, already_fulfilled: true }], error: null } })
 
-  const result = await awardPurchaseCredits('pur-1', 'user-a', 200, client)
+  const result = await awardPurchaseCredits(
+    { purchaseId: 'pur-1', userId: 'user-a', credits: 200, stripePaymentIntentId: 'pi_1', stripeEventId: 'evt_1', stripeCustomerId: null },
+    client
+  )
 
   assert.equal(result.alreadyFulfilled, true)
   assert.equal(result.creditsRemaining, null)
@@ -142,19 +157,51 @@ test('awardPurchaseCredits reports alreadyFulfilled: true for a purchase the RPC
 
 test('awardPurchaseCredits handles a single-row (non-array) RPC response the same way as an array response', async () => {
   const client = makeMockClient({ rpcResult: { data: { credits_remaining: 50, already_fulfilled: false }, error: null } })
-  const result = await awardPurchaseCredits('pur-1', 'user-a', 50, client)
+  const result = await awardPurchaseCredits(
+    { purchaseId: 'pur-1', userId: 'user-a', credits: 50, stripePaymentIntentId: null, stripeEventId: 'evt_1', stripeCustomerId: null },
+    client
+  )
   assert.equal(result.creditsRemaining, 50)
 })
 
 test('awardPurchaseCredits surfaces a Supabase/RPC error rather than swallowing it', async () => {
   const dbError = { message: 'function award_purchase_credits does not exist', code: '42883' }
   const client = makeMockClient({ rpcResult: { data: null, error: dbError } })
-  await assert.rejects(() => awardPurchaseCredits('pur-1', 'user-a', 200, client), (err: any) => err === dbError)
+  await assert.rejects(
+    () =>
+      awardPurchaseCredits(
+        { purchaseId: 'pur-1', userId: 'user-a', credits: 200, stripePaymentIntentId: null, stripeEventId: 'evt_1', stripeCustomerId: null },
+        client
+      ),
+    (err: any) => err === dbError
+  )
 })
 
-test('awardPurchaseCredits never accepts a caller-supplied credit amount beyond the explicit `credits` parameter — the function signature has no separate "amount"/"price" field to spoof', async () => {
+test('awardPurchaseCredits never accepts a caller-supplied credit amount beyond the explicit `credits` field — no separate "amount"/"price" field exists to spoof', async () => {
   const client = makeMockClient({ rpcResult: { data: [{ credits_remaining: 10, already_fulfilled: false }], error: null } })
-  await awardPurchaseCredits('pur-1', 'user-a', 10, client)
+  await awardPurchaseCredits(
+    { purchaseId: 'pur-1', userId: 'user-a', credits: 10, stripePaymentIntentId: null, stripeEventId: 'evt_1', stripeCustomerId: null },
+    client
+  )
   const rpcCall = client.__calls.find((c: any) => c.op === 'rpc')
-  assert.deepEqual(Object.keys(rpcCall.payload).sort(), ['p_credits', 'p_purchase_id', 'p_user_id'])
+  assert.deepEqual(
+    Object.keys(rpcCall.payload).sort(),
+    ['p_credits', 'p_purchase_id', 'p_stripe_customer_id', 'p_stripe_event_id', 'p_stripe_payment_intent_id', 'p_user_id']
+  )
+})
+
+test('awardPurchaseCredits is the ONLY write path that can flip a purchase to fulfilled — no other exported function sets status to "fulfilled" or "paid"', async () => {
+  const purchasesModule: any = await import('./purchases')
+  const source = require('fs').readFileSync(require('path').join(__dirname, 'purchases.ts'), 'utf8')
+  // Every remaining status-setting function (markPurchaseFailed,
+  // markPurchaseCancelled) must only ever set ITS OWN terminal status —
+  // this greps for the specific bug pattern (a bare "status: 'paid'" or
+  // "status: 'fulfilled'" outside of a comment) to catch a regression
+  // before it ships again.
+  const codeOnly = source
+    .split('\n')
+    .filter((line: string) => !line.trim().startsWith('//'))
+    .join('\n')
+  assert.ok(!/status:\s*'paid'/.test(codeOnly), 'no function in lib/purchases.ts may set status to "paid" outside the atomic RPC')
+  assert.ok(!/status:\s*'fulfilled'/.test(codeOnly), 'no function in lib/purchases.ts may set status to "fulfilled" directly — only the RPC does')
 })

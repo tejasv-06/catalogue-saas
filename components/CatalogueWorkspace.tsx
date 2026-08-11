@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState, type DragEvent, type RefObject } from 'react'
+import { useEffect, useMemo, useRef, useState, type DragEvent, type RefObject } from 'react'
 import Papa from 'papaparse'
 import JSZip from 'jszip'
 import { pick } from '@/lib/csvMapping'
@@ -15,13 +15,28 @@ import LeftPanel from '@/components/workspace/LeftPanel'
 import ImageOnlyPanel from '@/components/workspace/ImageOnlyPanel'
 import AppSidebar, { type WorkspaceDestination } from '@/components/AppSidebar'
 import QueueTable from '@/components/workspace/QueueTable'
-import ListingHealthBadge from '@/components/workspace/ListingHealthBadge'
+import CatalogFilterBar from '@/components/workspace/CatalogFilterBar'
+import BulkActionBar from '@/components/workspace/BulkActionBar'
+import ListingHealthBadge, { healthStatusClassName, type RowHealthStatus } from '@/components/workspace/ListingHealthBadge'
 import { computeListingHealth, FIELD_SPECS, type GenerationMeta } from '@/lib/listingHealth'
 import { createClient } from '@/lib/supabase/client'
 import { createProduct, upsertListing, setApproval, recordExport, getCatalog } from '@/lib/catalog'
 import { reconcileCatalog } from '@/lib/catalogReconciliation'
 import { PRODUCT_INTELLIGENCE_FIELD_KEYS, type ProductIntelligence, type ProductIntelligenceFieldKey } from '@/lib/productIntelligence'
 import { evaluateMarketplaceExportReadiness, readyMarketplaces, type MarketplaceExportReadiness, type ExportCandidateItem } from '@/lib/exportReadiness'
+import {
+  computeNeedsAttention,
+  filterProducts,
+  sortProducts,
+  getAvailableBrands,
+  getAvailableCategories,
+  gatherExportCandidateItems,
+  DEFAULT_PRODUCT_FILTERS,
+  type ProductFilters,
+  type ProductSortKey
+} from '@/lib/catalogOperations'
+import ActionCenter from '@/components/workspace/ActionCenter'
+import { computeCatalogRecommendations, type CatalogActionRecommendation } from '@/lib/catalogRecommendations'
 import CreditsBalance, { notifyCreditsChanged } from '@/components/CreditsBalance'
 import { CREDIT_COSTS } from '@/lib/creditCosts'
 import { useFocusTrap } from '@/lib/useFocusTrap'
@@ -160,22 +175,9 @@ function computeExportableCounts(draftProducts: DraftProduct[]): { marketplace: 
   }))
 }
 
-// Milestone C11 — the exact inputs lib/exportReadiness.ts's
-// evaluateMarketplaceExportReadiness() needs for one marketplace, gathered
-// from every approved row for that marketplace (same eligibility rule
-// computeExportableCounts above already uses — approved[marketplace], not
-// health/Ready status). Pure extraction, no marketplace-rule logic lives
-// here; that's entirely inside the C10 adapter this data gets handed to.
-function gatherExportCandidateItems(draftProducts: DraftProduct[], marketplace: Marketplace): ExportCandidateItem[] {
-  return draftProducts
-    .filter((p) => p.approved[marketplace])
-    .map((p) => ({
-      productId: p.id,
-      content: p.generatedContent[marketplace],
-      generationError: p.generationError[marketplace],
-      meta: p.generationMeta[marketplace]
-    }))
-}
+// Milestone C15 — gatherExportCandidateItems moved to lib/catalogOperations.ts
+// (imported below) so lib/catalogRecommendations.ts can reuse the exact same
+// function instead of re-deriving the same approved[marketplace] mapping.
 
 type FieldGroup = 'title' | 'bullets' | 'description'
 const FIELD_GROUPS: Record<Marketplace, Partial<Record<FieldGroup, string[]>>> = {
@@ -326,7 +328,8 @@ function GeneratedListingDrawer({
   onUnapproveMarketplace,
   onRetryMarketplace,
   onRegenerateField,
-  onAnalyzeProduct
+  onAnalyzeProduct,
+  onSwitchMarketplace
 }: {
   product: DraftProduct
   marketplace: Marketplace
@@ -339,6 +342,12 @@ function GeneratedListingDrawer({
   onRetryMarketplace: (id: string, marketplace: Marketplace) => void
   onRegenerateField: (id: string, marketplace: Marketplace, fieldGroup?: FieldGroup) => void
   onAnalyzeProduct: (id: string) => void
+  // Milestone C14 — "marketplace status view": lets the seller jump between
+  // this product's other marketplaces without closing/reopening the drawer
+  // from a different table row. Purely a navigation convenience — reuses
+  // the exact same computeListingHealth call every other status chip in
+  // this file already uses, never a new judgment about readiness.
+  onSwitchMarketplace: (marketplace: Marketplace) => void
 }) {
   const attemptedMarketplaces = [marketplace]
 
@@ -375,6 +384,35 @@ function GeneratedListingDrawer({
             <p className="font-medium text-[var(--heading-text)]">{product.brandName}</p>
             <p className="text-sm text-[var(--muted-text)]">{product.category}</p>
           </div>
+        </div>
+
+        {/* Milestone C14 — marketplace status view / quick switch: every
+            marketplace this product could target, colored by its own real
+            health status, so the seller can see (and jump to) the whole
+            picture without leaving the drawer. */}
+        <div className="mb-4 flex flex-wrap gap-1.5">
+          {SUPPORTED_MARKETPLACES.map((m) => {
+            const mContent = product.generatedContent[m]
+            const mError = product.generationError[m]
+            const attempted = mContent !== null || mError !== null
+            const mStatus: RowHealthStatus = attempted
+              ? computeListingHealth(m, mContent, mError, product.generationMeta[m]).status
+              : 'not-generated'
+            const isActive = m === marketplace
+            return (
+              <button
+                key={m}
+                type="button"
+                onClick={() => onSwitchMarketplace(m)}
+                aria-current={isActive}
+                className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${healthStatusClassName(mStatus)} ${
+                  isActive ? 'ring-2 ring-blue-500' : 'opacity-75 hover:opacity-100'
+                }`}
+              >
+                {MARKETPLACE_LABELS[m]}
+              </button>
+            )
+          })}
         </div>
 
         {/* Milestone 32 (C9) — the canonical Product Intelligence section.
@@ -729,14 +767,24 @@ function AddProductsPanel({
     // A normal flex column, not an overlay — no fixed positioning, no
     // z-index, no backdrop, no focus trap. Sits between AppSidebar and the
     // Listings column as a permanent part of the workspace layout.
-    // h-full/overflow-y-auto/border-r only apply at lg: below that the
+    // h-full/overflow-y-auto/border-r only apply at xl: below that the
     // outer row switches to flex-col (see the call site), so this panel
     // just takes its natural stacked height instead of each column
     // fighting to be 100% of a row that no longer has a fixed cross-axis
     // size — border moves from the right edge to the bottom edge to match.
+    //
+    // Milestone C16 — raised from lg (1024px) to xl (1280px). At 1024px
+    // with the sidebar's own default-expanded 256px rail, a three-way row
+    // (sidebar + this panel's fixed 420px + Listings) left Listings with as
+    // little as ~350px — exactly the "everything shrinks" symptom this
+    // milestone fixes. Below xl, this panel now stacks full-width above
+    // Listings instead, which gets the sidebar's ENTIRE remaining width for
+    // itself in the 1024-1279px "narrow desktop/tablet" range. The
+    // sidebar's own lg breakpoint (AppSidebar.tsx, unchanged) is
+    // intentionally independent of this one.
     <aside
       id="add-products-panel"
-      className="w-full lg:w-[420px] lg:shrink-0 lg:h-full lg:overflow-y-auto p-6 border-b lg:border-b-0 border-r-0 lg:border-r border-[var(--card-border)] bg-[var(--page-bg)]"
+      className="w-full xl:w-[420px] xl:shrink-0 xl:h-full xl:overflow-y-auto p-6 border-b xl:border-b-0 border-r-0 xl:border-r border-[var(--card-border)] bg-[var(--page-bg)]"
     >
       <h2 className={sectionHeadingClass}>Add Products</h2>
       <p className={`${bodyTextClass} mb-4`}>How would you like to add products?</p>
@@ -1048,6 +1096,22 @@ export default function CatalogueWorkspace() {
   const [draftProducts, setDraftProducts] = useState<DraftProduct[]>([])
   const [activeTab, setActiveTab] = useState<WorkspaceDestination>('manual')
   const [readinessFilter, setReadinessFilter] = useState<ReadinessFilter>('all')
+  // Milestone C14 — Catalog Command Center: product-level search/filter/sort
+  // (display-only, same "narrows the view, never what bulk actions read"
+  // rule readinessFilter above already established) and bulk-selection
+  // state. selectedProductIds is product-granularity (one checkbox per
+  // product row-group in QueueTable), not per (product, marketplace) row.
+  const [catalogFilters, setCatalogFilters] = useState<ProductFilters>(DEFAULT_PRODUCT_FILTERS)
+  const [sortKey, setSortKey] = useState<ProductSortKey>('newest')
+  const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set())
+  const [bulkRunning, setBulkRunning] = useState(false)
+  const [bulkProgressLabel, setBulkProgressLabel] = useState<string | null>(null)
+  // Milestone C14 — when set, Export All Ready (opened from BulkActionBar's
+  // "Export Selected") is scoped to exactly these product ids instead of
+  // every approved row in the workspace; null (the default, and what the
+  // header's own "Export Listings" button always uses) means unscoped,
+  // exactly today's C11 behavior.
+  const [exportScopeIds, setExportScopeIds] = useState<Set<string> | null>(null)
   // A QueueTable row is a (product, marketplace) pair — View Content must
   // review exactly that pair, so this carries both instead of just a
   // product id (which previously left the drawer to guess/show every
@@ -1835,22 +1899,19 @@ export default function CatalogueWorkspace() {
   // all-products-for-marketplace-2). Each (product, marketplace) pair is one
   // full-price generate-single call — total cost for a batch is simply the
   // count of successful calls, not a separate bulk formula.
-  async function handleGenerateAll() {
-    if (selectedMarketplaces.length === 0) {
-      flagMissingMarketplace()
-      return
-    }
-    const pending = draftProducts.filter((p) => p.status === 'draft')
-    if (pending.length === 0) return
-
-    // Snapshot now — see computeProductStatus above for why this must stay
-    // fixed for the whole run rather than re-reading live state.
-    const runMarketplaces = selectedMarketplaces
+  // Milestone C14 — extracted from handleGenerateAll unchanged (same loop,
+  // same credit-stop semantics) so Bulk Generate (scoped to a selection)
+  // can share it instead of re-implementing the batch/credit-stop logic a
+  // second time. `products` is a snapshot, same reasoning as the old
+  // `pending` local — see computeProductStatus above for why runMarketplaces
+  // must stay fixed for the whole run rather than re-reading live state.
+  async function runGenerationBatch(products: DraftProduct[], runMarketplaces: Marketplace[]) {
+    if (products.length === 0) return
 
     setGenerating(true)
     setCreditsStoppedInfo(null)
 
-    const totalPairs = pending.length * runMarketplaces.length
+    const totalPairs = products.length * runMarketplaces.length
     // completedPairs = attempts made so far, for the "attempt N of totalPairs"
     // progress indicator. succeededPairs = attempts that actually generated
     // content — a distinct count, since the one that trips
@@ -1859,7 +1920,7 @@ export default function CatalogueWorkspace() {
     let completedPairs = 0
     let succeededPairs = 0
 
-    outer: for (const product of pending) {
+    outer: for (const product of products) {
       for (const marketplace of runMarketplaces) {
         setCurrentlyGenerating({ productId: product.id, marketplace })
         setGenerationProgress({ current: completedPairs + 1, total: totalPairs })
@@ -1885,6 +1946,16 @@ export default function CatalogueWorkspace() {
     setCurrentlyGenerating(null)
     setGenerationProgress(null)
     setGenerating(false)
+  }
+
+  async function handleGenerateAll() {
+    if (selectedMarketplaces.length === 0) {
+      flagMissingMarketplace()
+      return
+    }
+    const pending = draftProducts.filter((p) => p.status === 'draft')
+    if (pending.length === 0) return
+    await runGenerationBatch(pending, selectedMarketplaces)
   }
 
   // Shared by the row-level "Retry" button and every drawer regenerate
@@ -2255,6 +2326,165 @@ export default function CatalogueWorkspace() {
     )
   }
 
+  // --- Milestone C14 — bulk selection + orchestration -----------------
+  // Every handler below operates on the CURRENT selection and reuses an
+  // already-existing per-item operation (never a second implementation of
+  // analyze/generate/approve/export); see BulkActionBar's own header
+  // comment for the exact mapping.
+
+  function toggleSelectProduct(id: string) {
+    setSelectedProductIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  // Selects/deselects every currently VISIBLE (filtered) product — never the
+  // full draftProducts — so "select all" respects whatever search/filters
+  // are active, per C14's own requirement.
+  function toggleSelectAllVisible() {
+    const allVisibleSelected = visibleProducts.length > 0 && visibleProducts.every((p) => selectedProductIds.has(p.id))
+    setSelectedProductIds((prev) => {
+      const next = new Set(prev)
+      for (const p of visibleProducts) {
+        if (allVisibleSelected) next.delete(p.id)
+        else next.add(p.id)
+      }
+      return next
+    })
+  }
+
+  function clearSelection() {
+    setSelectedProductIds(new Set())
+  }
+
+  // Reuses handleAnalyzeProduct (the exact same /api/enrich-product call the
+  // drawer's "Analyze Product" button makes) sequentially per selected
+  // product — credit-neutral (enrichment never calls deductCredits, see
+  // app/api/enrich-product/route.ts), and skips any selected product with no
+  // serverId (guests, or a create-product write still in flight) exactly
+  // the way the single-product button already does via its own disabled
+  // state.
+  async function handleBulkAnalyzeSelected() {
+    const targets = draftProducts.filter((p) => selectedProductIds.has(p.id) && p.serverId)
+    if (targets.length === 0 || bulkRunning) return
+    setBulkRunning(true)
+    for (let i = 0; i < targets.length; i++) {
+      setBulkProgressLabel(`Analyzing ${i + 1} of ${targets.length}…`)
+      await handleAnalyzeProduct(targets[i].id)
+    }
+    setBulkProgressLabel(null)
+    setBulkRunning(false)
+  }
+
+  // Reuses runGenerationBatch (the exact loop handleGenerateAll runs),
+  // scoped to selected products that haven't been generated for the
+  // currently-selected marketplaces yet — same credit-authority/stop
+  // behavior, same generateForProductMarketplace call, no new billing path.
+  async function handleBulkGenerateSelected() {
+    if (selectedMarketplaces.length === 0) {
+      flagMissingMarketplace()
+      return
+    }
+    const targets = draftProducts.filter((p) => selectedProductIds.has(p.id) && p.status === 'draft')
+    if (targets.length === 0 || bulkRunning) return
+    setBulkRunning(true)
+    await runGenerationBatch(targets, selectedMarketplaces)
+    setBulkRunning(false)
+  }
+
+  // Mirrors handleBulkApprove's own existing behavior exactly (same
+  // generated-content-implies-approvable rule, same lack of a
+  // persistApprovalToCatalog call — that's an existing C1-C13 property of
+  // bulk approval this milestone doesn't change), just scoped to the
+  // selected ids instead of every product.
+  function handleBulkApproveSelected() {
+    if (!requireMarketplace()) return
+    setDraftProducts((prev) =>
+      prev.map((p) => {
+        if (!selectedProductIds.has(p.id)) return p
+        if (p.status !== 'generated' && p.status !== 'partial') return p
+        const approved = { ...p.approved }
+        for (const marketplace of SUPPORTED_MARKETPLACES) {
+          if (p.generatedContent[marketplace] !== null) approved[marketplace] = true
+        }
+        return { ...p, approved }
+      })
+    )
+  }
+
+  // Opens the SAME ExportSummaryModal/performExport pipeline the header's
+  // "Export Listings" button uses — exportScopeIds is the only difference,
+  // and it only ever narrows which approved rows the C11 readiness gate and
+  // the export loop itself consider (see the useEffect below and
+  // performExport's own scopedProducts). No second readiness judgment.
+  function handleBulkExportSelected() {
+    if (!hasSession) {
+      setShowExportGateModal(true)
+      return
+    }
+    if (!requireMarketplace()) return
+    setExportError(null)
+    setExportReadiness(null)
+    setExportSkipped(null)
+    setExportScopeIds(new Set(selectedProductIds))
+    setShowExportSummary(true)
+  }
+
+  // Milestone C15 — Action Center dispatch. Every branch here calls an
+  // ALREADY-EXISTING handler (the exact same function QueueTable's row
+  // actions, the drawer's buttons, or the header's own Export Listings
+  // button already call) — this function contains no new business logic,
+  // it only routes a recommendation's actionType to the one existing
+  // handler that already implements it. Clicking is therefore the same
+  // explicit user action C1-C14 already required; the recommendation only
+  // ever suggested it.
+  function handleExecuteRecommendation(rec: CatalogActionRecommendation) {
+    switch (rec.actionType) {
+      case 'ANALYZE':
+        if (rec.productId) void handleAnalyzeProduct(rec.productId)
+        return
+      case 'GENERATE':
+        if (rec.productId && rec.marketplace) void runGeneration(rec.productId, rec.marketplace)
+        return
+      case 'APPROVE':
+        if (rec.productId && rec.marketplace) handleApproveMarketplace(rec.productId, rec.marketplace)
+        return
+      case 'EXPORT':
+        // Marketplace-level, not product-specific — opens the SAME
+        // C11-gated export summary the header's own Export Listings button
+        // uses (unscoped: every currently-approved, currently-READY row).
+        handleOpenExportSummary()
+        return
+      case 'FIX_LISTING':
+        // Opens the existing product/listing drawer at exactly this
+        // (product, marketplace) pair — never a second listing-editing UI.
+        if (rec.productId && rec.marketplace) setViewingTarget({ productId: rec.productId, marketplace: rec.marketplace })
+        return
+      case 'COMPLETE_INFORMATION': {
+        // Product-level (not marketplace-specific) — opens the drawer on
+        // whichever marketplace this product has already attempted (the
+        // Product Intelligence section it's about renders above the
+        // marketplace-specific section regardless of which one is shown),
+        // falling back to the first supported marketplace for a product
+        // with nothing generated yet.
+        if (!rec.productId) return
+        const product = draftProducts.find((p) => p.id === rec.productId)
+        if (!product) return
+        const attemptedMarketplace = SUPPORTED_MARKETPLACES.find(
+          (m) => product.generatedContent[m] !== null || product.generationError[m] !== null
+        )
+        setViewingTarget({ productId: product.id, marketplace: attemptedMarketplace ?? SUPPORTED_MARKETPLACES[0] })
+        return
+      }
+      case 'REVIEW_BRAND':
+        setShowBrandProfile(true)
+        return
+    }
+  }
+
   function handleSignInFromExportGate() {
     try {
       const saved = localStorage.getItem(SESSION_STORAGE_KEY)
@@ -2296,6 +2526,10 @@ export default function CatalogueWorkspace() {
     // (§11/§21, C11-AC21/AC22).
     setExportReadiness(null)
     setExportSkipped(null)
+    // Milestone C14 — the header's own global Export Listings button always
+    // means "every approved row," so any scope left over from a previous
+    // Bulk Export Selected run is cleared here.
+    setExportScopeIds(null)
     setShowExportSummary(true)
   }
 
@@ -2309,13 +2543,18 @@ export default function CatalogueWorkspace() {
   // spinner for work that already finished.
   useEffect(() => {
     if (!showExportSummary) return
-    const marketplacesInPlay = computeExportableCounts(draftProducts).map((c) => c.marketplace)
+    // Milestone C14 — scoped to exportScopeIds when Bulk Export Selected
+    // opened this modal, otherwise every product (unchanged C11 behavior).
+    // Still the one and only readiness judgment: evaluateMarketplaceExportReadiness
+    // itself is untouched, only the candidate set feeding it is narrowed.
+    const scopedProducts = exportScopeIds ? draftProducts.filter((p) => exportScopeIds.has(p.id)) : draftProducts
+    const marketplacesInPlay = computeExportableCounts(scopedProducts).map((c) => c.marketplace)
     const results = marketplacesInPlay.map((m) =>
-      evaluateMarketplaceExportReadiness(m, gatherExportCandidateItems(draftProducts, m))
+      evaluateMarketplaceExportReadiness(m, gatherExportCandidateItems(scopedProducts, m))
     )
     setExportReadiness(results)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showExportSummary])
+  }, [showExportSummary, exportScopeIds])
 
   // Milestone C11 — `marketplaces` is the READY subset from the readiness
   // gate (never the full SUPPORTED_MARKETPLACES list) — a NOT_READY or
@@ -2324,8 +2563,15 @@ export default function CatalogueWorkspace() {
   // queue-clearing logic below no matter what. This is the one and only
   // call site; there is no path that bypasses the gate.
   async function performExport(marketplaces: Marketplace[]) {
+    // Milestone C14 — scoped to exportScopeIds when set (Bulk Export
+    // Selected), otherwise every product, unchanged from C11. Every
+    // downstream step (the clearing flatMap over the FULL draftProducts
+    // further below) already keys off exportedByProduct, itself built only
+    // from flattenedRows — so a product outside this scope is structurally
+    // untouched regardless, no separate scoping needed there.
+    const scopedProducts = exportScopeIds ? draftProducts.filter((p) => exportScopeIds.has(p.id)) : draftProducts
     const flattenedRows: { id: string; marketplace: Marketplace; row: Record<string, string> }[] = []
-    for (const p of draftProducts) {
+    for (const p of scopedProducts) {
       for (const marketplace of marketplaces) {
         if (!p.approved[marketplace]) continue
         const row = flattenRow(marketplace, p.generatedContent[marketplace])
@@ -2532,6 +2778,32 @@ export default function CatalogueWorkspace() {
   // handlers), so a "Ready" filter never narrows what an action operates
   // on, only what the table currently shows.
   const listingSummary = computeListingSummary(draftProducts)
+  // Milestone C14 — Catalog Command Center derived view. All display-only
+  // (see catalogFilters/sortKey's own comment above): Generate All/Bulk
+  // Approve/Export above still read the full, unfiltered draftProducts.
+  const needsAttention = computeNeedsAttention(draftProducts)
+  const availableBrands = getAvailableBrands(draftProducts)
+  const availableCategories = getAvailableCategories(draftProducts)
+  const visibleProducts = sortProducts(filterProducts(draftProducts, catalogFilters), sortKey)
+  const selectedCount = selectedProductIds.size
+  const canBulkAnalyze = hasSession && draftProducts.some((p) => selectedProductIds.has(p.id) && p.serverId)
+  const canBulkGenerate = draftProducts.some((p) => selectedProductIds.has(p.id) && p.status === 'draft')
+  const canBulkApprove = draftProducts.some(
+    (p) => selectedProductIds.has(p.id) && (p.status === 'generated' || p.status === 'partial')
+  )
+  const canBulkExport = draftProducts.some(
+    (p) => selectedProductIds.has(p.id) && SUPPORTED_MARKETPLACES.some((m) => p.approved[m])
+  )
+  // Milestone C15 — pure, synchronous, side-effect-free derivation (see
+  // lib/catalogRecommendations.ts's own header comment). useMemo here is
+  // purely a render-cost optimization (avoids re-deriving on every
+  // unrelated re-render, e.g. a text input keystroke elsewhere in this
+  // component) — it changes no behavior, since the underlying function is
+  // pure regardless.
+  const recommendations = useMemo(
+    () => computeCatalogRecommendations(draftProducts, selectedClient),
+    [draftProducts, selectedClient]
+  )
   const viewingProduct = viewingTarget ? draftProducts.find((p) => p.id === viewingTarget.productId) || null : null
   const editingProduct = editingId ? draftProducts.find((p) => p.id === editingId) || null : null
   const formPreviewUrl = imageFile ? null : editingProduct?.imageUrl ?? null
@@ -2562,16 +2834,18 @@ export default function CatalogueWorkspace() {
       <div className="pt-16 h-screen flex flex-col">
         <AppSidebar>
           {/* Sidebar → Add Products → Listings: a normal three-column flex
-              row at lg: and above, not sidebar-plus-overlay. Add Products is
+              row at xl: and above, not sidebar-plus-overlay. Add Products is
               a fixed-width, always-mounted sibling of the Listings column,
-              each with its own independent overflow-y-auto (lg: only — see
+              each with its own independent overflow-y-auto (xl: only — see
               AddProductsPanel) so a tall form and a long queue can each
               scroll on their own without a page-level horizontal scrollbar.
-              Below lg, flex-col stacks Add Products above Listings instead
+              Below xl, flex-col stacks Add Products above Listings instead
               of squeezing both into a shrinking row — this is what keeps
               the three-tab strip from ever fighting for width against the
-              Listings column at tablet sizes. */}
-          <div className="flex-1 flex flex-col lg:flex-row min-h-0">
+              Listings column at tablet/narrow-desktop sizes (Milestone
+              C16 — raised from lg to xl; see AddProductsPanel's own comment
+              for why 1024px specifically was too cramped for a 3-way row). */}
+          <div className="flex-1 flex flex-col xl:flex-row min-h-0">
             <AddProductsPanel
               activeTab={activeTab}
               onActiveTabChange={setActiveTab}
@@ -2612,12 +2886,12 @@ export default function CatalogueWorkspace() {
               onCsvAddAllWithBrandVoice={handleCsvAddAllWithBrandVoice}
               onCsvCancelMismatch={handleCsvCancelMismatch}
             />
-          {/* min-h-0/overflow-y-auto gated to lg: same reasoning as the row
-              above — below lg this column takes its natural stacked
+          {/* min-h-0/overflow-y-auto gated to xl: same reasoning as the row
+              above — below xl this column takes its natural stacked
               height instead of competing with Add Products for a shared
               row height it no longer has, and the page's own scroll
               (this whole block's ancestor) takes over. */}
-          <div className="flex-1 flex flex-col lg:min-h-0 p-6 lg:overflow-y-auto">
+          <div className="flex-1 flex flex-col xl:min-h-0 p-6 xl:overflow-y-auto">
           {/* Compact — a heading and one line, not a page-header-sized
               banner. Establishes "what am I working on" without taking
               space from the catalog table below it. */}
@@ -2712,6 +2986,21 @@ export default function CatalogueWorkspace() {
             </div>
           )}
 
+          {/* Milestone C15 — Action Center. Additive section above the
+              existing Listings table, not a new page/route. Purely a
+              read/present layer: computeCatalogRecommendations is pure and
+              synchronous (see its own header comment), and every button
+              here dispatches to handleExecuteRecommendation below, which
+              only ever calls an already-existing C9-C14 handler — nothing
+              here can fire a network/credit/mutation call on its own. */}
+          <ActionCenter
+            recommendations={recommendations}
+            hasProducts={draftProducts.length > 0}
+            loading={!sessionReady}
+            busy={generating || bulkRunning}
+            onExecute={handleExecuteRecommendation}
+          />
+
           {/* Listings — the primary content of this column. Add Products is
               the persistent sibling column to the left, not an action
               triggered from here anymore. */}
@@ -2720,6 +3009,32 @@ export default function CatalogueWorkspace() {
               <WorkspaceEmptyState />
             ) : (
               <>
+                {draftProducts.length > 0 && (
+                  <CatalogFilterBar
+                    filters={catalogFilters}
+                    onFiltersChange={setCatalogFilters}
+                    sortKey={sortKey}
+                    onSortKeyChange={setSortKey}
+                    availableBrands={availableBrands}
+                    availableCategories={availableCategories}
+                    needsAttention={needsAttention}
+                    onClearFilters={() => setCatalogFilters(DEFAULT_PRODUCT_FILTERS)}
+                  />
+                )}
+                <BulkActionBar
+                  selectedCount={selectedCount}
+                  onClear={clearSelection}
+                  onAnalyze={handleBulkAnalyzeSelected}
+                  onGenerate={handleBulkGenerateSelected}
+                  onApprove={handleBulkApproveSelected}
+                  onExport={handleBulkExportSelected}
+                  canAnalyze={canBulkAnalyze}
+                  canGenerate={canBulkGenerate}
+                  canApprove={canBulkApprove}
+                  canExport={canBulkExport}
+                  busy={bulkRunning || generating}
+                  progressLabel={bulkProgressLabel}
+                />
                 {draftProducts.length > 0 && (
                   <div className="mb-3 flex flex-wrap items-center gap-4">
                     {/* Real counts of attempted (product, marketplace) pairs
@@ -2777,7 +3092,8 @@ export default function CatalogueWorkspace() {
                   </div>
                 )}
                 <QueueTable
-                  draftProducts={draftProducts}
+                  draftProducts={visibleProducts}
+                  totalProductCount={draftProducts.length}
                   readinessFilter={readinessFilter}
                   currentlyGenerating={currentlyGenerating}
                   selectedMarketplaces={selectedMarketplaces}
@@ -2786,6 +3102,9 @@ export default function CatalogueWorkspace() {
                   loading={!sessionReady}
                   hasSession={hasSession}
                   pendingCount={pendingCount}
+                  selectedIds={selectedProductIds}
+                  onToggleSelect={toggleSelectProduct}
+                  onToggleSelectAll={toggleSelectAllVisible}
                   onGenerateAll={handleGenerateAll}
                   onBulkApprove={handleBulkApprove}
                   onDownloadApproved={handleOpenExportSummary}
@@ -2815,6 +3134,7 @@ export default function CatalogueWorkspace() {
           onRetryMarketplace={handleRetryProductMarketplace}
           onRegenerateField={handleRegenerateField}
           onAnalyzeProduct={handleAnalyzeProduct}
+          onSwitchMarketplace={(m) => setViewingTarget({ productId: viewingProduct.id, marketplace: m })}
         />
       )}
 
@@ -2843,8 +3163,11 @@ export default function CatalogueWorkspace() {
       )}
       {showExportSummary && (
         <ExportSummaryModal
-          exportableCounts={computeExportableCounts(draftProducts)}
-          summary={listingSummary}
+          // Milestone C14 — shows the SCOPED counts/summary when Bulk Export
+          // Selected opened this modal, so the confirmation surface never
+          // shows counts for products outside the export it's about to run.
+          exportableCounts={computeExportableCounts(exportScopeIds ? draftProducts.filter((p) => exportScopeIds.has(p.id)) : draftProducts)}
+          summary={computeListingSummary(exportScopeIds ? draftProducts.filter((p) => exportScopeIds.has(p.id)) : draftProducts)}
           exportError={exportError}
           readiness={exportReadiness}
           onClose={() => {

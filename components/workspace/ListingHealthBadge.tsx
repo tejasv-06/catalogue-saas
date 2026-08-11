@@ -44,6 +44,14 @@ const CONFIG: Record<RowHealthStatus, { label: string; icon: LucideIcon; classNa
   }
 }
 
+// Milestone C14 — the same status->color mapping ListingHealthBadge itself
+// uses, exposed so a compact custom chip (the drawer's marketplace
+// quick-switch strip) can share the exact same color convention instead of
+// re-deriving/duplicating it.
+export function healthStatusClassName(status: RowHealthStatus): string {
+  return CONFIG[status].className
+}
+
 export default function ListingHealthBadge({ status }: { status: RowHealthStatus }) {
   const { label, icon: Icon, className } = CONFIG[status]
   return (

@@ -85,29 +85,19 @@ export async function getPurchaseById(id: string, client: SupabaseClient = getSu
   return data as CreditPurchaseRow | null
 }
 
-// Intermediate state, set right before the atomic award step — captures
-// Stripe's own identifiers for observability even in the (should-be-rare)
-// case the subsequent award step fails unexpectedly. Not itself a security
-// boundary — award_purchase_credits' own `status <> 'fulfilled'` guard is
-// what actually prevents double-crediting, this is just bookkeeping.
-export async function markPurchasePaid(
-  id: string,
-  fields: { stripePaymentIntentId: string | null; stripeEventId: string; stripeCustomerId: string | null },
-  client: SupabaseClient = getSupabaseAdminClient()
-): Promise<void> {
-  const { error } = await client
-    .from('credit_purchases')
-    .update({
-      status: 'paid',
-      paid_at: new Date().toISOString(),
-      stripe_payment_intent_id: fields.stripePaymentIntentId,
-      stripe_event_id: fields.stripeEventId,
-      stripe_customer_id: fields.stripeCustomerId
-    })
-    .eq('id', id)
-
-  if (error) throw error
-}
+// C13 follow-up — markPurchasePaid() (a separate, unconditional "set
+// status = 'paid'" UPDATE issued right before the atomic award call) used
+// to exist here and was REMOVED after live testing proved it dangerous: it
+// had no guard, so calling it on a replayed webhook silently reset an
+// already-'fulfilled' purchase back to 'paid', erasing the exact state
+// award_purchase_credits()'s idempotency guard depends on — a real,
+// live-verified double-credit bug. Recording Stripe's payment identifiers
+// is now folded into award_purchase_credits() itself (see
+// supabase/migrations/20260810_09_fix_award_purchase_credits_atomicity.sql)
+// as part of the SAME atomic statement, so there is no separate write for
+// a concurrent/replayed call to land in between "verified" and "awarded."
+// Do not reintroduce a standalone status-mutating call in this file
+// without a WHERE-clause guard against an already-terminal status.
 
 export async function markPurchaseFailed(id: string, client: SupabaseClient = getSupabaseAdminClient()): Promise<void> {
   const { error } = await client.from('credit_purchases').update({ status: 'failed' }).eq('id', id)
@@ -120,21 +110,40 @@ export async function markPurchaseCancelled(id: string, client: SupabaseClient =
 }
 
 // The one atomic, idempotent credit-award call — see
-// supabase/migrations/20260810_08_credit_purchases.sql's
-// award_purchase_credits() for the actual guarantee. `alreadyFulfilled:
-// true` means this purchase was already processed by an earlier call (a
-// retried webhook) — the caller must treat that as success, not an error,
-// and must not have awarded credits a second time.
+// supabase/migrations/20260810_09_fix_award_purchase_credits_atomicity.sql
+// for the actual guarantee, and its own comment for the real bug this
+// fixed: an earlier version of this pipeline called a separate
+// markPurchasePaid() UPDATE immediately before this RPC on every webhook
+// invocation, which unconditionally reset status back to 'paid' — erasing
+// this RPC's own `status <> 'fulfilled'` idempotency guard and letting a
+// replayed webhook award credits twice. Recording Stripe's payment
+// identifiers is now part of THIS SAME atomic statement (the
+// p_stripe_* params below) instead of a prior, separate, unguarded write
+// — there is no longer an intermediate state between "payment verified"
+// and "credits awarded, ledger recorded, purchase fulfilled" for a
+// concurrent/replayed call to land in.
+//
+// `alreadyFulfilled: true` means this purchase was already processed by an
+// earlier call (a retried webhook) — the caller must treat that as
+// success, not an error, and must not have awarded credits a second time.
 export async function awardPurchaseCredits(
-  purchaseId: string,
-  userId: string,
-  credits: number,
+  params: {
+    purchaseId: string
+    userId: string
+    credits: number
+    stripePaymentIntentId: string | null
+    stripeEventId: string
+    stripeCustomerId: string | null
+  },
   client: SupabaseClient = getSupabaseAdminClient()
 ): Promise<{ creditsRemaining: number | null; alreadyFulfilled: boolean }> {
   const { data, error } = await client.rpc('award_purchase_credits', {
-    p_purchase_id: purchaseId,
-    p_user_id: userId,
-    p_credits: credits
+    p_purchase_id: params.purchaseId,
+    p_user_id: params.userId,
+    p_credits: params.credits,
+    p_stripe_payment_intent_id: params.stripePaymentIntentId,
+    p_stripe_event_id: params.stripeEventId,
+    p_stripe_customer_id: params.stripeCustomerId
   })
   if (error) throw error
   const row = Array.isArray(data) ? data[0] : data

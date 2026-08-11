@@ -37,7 +37,7 @@ test('readiness is computed via the C10/C11 pure functions, not re-derived inlin
 
 test('the modal is wired to only export the READY subset, via onConfirmReady', () => {
   const start = source.indexOf('<ExportSummaryModal')
-  const callSite = source.slice(start, start + 400)
+  const callSite = source.slice(start, start + 900)
   assert.match(callSite, /readiness=\{exportReadiness\}/)
   assert.match(callSite, /onConfirmReady=\{\(marketplaces\) => performExport\(marketplaces\)\}/)
 })
@@ -54,8 +54,17 @@ test('ExportSummaryModal never labels a non-READY marketplace with a generic "so
 })
 
 test('gatherExportCandidateItems reuses the same approved[marketplace] eligibility rule as computeExportableCounts, not a new one', () => {
-  const body = bodyOf('function gatherExportCandidateItems(')
+  // Milestone C15 — moved from this file into lib/catalogOperations.ts so
+  // lib/catalogRecommendations.ts's marketplace-level EXPORT recommendation
+  // can call the exact same function CatalogueWorkspace.tsx's own export
+  // flow does, rather than re-deriving the same approved[marketplace]
+  // mapping a second time. Behavior (and this assertion) is unchanged.
+  const opsSource = readFileSync(join(__dirname, '..', 'lib', 'catalogOperations.ts'), 'utf8')
+  const start = opsSource.indexOf('export function gatherExportCandidateItems(')
+  assert.ok(start !== -1, 'expected to find gatherExportCandidateItems in lib/catalogOperations.ts')
+  const body = opsSource.slice(start, start + 500)
   assert.match(body, /p\.approved\[marketplace\]/)
+  assert.match(source, /import\s*\{[^}]*gatherExportCandidateItems[^}]*\}\s*from\s*'@\/lib\/catalogOperations'/)
 })
 
 test('skipped-marketplace reasons come from the real readiness issues, never a hardcoded generic string', () => {

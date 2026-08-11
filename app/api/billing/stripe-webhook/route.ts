@@ -3,12 +3,7 @@ import type Stripe from 'stripe'
 import { getStripeClient } from '@/lib/stripeClient'
 import { getCreditPackage } from '@/lib/creditPackages'
 import { verifyStripeWebhookSignature, isSupportedFulfillmentEvent, WebhookSignatureError } from '@/lib/webhookVerification'
-import {
-  getPurchaseByCheckoutSessionId,
-  markPurchasePaid,
-  markPurchaseFailed,
-  awardPurchaseCredits
-} from '@/lib/purchases'
+import { getPurchaseByCheckoutSessionId, markPurchaseFailed, awardPurchaseCredits } from '@/lib/purchases'
 
 // Milestone C13 — POST /api/billing/stripe-webhook. The ONLY authority in
 // this whole app that ever awards purchased credits. Nothing here trusts
@@ -102,17 +97,22 @@ export async function POST(request: Request) {
   }
 
   try {
-    await markPurchasePaid(purchase.id, {
+    // C13-AC13/AC14/AC15 — the one atomic, idempotent step. Recording
+    // Stripe's payment identifiers happens INSIDE this same call now (see
+    // supabase/migrations/20260810_09_fix_award_purchase_credits_atomicity.sql)
+    // — there is no separate prior write that could reset the purchase's
+    // status between the signature check above and this award. A retried
+    // delivery of this same event for an already-fulfilled purchase comes
+    // back with alreadyFulfilled: true and creditsRemaining: null — this
+    // is success, not an error, and must not be treated as a second award.
+    const result = await awardPurchaseCredits({
+      purchaseId: purchase.id,
+      userId: purchase.user_id,
+      credits: purchase.credits,
       stripePaymentIntentId: typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id ?? null,
       stripeEventId: event.id,
       stripeCustomerId: typeof session.customer === 'string' ? session.customer : session.customer?.id ?? null
     })
-
-    // C13-AC13/AC14/AC15 — the one atomic, idempotent step. A retried
-    // delivery of this same event for an already-fulfilled purchase comes
-    // back with alreadyFulfilled: true and creditsRemaining: null — this
-    // is success, not an error, and must not be treated as a second award.
-    const result = await awardPurchaseCredits(purchase.id, purchase.user_id, purchase.credits)
 
     if (result.alreadyFulfilled) {
       return NextResponse.json({ received: true, handled: true, alreadyFulfilled: true })
