@@ -1,10 +1,10 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState, type DragEvent, type RefObject } from 'react'
+import { useEffect, useRef, useState, type DragEvent, type RefObject } from 'react'
 import Papa from 'papaparse'
 import JSZip from 'jszip'
 import { pick } from '@/lib/csvMapping'
-import { exportColumns, flattenRow } from '@/lib/exportShapers'
+import { exportColumns, flattenRow, RAW_COLUMNS, buildRawColumnsRow, generatedColumnLabels } from '@/lib/exportShapers'
 import { type Client } from '@/components/ClientSelector'
 import BrandProfileModal from '@/components/BrandProfileModal'
 import StatusBadge from '@/components/StatusBadge'
@@ -13,37 +13,27 @@ import AppHeader from '@/components/AppHeader'
 import TopHeader from '@/components/TopHeader'
 import LeftPanel from '@/components/workspace/LeftPanel'
 import ImageOnlyPanel from '@/components/workspace/ImageOnlyPanel'
-import AppSidebar, { type WorkspaceDestination } from '@/components/AppSidebar'
+import AppSidebar, { ChevronIcon, type WorkspaceDestination } from '@/components/AppSidebar'
 import QueueTable from '@/components/workspace/QueueTable'
-import CatalogFilterBar from '@/components/workspace/CatalogFilterBar'
-import BulkActionBar from '@/components/workspace/BulkActionBar'
 import ListingHealthBadge from '@/components/workspace/ListingHealthBadge'
-import { marketplaceChipFor, explainMissing, CHIP_TONE_CLASS } from '@/components/workspace/humanCopy'
 import { computeListingHealth, FIELD_SPECS, type GenerationMeta } from '@/lib/listingHealth'
 import { createClient } from '@/lib/supabase/client'
+import {
+  createProduct,
+  updateProduct,
+  upsertListing,
+  setApproval,
+  recordExport,
+  getCatalog,
+  deleteProduct,
+  getProductIdsWithPerformanceHistory
+} from '@/lib/catalog'
 import { recordProductHistoryEvent } from '@/lib/productHistory'
 import ProductHistory from '@/components/ProductHistory'
+import ProductPerformance from '@/components/ProductPerformance'
 import { reconcileCatalog } from '@/lib/catalogReconciliation'
-import { getCatalog, createProduct, upsertListing, setApproval, deleteProduct, recordExport, updateProduct } from '@/lib/catalog'
 import { PRODUCT_INTELLIGENCE_FIELD_KEYS, type ProductIntelligence, type ProductIntelligenceFieldKey } from '@/lib/productIntelligence'
 import { evaluateMarketplaceExportReadiness, readyMarketplaces, type MarketplaceExportReadiness, type ExportCandidateItem } from '@/lib/exportReadiness'
-import {
-  computeNeedsAttention,
-  filterProducts,
-  sortProducts,
-  getAvailableBrands,
-  getAvailableCategories,
-  gatherExportCandidateItems,
-  DEFAULT_PRODUCT_FILTERS,
-  type ProductFilters,
-  type ProductSortKey
-} from '@/lib/catalogOperations'
-// Milestone C17 — ActionCenter.tsx (the global "N actions need attention"
-// card-stack) is no longer mounted here; the recommendation engine it was
-// built on stays in active use, surfaced per-product instead (see
-// QueueTable's own `recommendations` prop and handleExecuteRecommendation
-// below).
-import { computeCatalogRecommendations, type CatalogActionRecommendation } from '@/lib/catalogRecommendations'
 import CreditsBalance, { notifyCreditsChanged } from '@/components/CreditsBalance'
 import { CREDIT_COSTS } from '@/lib/creditCosts'
 import { useFocusTrap } from '@/lib/useFocusTrap'
@@ -77,6 +67,11 @@ import {
 import Link from 'next/link'
 
 const SESSION_STORAGE_KEY = 'catalogue-draft-session'
+// Same UI-preference persistence pattern as AppSidebar's own
+// COLLAPSE_STORAGE_KEY ('workspace-sidebar-collapsed') — a plain
+// localStorage 'true'/'false' flag, not part of the session-restore
+// payload above (which is product data, not a UI preference).
+const ADD_PRODUCTS_COLLAPSE_STORAGE_KEY = 'workspace-add-products-collapsed'
 const SESSION_MAX_AGE_MS = 4 * 60 * 60 * 1000
 // Bumped whenever the saved-session payload's shape changes in a way a
 // straight JSON restore can't safely absorb — e.g. this refactor, which
@@ -131,25 +126,45 @@ const ADD_METHOD_TABS: { id: WorkspaceDestination; label: string }[] = [
 // one Ready and one Needs Review marketplace shows only the matching row
 // under either filter instead of both.
 export type ReadinessFilter = 'all' | 'ready' | 'needs-review' | 'missing-data' | 'error'
-// Milestone C17 — the plain-language labels for these are now defined once,
-// in components/workspace/CatalogFilterBar.tsx's own STATUS_OPTIONS
-// (the only place this filter's UI renders since the Action Center's
-// removal from the primary experience).
+const FILTER_OPTIONS: { id: ReadinessFilter; label: string }[] = [
+  { id: 'all', label: 'All' },
+  { id: 'ready', label: 'Ready' },
+  { id: 'needs-review', label: 'Needs Review' },
+  { id: 'missing-data', label: 'Missing Data' },
+  { id: 'error', label: 'Error' }
+]
 
-// Compact single-line summary, not a stat-card grid — counts real
-// (product, marketplace) pairs that have actually been attempted (content
-// or error present), using the exact same computeListingHealth call
-// QueueTable's own rows use. A draft product with nothing generated yet
-// isn't counted as a "listing" here, same as it isn't shown as a real
-// health-bearing row in the table.
+// Compact single-line summary, not a stat-card grid. `total` mirrors
+// QueueTable's own row-rendering exactly (buildRowData/
+// getDisplayMarketplaces in components/workspace/QueueTable.tsx): each
+// (product, marketplace) pair that's actually been attempted (content or
+// error present) is one row, and a product with NOTHING attempted yet
+// still renders as exactly one fallback row (marketplace slot null) —
+// counted here as 1, not 0. Regression guard: this used to skip that
+// fallback case entirely, so the header could read "0 Listings" while the
+// table directly beneath it visibly showed real rows for not-yet-generated
+// products — this keeps the two permanently in sync instead of measuring
+// two different things. The ready/needsReview/missingData/error
+// sub-counts still only ever tally real computeListingHealth statuses
+// (the same call QueueTable's own rows use) — a fallback row has no
+// health status yet, so it contributes to `total` without incrementing
+// any of them, which is why the breakdown doesn't always sum to `total`.
 function computeListingSummary(draftProducts: DraftProduct[]) {
   const counts = { total: 0, ready: 0, needsReview: 0, missingData: 0, error: 0 }
   for (const product of draftProducts) {
-    for (const m of SUPPORTED_MARKETPLACES) {
+    const attemptedMarketplaces = SUPPORTED_MARKETPLACES.filter(
+      (m) => product.generatedContent[m] !== null || product.generationError[m] !== null
+    )
+
+    if (attemptedMarketplaces.length === 0) {
+      counts.total++
+      continue
+    }
+
+    for (const m of attemptedMarketplaces) {
+      counts.total++
       const content = product.generatedContent[m]
       const error = product.generationError[m]
-      if (content === null && error === null) continue
-      counts.total++
       const status = computeListingHealth(m, content, error, product.generationMeta[m]).status
       if (status === 'ready') counts.ready++
       else if (status === 'needs-review') counts.needsReview++
@@ -179,9 +194,22 @@ function computeExportableCounts(draftProducts: DraftProduct[]): { marketplace: 
   }))
 }
 
-// Milestone C15 — gatherExportCandidateItems moved to lib/catalogOperations.ts
-// (imported below) so lib/catalogRecommendations.ts can reuse the exact same
-// function instead of re-deriving the same approved[marketplace] mapping.
+// Milestone C11 — the exact inputs lib/exportReadiness.ts's
+// evaluateMarketplaceExportReadiness() needs for one marketplace, gathered
+// from every approved row for that marketplace (same eligibility rule
+// computeExportableCounts above already uses — approved[marketplace], not
+// health/Ready status). Pure extraction, no marketplace-rule logic lives
+// here; that's entirely inside the C10 adapter this data gets handed to.
+function gatherExportCandidateItems(draftProducts: DraftProduct[], marketplace: Marketplace): ExportCandidateItem[] {
+  return draftProducts
+    .filter((p) => p.approved[marketplace])
+    .map((p) => ({
+      productId: p.id,
+      content: p.generatedContent[marketplace],
+      generationError: p.generationError[marketplace],
+      meta: p.generationMeta[marketplace]
+    }))
+}
 
 type FieldGroup = 'title' | 'bullets' | 'description'
 const FIELD_GROUPS: Record<Marketplace, Partial<Record<FieldGroup, string[]>>> = {
@@ -332,8 +360,7 @@ function GeneratedListingDrawer({
   onUnapproveMarketplace,
   onRetryMarketplace,
   onRegenerateField,
-  onAnalyzeProduct,
-  onSwitchMarketplace
+  onAnalyzeProduct
 }: {
   product: DraftProduct
   marketplace: Marketplace
@@ -346,12 +373,6 @@ function GeneratedListingDrawer({
   onRetryMarketplace: (id: string, marketplace: Marketplace) => void
   onRegenerateField: (id: string, marketplace: Marketplace, fieldGroup?: FieldGroup) => void
   onAnalyzeProduct: (id: string) => void
-  // Milestone C14 — "marketplace status view": lets the seller jump between
-  // this product's other marketplaces without closing/reopening the drawer
-  // from a different table row. Purely a navigation convenience — reuses
-  // the exact same computeListingHealth call every other status chip in
-  // this file already uses, never a new judgment about readiness.
-  onSwitchMarketplace: (marketplace: Marketplace) => void
 }) {
   const attemptedMarketplaces = [marketplace]
 
@@ -377,15 +398,9 @@ function GeneratedListingDrawer({
         aria-label="Generated Listings"
         className="relative w-full max-w-md border-l h-full p-6 overflow-y-auto shadow-xl focus:outline-none bg-[var(--card-bg)] border-[var(--card-border)]"
       >
-        {/* Milestone C17 — "Product Studio": the drawer is where the seller
-            goes deep on one product — what Tesolute understands about it,
-            its marketplace-ready content, and what's left to do. The old
-            draft/partial/generated progress badge is dropped here (that's
-            an internal generation-progress concept, not a seller-facing
-            one) in favor of the per-marketplace chips just below, which
-            already say more useful things in plain language. */}
-        <div className="mb-4">
-          <h2 className={sectionHeadingClass}>Product Studio</h2>
+        <div className="mb-4 flex items-center gap-2">
+          <h2 className={sectionHeadingClass}>Generated Listings</h2>
+          <StatusBadge status={product.status} />
         </div>
 
         <div className="flex items-center gap-3 mb-4">
@@ -396,78 +411,15 @@ function GeneratedListingDrawer({
           </div>
         </div>
 
-        {/* Milestone C14 — marketplace status view / quick switch: every
-            marketplace this product could target, so the seller can see
-            (and jump to) the whole picture without leaving the drawer.
-            Milestone C17 — the color AND label now come from the same
-            plain-language humanCopy translation the product cards use
-            (marketplaceChipFor), never the raw ready/needs-review/
-            missing-data/error vocabulary. */}
-        <div className="mb-4 flex flex-wrap gap-1.5">
-          {SUPPORTED_MARKETPLACES.map((m) => {
-            const mContent = product.generatedContent[m]
-            const mError = product.generationError[m]
-            const attempted = mContent !== null || mError !== null
-            const mHealth = attempted ? computeListingHealth(m, mContent, mError, product.generationMeta[m]) : null
-            const chip = marketplaceChipFor(attempted, mHealth)
-            const isActive = m === marketplace
-            return (
-              <button
-                key={m}
-                type="button"
-                onClick={() => onSwitchMarketplace(m)}
-                aria-current={isActive}
-                className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${CHIP_TONE_CLASS[chip.tone]} ${
-                  isActive ? 'ring-2 ring-blue-500' : 'opacity-75 hover:opacity-100'
-                }`}
-              >
-                {MARKETPLACE_LABELS[m]} · {chip.label}
-              </button>
-            )
-          })}
-        </div>
-
-        {/* Milestone C17 — "What Tesolute Understands." Same C9
-            product_intelligence data, C14 visualAttributes, and the
-            seller's own typed-in fields as before — reorganized so the
-            seller can tell CONFIRMED (their own input) from OBSERVED
-            (detected in their photo) from INFERRED (the AI's own
-            reasoning, never presented as settled fact) at a glance, per
-            the explicit "never present an uncertain AI inference as a
-            confirmed product fact" requirement. */}
+        {/* Milestone 32 (C9) — the canonical Product Intelligence section.
+            Content-first even here: the trigger/status/re-analyze action
+            sits on one compact header line, the fields themselves render as
+            plain label/value rows (same visual weight as "Detected from
+            image" below), and missing-information is a small warning list —
+            never a score dashboard preceding the product's own data. */}
         <div className="mb-4 pb-4 border-b border-[var(--card-border)]">
-          <p className={`${labelClass} mb-2`}>What Tesolute Understands</p>
-
-          {/* Confirmed — verbatim from the seller's own form fields, never
-              re-derived. */}
-          {(product.brandName || product.category || product.description) && (
-            <div className="mb-3">
-              <p className="text-xs font-medium text-[var(--success-text)] mb-1">✓ Confirmed by you</p>
-              <div className="flex flex-col gap-0.5">
-                {product.brandName && (
-                  <p className="text-sm text-[var(--body-text)]">
-                    <span className="text-[var(--muted-text)]">Brand: </span>
-                    {product.brandName}
-                  </p>
-                )}
-                {product.category && (
-                  <p className="text-sm text-[var(--body-text)]">
-                    <span className="text-[var(--muted-text)]">Category: </span>
-                    {product.category}
-                  </p>
-                )}
-                {product.description && (
-                  <p className="text-sm text-[var(--body-text)]">
-                    <span className="text-[var(--muted-text)]">Description: </span>
-                    {product.description}
-                  </p>
-                )}
-              </div>
-            </div>
-          )}
-
           <div className="flex items-center justify-between mb-1">
-            <p className="text-xs font-medium text-[var(--accent-sky-text)]">Inferred by Tesolute</p>
+            <p className={labelClass}>Product Intelligence</p>
             <button
               onClick={() => onAnalyzeProduct(product.id)}
               disabled={isAnalyzing || !product.serverId}
@@ -485,7 +437,11 @@ function GeneratedListingDrawer({
           </div>
 
           {(!product.productIntelligence || product.productIntelligence.status === 'not_started') && !isAnalyzing && (
-            <p className="text-xs text-[var(--muted-text)]">Not analyzed yet — Tesolute hasn't looked at this product closely.</p>
+            <p className="text-xs text-[var(--muted-text)]">
+              Not analyzed yet — optional. A deeper, confidence-scored read (occasion, target customer, key
+              selling points, and more) than the visual details already detected below; existing generated
+              listings don't need it.
+            </p>
           )}
 
           {product.productIntelligence?.status === 'failed' && (
@@ -496,29 +452,20 @@ function GeneratedListingDrawer({
 
           {product.productIntelligence?.data && (
             <div className="mt-1 flex flex-col gap-1">
-              {/* Every inferred fact is explicitly framed as AI reasoning
-                  with its own confidence, never stated as settled — a
-                  "low"/"unknown" confidence gets an extra nudge to verify
-                  before publishing, exactly per spec. */}
               {PRODUCT_INTELLIGENCE_FIELD_KEYS.map((key) => {
                 const field = product.productIntelligence!.data![key]
-                if (field.value == null || (Array.isArray(field.value) && field.value.length === 0)) return null
-                const needsVerification = field.confidence === 'low' || field.confidence === 'unknown'
                 return (
                   <p key={key} className="text-sm text-[var(--body-text)]">
                     <span className="text-[var(--muted-text)]">{INTELLIGENCE_FIELD_LABELS[key]}: </span>
                     {formatIntelligenceValue(field.value)}
-                    <span className={`text-xs ${needsVerification ? 'text-[var(--warn-text)]' : 'text-[var(--muted-text)]'}`}>
-                      {' '}
-                      ({needsVerification ? 'unverified — worth checking' : `${field.confidence} confidence`})
-                    </span>
+                    <span className="text-xs text-[var(--muted-text)]"> ({field.confidence} confidence)</span>
                   </p>
                 )
               })}
 
               {product.productIntelligence.missing_information.length > 0 && (
                 <div className={`mt-2 ${warningBannerClass}`}>
-                  <p className={`${warningTextClass} font-medium mb-1`}>Tesolute needs more to work with:</p>
+                  <p className={`${warningTextClass} font-medium mb-1`}>Missing information</p>
                   <ul className="list-disc list-inside">
                     {product.productIntelligence.missing_information.map((item, i) => (
                       <li key={i} className={warningTextClass}>
@@ -534,7 +481,7 @@ function GeneratedListingDrawer({
 
         {hasVisualAttributes && (
           <div className="mb-4 pb-4 border-b border-[var(--card-border)]">
-            <p className="text-xs font-medium text-[var(--accent-sky-text)] mb-1">Observed in your photo</p>
+            <p className={labelClass}>Detected from image</p>
             <div className="mt-1 grid grid-cols-2 gap-x-3 gap-y-1">
               {detectedAttributes.map(([key, value]) => (
                 <p key={key} className="text-sm text-[var(--body-text)] capitalize">
@@ -621,11 +568,6 @@ function GeneratedListingDrawer({
                 : undefined
             }
 
-            // Milestone C17 — the plain-language line every field-level
-            // annotation below already backs up with real detail; never a
-            // second, independent judgment about this listing's status.
-            const humanStatusLine = !isGenerating && (content || error) ? explainMissing(MARKETPLACE_LABELS[marketplace], health) : null
-
             return (
               <div key={marketplace} className="pt-4 border-t border-[var(--card-border)] first:pt-0 first:border-t-0">
                 <div className="flex items-center justify-between mb-2">
@@ -635,11 +577,6 @@ function GeneratedListingDrawer({
                     {(content || error) && <ListingHealthBadge status={isGenerating ? 'generating' : health.status} />}
                   </div>
                 </div>
-                {!isGenerating && content && !error && (
-                  <p className={`mb-2 text-sm ${humanStatusLine ? 'text-[var(--warn-text)]' : 'text-[var(--success-text)]'}`}>
-                    {humanStatusLine ?? `Your ${MARKETPLACE_LABELS[marketplace]} content is complete.`}
-                  </p>
-                )}
 
                 {/* True first-ever-attempt failure (no content exists yet) —
                     unchanged from before: full-width banner, generic retry. */}
@@ -731,6 +668,7 @@ function GeneratedListingDrawer({
           })}
         </div>
 
+        <ProductPerformance productId={product.serverId} />
         <ProductHistory productId={product.serverId} />
 
         <div className="mt-6 flex justify-end">
@@ -744,12 +682,14 @@ function GeneratedListingDrawer({
 }
 
 // The three input methods (Bulk Upload / Manual Entry / Photos Only),
-// unchanged from Milestone 1's tab-strip. Milestone C17 — no longer a
-// permanent sidebar column: mounted inline inside the create hero only
-// while it's expanded (see CatalogueWorkspace's showCreatePanel state).
-// None of LeftPanel/ImageOnlyPanel's own props, fields, or submit logic
-// changed, only where and how this whole block is framed.
+// unchanged from Milestone 1's tab-strip — a persistent workspace column
+// now (sidebar → Add Products → Listings), not a modal/drawer: always
+// mounted, no backdrop, no focus trap, no close action. None of
+// LeftPanel/ImageOnlyPanel's own props, fields, or submit logic changed,
+// only where this whole block renders.
 function AddProductsPanel({
+  collapsed,
+  onToggleCollapsed,
   activeTab,
   onActiveTabChange,
   brandName,
@@ -789,6 +729,8 @@ function AddProductsPanel({
   onCsvAddAllWithBrandVoice,
   onCsvCancelMismatch
 }: {
+  collapsed: boolean
+  onToggleCollapsed: () => void
   activeTab: WorkspaceDestination
   onActiveTabChange: (tab: WorkspaceDestination) => void
   brandName: string
@@ -829,100 +771,145 @@ function AddProductsPanel({
   onCsvCancelMismatch: () => void
 }) {
   return (
-    // Milestone C17 — a plain full-width card now, mounted inline within
-    // the create hero rather than a permanent sidebar column (the old
-    // lg→xl breakpoint tuning from C16 no longer applies since this never
-    // competes for row width with anything anymore).
-    // Milestone C17 — max-w-2xl (not the full hero-card width): a focused
-    // creation task reads better as a centered ~672px form than a
-    // full-bleed field stretching the entire workspace width.
-    <aside id="add-products-panel" className={`w-full max-w-2xl mx-auto p-6 ${cardClass}`}>
-      <h2 className={sectionHeadingClass}>Add Products</h2>
-      <p className={`${bodyTextClass} mb-4`}>How would you like to add products?</p>
+    // Same collapse-to-narrow-rail mechanism as AppSidebar's own nav
+    // (components/AppSidebar.tsx) — same ChevronIcon, same
+    // transition-[width] duration-200 + overflow-hidden approach, same
+    // click/toggle/localStorage-persisted pattern — reused directly, not
+    // reimplemented. The one necessary adaptation: AppSidebar's nav is
+    // position:fixed (spans the viewport height on its own), while this
+    // panel is a normal flex-row sibling of the Listings column, so a
+    // collapsed narrow rail would otherwise still get stretched to match
+    // the Listings column's full height (flex's default cross-axis
+    // stretch) — lg:self-start overrides that specifically while
+    // collapsed, so it shrinks to its own natural (just-the-button)
+    // height instead of leaving a tall empty box. Expanded keeps the
+    // original lg:h-full/overflow-y-auto stretch-and-scroll behavior,
+    // matching the Listings column's height either way. Collapse is a
+    // desktop-only concept here too (same as AppSidebar's own mobile
+    // behavior) — below lg every class below is inert, so the panel
+    // always renders full-width/full-content on mobile regardless of
+    // `collapsed`.
+    <aside
+      id="add-products-panel"
+      className={`w-full shrink-0 flex flex-col overflow-hidden border-b lg:border-b-0 border-r-0 lg:border-r border-[var(--card-border)] bg-[var(--page-bg)] transition-[width] duration-200 ${
+        collapsed ? 'lg:w-14 lg:self-start' : 'lg:w-[560px] lg:h-full'
+      }`}
+    >
+      <button
+        type="button"
+        onClick={onToggleCollapsed}
+        aria-expanded={!collapsed}
+        aria-label={collapsed ? 'Expand Add Products' : 'Collapse Add Products'}
+        title={collapsed ? 'Expand Add Products' : 'Collapse Add Products'}
+        className={`flex items-center shrink-0 gap-2 px-3 py-2.5 mt-2 mx-2 rounded-lg text-[var(--muted-text)] hover:text-[var(--heading-text)] hover:bg-[var(--secondary-btn-bg-hover)] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[var(--page-bg)] focus:ring-blue-500 transition-colors ${
+          collapsed ? 'justify-center' : 'justify-between'
+        }`}
+      >
+        {!collapsed && <h2 className={sectionHeadingClass}>Add Products</h2>}
+        {/* No text label (bare word next to the icon read as clutter) — the
+            chevron itself gets a visible pill chip (border + tinted
+            background, not just on hover) so it reads as its own
+            distinct, clickable control instead of a faint stray stroke
+            blending into the header. title/aria-label above still carry
+            "Collapse"/"Expand" for the tooltip and for screen readers. */}
+        <span className="flex items-center justify-center rounded-full border border-[var(--secondary-btn-border)] bg-[var(--secondary-btn-bg)] p-1">
+          <ChevronIcon pointingRight={collapsed} />
+        </span>
+      </button>
 
-        <div className="mb-3">
-          {/* grid-cols-3 (not flex-wrap): guarantees Bulk Upload / Manual
-              Entry / Photos Only stay on exactly one row, each taking an
-              equal, deterministic third of the panel's width, rather than
-              risking the last tab wrapping if content width runs tight. */}
-          <div className="grid grid-cols-3 gap-1.5">
-            {ADD_METHOD_TABS.map((tab) => {
-              const isActive = activeTab === tab.id
-              return (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => onActiveTabChange(tab.id)}
-                  aria-pressed={isActive}
-                  className={`px-2 py-2 rounded-lg text-xs sm:text-sm font-medium border whitespace-nowrap text-center transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[var(--page-bg)] focus:ring-blue-500 ${
-                    isActive
-                      ? 'bg-blue-600 border-blue-600 text-white'
-                      : 'bg-[var(--input-bg)] border-[var(--input-border)] text-[var(--heading-text)] hover:bg-[var(--secondary-btn-bg-hover)]'
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              )
-            })}
+      {/* Always mounted (never a JS-level unmount) so scrollIntoView/focus
+          targeting from WorkspaceEmptyState's "+ Add Products" button
+          keeps working — lg:hidden only ever applies at the desktop
+          breakpoint collapse actually affects; mobile always shows this
+          regardless of `collapsed`, matching AppSidebar's own mobile
+          behavior. */}
+      <div className={`flex-1 min-h-0 flex flex-col px-6 pb-6 pt-2 lg:overflow-y-auto ${collapsed ? 'lg:hidden' : ''}`}>
+          <p className={`${bodyTextClass} mb-4`}>How would you like to add products?</p>
+
+          <div className="mb-3">
+            {/* grid-cols-3 (not flex-wrap): guarantees Bulk Upload / Manual
+                Entry / Photos Only stay on exactly one row, each taking an
+                equal, deterministic third of the panel's width, rather than
+                risking the last tab wrapping if content width runs tight. */}
+            <div className="grid grid-cols-3 gap-1.5">
+              {ADD_METHOD_TABS.map((tab) => {
+                const isActive = activeTab === tab.id
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => onActiveTabChange(tab.id)}
+                    aria-pressed={isActive}
+                    className={`px-2 py-2 rounded-lg text-xs sm:text-sm font-medium border whitespace-nowrap text-center transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[var(--page-bg)] focus:ring-blue-500 ${
+                      isActive
+                        ? 'bg-blue-600 border-blue-600 text-white'
+                        : 'bg-[var(--input-bg)] border-[var(--input-border)] text-[var(--heading-text)] hover:bg-[var(--secondary-btn-bg-hover)]'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                )
+              })}
+            </div>
           </div>
-        </div>
 
-        {activeTab === 'image' ? (
-          <ImageOnlyPanel
-            brandName={brandName}
-            onBrandNameChange={onBrandNameChange}
-            category={category}
-            onCategoryChange={onCategoryChange}
-            imageFile={imageFile}
-            onImageFileChange={onImageFileChange}
-            formPreviewUrl={formPreviewUrl}
-            fileInputRef={fileInputRef}
-            formError={formError}
-            guestLimitReached={guestLimitReached}
-            onSubmit={onAddImageOnlyProduct}
-            uploadingImage={uploadingImage}
-            editingId={editingId}
-          />
-        ) : (
-          <LeftPanel
-            activeTab={activeTab}
-            brandName={brandName}
-            onBrandNameChange={onBrandNameChange}
-            category={category}
-            onCategoryChange={onCategoryChange}
-            description={description}
-            onDescriptionChange={onDescriptionChange}
-            imageFile={imageFile}
-            onImageFileChange={onImageFileChange}
-            formPreviewUrl={formPreviewUrl}
-            fileInputRef={fileInputRef}
-            formError={formError}
-            guestLimitReached={guestLimitReached}
-            brandMismatchPending={brandMismatchPending}
-            selectedClient={selectedClient}
-            pendingImageUrl={pendingImageUrl}
-            onCommitAddProduct={onCommitAddProduct}
-            onCancelBrandMismatch={onCancelBrandMismatch}
-            onAddProduct={onAddProduct}
-            onClearForm={onClearForm}
-            uploadingImage={uploadingImage}
-            editingId={editingId}
-            csvFile={csvFile}
-            onCsvFileChange={onCsvFileChange}
-            csvFileInputRef={csvFileInputRef}
-            csvSummary={csvSummary}
-            isDragging={isDragging}
-            onDragOver={onDragOver}
-            onDragLeave={onDragLeave}
-            onDrop={onDrop}
-            pendingCsvUpload={pendingCsvUpload}
-            onUploadCsv={onUploadCsv}
-            onCsvAddWithoutBrandVoice={onCsvAddWithoutBrandVoice}
-            onCsvAddOnlyMatching={onCsvAddOnlyMatching}
-            onCsvAddAllWithBrandVoice={onCsvAddAllWithBrandVoice}
-            onCsvCancelMismatch={onCsvCancelMismatch}
-          />
-        )}
+          {activeTab === 'image' ? (
+            <ImageOnlyPanel
+              brandName={brandName}
+              onBrandNameChange={onBrandNameChange}
+              category={category}
+              onCategoryChange={onCategoryChange}
+              imageFile={imageFile}
+              onImageFileChange={onImageFileChange}
+              formPreviewUrl={formPreviewUrl}
+              fileInputRef={fileInputRef}
+              formError={formError}
+              guestLimitReached={guestLimitReached}
+              onSubmit={onAddImageOnlyProduct}
+              uploadingImage={uploadingImage}
+              editingId={editingId}
+            />
+          ) : (
+            <LeftPanel
+              activeTab={activeTab}
+              brandName={brandName}
+              onBrandNameChange={onBrandNameChange}
+              category={category}
+              onCategoryChange={onCategoryChange}
+              description={description}
+              onDescriptionChange={onDescriptionChange}
+              imageFile={imageFile}
+              onImageFileChange={onImageFileChange}
+              formPreviewUrl={formPreviewUrl}
+              fileInputRef={fileInputRef}
+              formError={formError}
+              guestLimitReached={guestLimitReached}
+              brandMismatchPending={brandMismatchPending}
+              selectedClient={selectedClient}
+              pendingImageUrl={pendingImageUrl}
+              onCommitAddProduct={onCommitAddProduct}
+              onCancelBrandMismatch={onCancelBrandMismatch}
+              onAddProduct={onAddProduct}
+              onClearForm={onClearForm}
+              uploadingImage={uploadingImage}
+              editingId={editingId}
+              csvFile={csvFile}
+              onCsvFileChange={onCsvFileChange}
+              csvFileInputRef={csvFileInputRef}
+              csvSummary={csvSummary}
+              isDragging={isDragging}
+              onDragOver={onDragOver}
+              onDragLeave={onDragLeave}
+              onDrop={onDrop}
+              pendingCsvUpload={pendingCsvUpload}
+              onUploadCsv={onUploadCsv}
+              onCsvAddWithoutBrandVoice={onCsvAddWithoutBrandVoice}
+              onCsvAddOnlyMatching={onCsvAddOnlyMatching}
+              onCsvAddAllWithBrandVoice={onCsvAddAllWithBrandVoice}
+              onCsvCancelMismatch={onCsvCancelMismatch}
+            />
+          )}
+      </div>
     </aside>
   )
 }
@@ -950,6 +937,54 @@ function ExportGateModal({ onClose, onSignIn }: { onClose: () => void; onSignIn:
           <Link href="/login" onClick={onSignIn} className={buttonPrimaryClass}>
             Sign In
           </Link>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Confirm-before-destroy surface for the Listings toolbar's "Clear All"
+// button — same structural convention as ExportGateModal (fixed inset-0 z-40
+// centered overlay + backdrop + useFocusTrap + cardClass panel), the one
+// existing modal pattern in this workspace, reused rather than a third
+// bespoke dialog shape. `count` is the same listingSummary.total already
+// shown in the "N Listings" header, so the copy here never drifts from what
+// the user is actually looking at.
+function ClearAllConfirmModal({
+  count,
+  clearing,
+  onCancel,
+  onConfirm
+}: {
+  count: number
+  clearing: boolean
+  onCancel: () => void
+  onConfirm: () => void
+}) {
+  const containerRef = useRef<HTMLDivElement>(null)
+  useFocusTrap(containerRef, onCancel)
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/40" onClick={clearing ? undefined : onCancel} />
+      <div
+        ref={containerRef}
+        tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Clear all listings"
+        className={`relative p-6 max-w-sm w-full mx-4 focus:outline-none ${cardClass}`}
+      >
+        <p className="text-sm text-[var(--body-text)] mb-4">
+          This will remove all {count} listing{count === 1 ? '' : 's'} from this session. This cannot be undone.
+        </p>
+        <div className="flex justify-end gap-2">
+          <button onClick={onCancel} disabled={clearing} className={linkButtonClass}>
+            Cancel
+          </button>
+          <button onClick={onConfirm} disabled={clearing} className={buttonDestructiveClass}>
+            {clearing ? 'Clearing...' : 'Clear All'}
+          </button>
         </div>
       </div>
     </div>
@@ -1114,14 +1149,24 @@ function ExportSummaryModal({
 // its left is always visible, so a second entry point would be redundant.
 // Uses the same cardClass surface QueueTable itself sits in, so swapping
 // between the two doesn't change the page's visual rhythm.
-function WorkspaceEmptyState({ onOpenCreate }: { onOpenCreate: () => void }) {
+function WorkspaceEmptyState() {
+  // The Add Products panel is always visible on desktop, but stacks above
+  // Listings below the lg breakpoint — this scrolls it into view (and
+  // focuses its first field) rather than being a purely decorative button,
+  // since there's no show/hide state left to toggle.
+  function focusAddProducts() {
+    const panel = document.getElementById('add-products-panel')
+    panel?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    panel?.querySelector<HTMLElement>('input, textarea, button')?.focus()
+  }
+
   return (
     <div className="flex-1 flex items-center justify-center">
       <div className={`flex flex-col items-center text-center gap-2 px-8 py-8 max-w-sm ${cardClass}`}>
-        <p className={sectionHeadingClass}>Your products will show up here</p>
-        <p className={bodyTextClass}>Give Tesolute a product to work with and it'll show up here, ready to review.</p>
-        <button onClick={onOpenCreate} className={`mt-2 ${buttonPrimaryClass}`}>
-          + Create your first listing
+        <p className={sectionHeadingClass}>Your listings are ready to be created</p>
+        <p className={bodyTextClass}>Add products using the panel on the left to start creating marketplace-ready listings.</p>
+        <button onClick={focusAddProducts} className={`mt-2 ${buttonPrimaryClass}`}>
+          + Add Products
         </button>
       </div>
     </div>
@@ -1130,30 +1175,13 @@ function WorkspaceEmptyState({ onOpenCreate }: { onOpenCreate: () => void }) {
 
 export default function CatalogueWorkspace() {
   // Global/session-scoped, same as the old single-value dropdown — not
-  // frozen onto individual products at add time. Every batch generation
-  // path (runGenerationBatch, driven by handleBulkGenerateSelected) reads
-  // whatever's currently selected here, applied to every product it
-  // touches in that run.
+  // frozen onto individual products at add time. The generation loop always
+  // reads whatever's currently selected here, applied to every product it
+  // touches in that run (see handleGenerateAll).
   const [selectedMarketplaces, setSelectedMarketplaces] = useState<Marketplace[]>([])
   const [draftProducts, setDraftProducts] = useState<DraftProduct[]>([])
   const [activeTab, setActiveTab] = useState<WorkspaceDestination>('manual')
   const [readinessFilter, setReadinessFilter] = useState<ReadinessFilter>('all')
-  // Milestone C14 — Catalog Command Center: product-level search/filter/sort
-  // (display-only, same "narrows the view, never what bulk actions read"
-  // rule readinessFilter above already established) and bulk-selection
-  // state. selectedProductIds is product-granularity (one checkbox per
-  // product row-group in QueueTable), not per (product, marketplace) row.
-  const [catalogFilters, setCatalogFilters] = useState<ProductFilters>(DEFAULT_PRODUCT_FILTERS)
-  const [sortKey, setSortKey] = useState<ProductSortKey>('newest')
-  const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set())
-  const [bulkRunning, setBulkRunning] = useState(false)
-  const [bulkProgressLabel, setBulkProgressLabel] = useState<string | null>(null)
-  // Milestone C14 — when set, Export All Ready (opened from BulkActionBar's
-  // "Export Selected") is scoped to exactly these product ids instead of
-  // every approved row in the workspace; null (the default, and what the
-  // header's own "Export Listings" button always uses) means unscoped,
-  // exactly today's C11 behavior.
-  const [exportScopeIds, setExportScopeIds] = useState<Set<string> | null>(null)
   // A QueueTable row is a (product, marketplace) pair — View Content must
   // review exactly that pair, so this carries both instead of just a
   // product id (which previously left the drawer to guess/show every
@@ -1165,26 +1193,6 @@ export default function CatalogueWorkspace() {
   const [selectedClient, setSelectedClient] = useState<Client | null>(null)
   // Milestone C12 — Edit Brand Profile modal.
   const [showBrandProfile, setShowBrandProfile] = useState(false)
-  // Milestone C17 (corrected) — the create panel now starts COLLAPSED,
-  // always. A previous pass had it auto-expanded by default, which is
-  // exactly the "form inside form" / "already-expanded giant form"
-  // complaint this correction fixes: the workspace should open calm, with
-  // one obvious entry point, never a form the seller didn't ask for yet.
-  // `createIntent` only changes the hint copy shown above the (100%
-  // unchanged) existing AddProductsPanel form — "Create" and "Improve" are
-  // two framings of the exact same commitAddProduct pipeline, never two
-  // separate code paths. Bulk Upload is reached from WITHIN the opened
-  // panel via its own existing tab strip (see ADD_METHOD_TABS) — it is an
-  // INPUT METHOD inside the one Create Product flow, not a third
-  // competing top-level entry point.
-  const [showCreatePanel, setShowCreatePanel] = useState(false)
-  const [createIntent, setCreateIntent] = useState<'create' | 'improve'>('create')
-
-  function openCreatePanel(intent: 'create' | 'improve') {
-    setCreateIntent(intent)
-    setActiveTab('manual')
-    setShowCreatePanel(true)
-  }
   // Saved session read from localStorage on mount, held here until we also know
   // whether the visitor is authenticated — that decides auto-restore vs. banner.
   const [savedSessionData, setSavedSessionData] = useState<any | null>(null)
@@ -1253,11 +1261,6 @@ export default function CatalogueWorkspace() {
   const [creditsStoppedInfo, setCreditsStoppedInfo] = useState<{ completedPairs: number; totalPairs: number } | null>(null)
   const [formError, setFormError] = useState<string | null>(null)
   const [downloadMessage, setDownloadMessage] = useState<string | null>(null)
-  // Milestone C17 — surfaced only when a server-side delete genuinely
-  // fails (see handleDeleteProduct below); a product is never removed from
-  // local state until the server confirms the delete, so this is the one
-  // and only case where a delete attempt visibly doesn't "stick."
-  const [deleteError, setDeleteError] = useState<string | null>(null)
   const marketplaceSelectRef = useRef<HTMLDivElement>(null)
   const [marketplaceError, setMarketplaceError] = useState<string | null>(null)
   const [marketplaceFlash, setMarketplaceFlash] = useState(false)
@@ -1265,6 +1268,21 @@ export default function CatalogueWorkspace() {
   const [pendingImageUrl, setPendingImageUrl] = useState<string | null>(null)
   const [uploadingImage, setUploadingImage] = useState(false)
   const [pendingCsvUpload, setPendingCsvUpload] = useState<PendingCsvUpload | null>(null)
+  // Surfaced when a server-side product delete fails (RLS rejection, not
+  // found, network error) — the product stays visible rather than being
+  // optimistically removed, so the seller isn't shown a "deleted" state
+  // that didn't actually happen server-side.
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+  // Add Products' collapse/expand preference. null = no explicit choice
+  // made yet, so the derived value below falls back to "expanded while
+  // the queue is empty, collapsed once a product exists." An explicit
+  // toggle (click) sets a real true/false here AND persists it to
+  // localStorage (see the effect/handler below), same pattern
+  // AppSidebar's own collapse preference already uses — from then on the
+  // stored choice always wins over the empty/non-empty default.
+  const [addProductsCollapsedPreference, setAddProductsCollapsedPreference] = useState<boolean | null>(null)
+  const [showClearAllConfirm, setShowClearAllConfirm] = useState(false)
+  const [clearingAll, setClearingAll] = useState(false)
   const [hasSession, setHasSession] = useState(false)
   // Distinguishes "haven't checked auth yet" from "checked, guest" — hasSession
   // alone starts false either way, which isn't enough to gate the restore decision.
@@ -1300,6 +1318,18 @@ export default function CatalogueWorkspace() {
       setHasSession(!!data.user)
       setHasCheckedSession(true)
     })
+  }, [])
+
+  // Reads an explicit prior Add Products collapse/expand choice, if one
+  // was ever made — same mount-time-read pattern as AppSidebar's own
+  // collapse preference. No stored value yet means no explicit choice has
+  // been made, so addProductsCollapsed (derived below) falls back to the
+  // empty/non-empty default instead.
+  useEffect(() => {
+    const stored = localStorage.getItem(ADD_PRODUCTS_COLLAPSE_STORAGE_KEY)
+    if (stored === 'true' || stored === 'false') {
+      setAddProductsCollapsedPreference(stored === 'true')
+    }
   }, [])
 
   // AppSidebar's csv/manual/image items link here as /workspace?tab=<id>
@@ -1633,8 +1663,8 @@ export default function CatalogueWorkspace() {
 
   async function handleAddProduct() {
     // Marketplace selection is not required to add a product — it's only
-    // relevant to generation (see requireMarketplace()). A product can
-    // exist in the catalog before any marketplace has
+    // relevant to generation (see handleGenerateAll's requireMarketplace()
+    // check). A product can exist in the catalog before any marketplace has
     // been chosen; it just sits there ungenerated until one is.
     if (!brandName.trim() || !category.trim() || !description.trim()) {
       setFormError('Brand Name, Category, and Description are required.')
@@ -1661,7 +1691,7 @@ export default function CatalogueWorkspace() {
       return
     }
 
-    commitAddProduct(false, uploadedImageUrl)
+    commitAddProduct(false, uploadedImageUrl, undefined, 'manual')
   }
 
   // Image-only adds: brand/category are optional here (unlike manual entry),
@@ -1702,15 +1732,8 @@ export default function CatalogueWorkspace() {
   function commitAddProduct(
     skipBrandVoice: boolean,
     uploadedImageUrl: string | null,
-    descriptionOverride?: string,
-    // Milestone C14 — which create-panel tab this product actually came
-    // from, threaded through to ensureServerProduct so product_created's
-    // metadata.source is a real fact, not a guess. Defaults to 'manual'
-    // since that covers both handleAddProduct's own call and the
-    // mismatch-confirm callback AddProductsPanel invokes through the
-    // onCommitAddProduct prop (2-arg signature, unchanged by this
-    // milestone) — both are the manual-entry tab either way.
-    source: 'manual' | 'photo' = 'manual'
+    descriptionOverride: string | undefined,
+    source: 'manual' | 'csv' | 'photo'
   ) {
     const effectiveDescription = descriptionOverride ?? description
 
@@ -1729,14 +1752,12 @@ export default function CatalogueWorkspace() {
             : p
         )
       )
-      // Milestone C14 — persists the edit server-side (lib/catalog.ts's new,
-      // additive updateProduct — see that file's own comment for why it
-      // didn't exist before this milestone) and records product_updated
-      // only once that write actually succeeds. Same fire-and-forget,
-      // best-effort convention as every other catalog-persistence call in
-      // this file: never blocks the local edit, never surfaces as a
-      // user-facing error, and is skipped entirely for a product with no
-      // serverId yet (nothing persisted to update) or no session (guest).
+
+      // Milestone C14 — additive persistence: before this, an edit only
+      // ever updated local state. Guests and products with no server row
+      // yet (nothing has been generated for them) have nothing to persist
+      // — never a fabricated update. product_updated is only recorded
+      // AFTER updateProduct's own write actually resolves.
       if (hasSession && existing?.serverId) {
         const serverId = existing.serverId
         void updateProduct(serverId, {
@@ -1745,11 +1766,16 @@ export default function CatalogueWorkspace() {
           category: category || null,
           ...(uploadedImageUrl ? { image_url: uploadedImageUrl } : {})
         })
-          .then(() => recordProductHistoryEvent({ productId: serverId, eventType: 'product_updated' }))
+          .then(() => {
+            recordProductHistoryEvent({ productId: serverId, eventType: 'product_updated' }).catch((err: any) => {
+              console.error(`Product history: failed to record product_updated for ${serverId}:`, err?.message ?? err)
+            })
+          })
           .catch((err: any) => {
-            console.error(`Catalog persistence: failed to update catalog_products ${serverId}:`, err?.message ?? err)
+            console.error(`Catalog persistence: failed to update catalog_products row ${serverId}:`, err?.message ?? err)
           })
       }
+
       setEditingId(null)
       setDescription('')
       setImageFile(null)
@@ -1774,11 +1800,7 @@ export default function CatalogueWorkspace() {
       generationError: emptyGenerationError(),
       generationMeta: emptyGenerationMeta(),
       visualAttributes: null,
-      skipBrandVoice,
-      // Milestone C17 — identical expression to ensureServerProduct's own
-      // client_id, computed here too so "My Products" can scope to the
-      // active brand immediately, without waiting on a server round-trip.
-      clientId: skipBrandVoice ? null : selectedClient?.id ?? null
+      skipBrandVoice
     }
 
     setDraftProducts((prev) => [...prev, newProduct])
@@ -1810,13 +1832,6 @@ export default function CatalogueWorkspace() {
     }
     setBrandMismatchPending(false)
     setPendingImageUrl(null)
-    // Milestone C17 — collapse the creation panel and bring the seller's
-    // attention back to their product library once a product has actually
-    // been added, instead of leaving them stranded above/below an
-    // already-done form (the CSV bulk-import path has its own separate
-    // commitCsvUpload and is intentionally unaffected — adding many
-    // products at once shouldn't auto-close mid-batch).
-    setShowCreatePanel(false)
   }
 
   function handleEditProduct(product: DraftProduct) {
@@ -1828,23 +1843,20 @@ export default function CatalogueWorkspace() {
       fileInputRef.current.value = ''
     }
     setEditingId(product.id)
-    // Milestone C17 — the create panel is collapsed by default now, so
-    // editing an existing product must explicitly reopen it (on Manual
-    // Entry, with the pre-filled form) rather than assuming it's already
-    // on screen.
+    // Switches the always-visible Add Products panel to Manual Entry so
+    // the pre-filled form is immediately visible — the panel itself never
+    // needs to be shown/hidden anymore, it's already on screen.
     setActiveTab('manual')
-    setCreateIntent('create')
-    setShowCreatePanel(true)
   }
 
-  // Milestone C17 — fixes the confirmed delete-doesn't-persist bug: this
-  // used to only ever call setDraftProducts, never any server call, so the
-  // next reconcileCatalog (on reload) pulled the still-present row straight
-  // back in. Now the local removal only ever happens AFTER lib/catalog.ts's
+  // Fixes a confirmed delete-doesn't-persist bug: this used to only ever
+  // call setDraftProducts, never any server call, so the next
+  // reconcileCatalog (on reload) pulled the still-present row straight
+  // back in. Local removal only ever happens AFTER lib/catalog.ts's
   // deleteProduct() confirms the row is actually gone (RLS-owner-scoped,
   // cascades to catalog_listings/catalog_listing_approvals) — a failed
-  // server delete leaves the product visibly in place with deleteError set,
-  // rather than silently showing a "deleted" state that isn't real.
+  // server delete leaves the product visibly in place with deleteError
+  // set, rather than silently showing a "deleted" state that isn't real.
   async function handleDeleteProduct(id: string) {
     const product = draftProducts.find((p) => p.id === id)
     setDeleteError(null)
@@ -1866,6 +1878,72 @@ export default function CatalogueWorkspace() {
     setDraftProducts((prev) => prev.filter((p) => p.id !== id))
     if (viewingTarget?.productId === id) setViewingTarget(null)
     if (editingId === id) handleClearForm()
+  }
+
+  // Same server-confirms-before-local-removal discipline as
+  // handleDeleteProduct above, batched. One extra guard handleDeleteProduct
+  // doesn't need: getProductIdsWithPerformanceHistory checks for linked
+  // marketplace_performance rows first (that table's product_id carries `on
+  // delete cascade` — see lib/catalog.ts) and those products are left in the
+  // queue rather than deleted, so "Clear All" can never silently take
+  // imported performance history down with it.
+  async function handleClearAll() {
+    setDeleteError(null)
+    setClearingAll(true)
+
+    const candidateServerIds = draftProducts
+      .filter((p) => hasSession && p.serverId)
+      .map((p) => p.serverId as string)
+
+    let protectedIds = new Set<string>()
+    if (candidateServerIds.length > 0) {
+      try {
+        protectedIds = await getProductIdsWithPerformanceHistory(candidateServerIds)
+      } catch (err: any) {
+        console.error('Catalog persistence: failed to check performance history before Clear All:', err?.message ?? err)
+        setDeleteError("Couldn't verify performance history before clearing — please try again.")
+        setClearingAll(false)
+        setShowClearAllConfirm(false)
+        return
+      }
+    }
+
+    const kept: DraftProduct[] = []
+    let failedCount = 0
+
+    for (const product of draftProducts) {
+      if (hasSession && product.serverId) {
+        if (protectedIds.has(product.serverId)) {
+          kept.push(product)
+          continue
+        }
+        try {
+          await deleteProduct(product.serverId)
+        } catch (err: any) {
+          console.error(`Catalog persistence: failed to delete catalog_products row ${product.serverId}:`, err?.message ?? err)
+          kept.push(product)
+          failedCount++
+          continue
+        }
+      }
+    }
+
+    const clearedCount = draftProducts.length - kept.length
+    setDraftProducts(kept)
+
+    const keptIds = new Set(kept.map((p) => p.id))
+    if (viewingTarget && !keptIds.has(viewingTarget.productId)) setViewingTarget(null)
+    if (editingId && !keptIds.has(editingId)) handleClearForm()
+
+    if (protectedIds.size > 0 || failedCount > 0) {
+      const parts: string[] = []
+      if (protectedIds.size > 0) parts.push(`${protectedIds.size} kept (linked performance history)`)
+      if (failedCount > 0) parts.push(`${failedCount} failed to delete`)
+      setDeleteError(`Cleared ${clearedCount} of ${draftProducts.length} listings. ${parts.join('; ')}.`)
+    }
+
+    setClearingAll(false)
+    setShowClearAllConfirm(false)
   }
 
   function handleCsvFileChange(file: File | null) {
@@ -1917,10 +1995,7 @@ export default function CatalogueWorkspace() {
         generationError: emptyGenerationError(),
         generationMeta: emptyGenerationMeta(),
         visualAttributes: null,
-        skipBrandVoice: false,
-        // Milestone C17 — same brand association a CSV row's own
-        // ensureServerProduct call already sends server-side.
-        clientId: selectedClient?.id ?? null
+        skipBrandVoice: false
       })
     }
 
@@ -1983,8 +2058,7 @@ export default function CatalogueWorkspace() {
     if (!pendingCsvUpload) return
     const all = [...pendingCsvUpload.matchingProducts, ...pendingCsvUpload.mismatchedProducts].map((p) => ({
       ...p,
-      skipBrandVoice: true,
-      clientId: null
+      skipBrandVoice: true
     }))
     commitCsvUpload(all, pendingCsvUpload.fileName, pendingCsvUpload.total)
   }
@@ -2043,19 +2117,22 @@ export default function CatalogueWorkspace() {
   // all-products-for-marketplace-2). Each (product, marketplace) pair is one
   // full-price generate-single call — total cost for a batch is simply the
   // count of successful calls, not a separate bulk formula.
-  // Milestone C14 — the shared batch-generation loop (same credit-stop
-  // semantics either way), used by BOTH handleGenerateAll (the whole
-  // current batch, zero selection needed) and handleBulkGenerateSelected
-  // (a selected subset) — see computeProductStatus above for why
-  // runMarketplaces must stay fixed for the whole run rather than
-  // re-reading live state.
-  async function runGenerationBatch(products: DraftProduct[], runMarketplaces: Marketplace[]) {
-    if (products.length === 0) return
+  async function handleGenerateAll() {
+    if (selectedMarketplaces.length === 0) {
+      flagMissingMarketplace()
+      return
+    }
+    const pending = draftProducts.filter((p) => p.status === 'draft')
+    if (pending.length === 0) return
+
+    // Snapshot now — see computeProductStatus above for why this must stay
+    // fixed for the whole run rather than re-reading live state.
+    const runMarketplaces = selectedMarketplaces
 
     setGenerating(true)
     setCreditsStoppedInfo(null)
 
-    const totalPairs = products.length * runMarketplaces.length
+    const totalPairs = pending.length * runMarketplaces.length
     // completedPairs = attempts made so far, for the "attempt N of totalPairs"
     // progress indicator. succeededPairs = attempts that actually generated
     // content — a distinct count, since the one that trips
@@ -2064,7 +2141,7 @@ export default function CatalogueWorkspace() {
     let completedPairs = 0
     let succeededPairs = 0
 
-    outer: for (const product of products) {
+    outer: for (const product of pending) {
       for (const marketplace of runMarketplaces) {
         setCurrentlyGenerating({ productId: product.id, marketplace })
         setGenerationProgress({ current: completedPairs + 1, total: totalPairs })
@@ -2090,23 +2167,6 @@ export default function CatalogueWorkspace() {
     setCurrentlyGenerating(null)
     setGenerationProgress(null)
     setGenerating(false)
-  }
-
-  // Milestone C17 (corrected) — restored as the PRIMARY, zero-selection
-  // generation action: "selection is not the primary workflow" — a seller
-  // who just added N products wants Tesolute to work on all of them, not
-  // to select each one first. Operates on every current-batch draft
-  // product (status === 'draft'); handleBulkGenerateSelected (below)
-  // remains available as the secondary, selection-scoped variant for
-  // narrowing to a subset.
-  async function handleGenerateAll() {
-    if (selectedMarketplaces.length === 0) {
-      flagMissingMarketplace()
-      return
-    }
-    const pending = draftProducts.filter((p) => p.status === 'draft')
-    if (pending.length === 0) return
-    await runGenerationBatch(pending, selectedMarketplaces)
   }
 
   // Shared by the row-level "Retry" button and every drawer regenerate
@@ -2201,16 +2261,10 @@ export default function CatalogueWorkspace() {
   // draft and generating independently — this map is per-tab, in-memory
   // only, and catalog_products has no column to put a database-level
   // uniqueness guarantee on without a schema change (out of scope here).
-  async function ensureServerProduct(
-    product: DraftProduct,
-    // Milestone C14 — only ever meaningful the one time this function
-    // actually calls createProduct (see below); ignored on every other
-    // path (early serverId return, in-flight-promise reuse), which is
-    // exactly why product_created can never double-fire for one product —
-    // those are the same two guards that already prevented a duplicate
-    // createProduct call.
-    source: 'manual' | 'csv' | 'photo' = 'manual'
-  ): Promise<string> {
+  // Milestone C14 — `source` (manual/csv/photo) is threaded through from
+  // every call site so product_created's metadata records a real,
+  // known-at-creation-time fact, never a guess made after the fact.
+  async function ensureServerProduct(product: DraftProduct, source: 'manual' | 'csv' | 'photo'): Promise<string> {
     if (product.serverId) return product.serverId
 
     const existing = serverProductPromises.current.get(product.id)
@@ -2225,15 +2279,12 @@ export default function CatalogueWorkspace() {
         client_id: product.skipBrandVoice ? null : selectedClient?.id ?? null
       })
       setDraftProducts((prev) => prev.map((p) => (p.id === product.id ? { ...p, serverId: id } : p)))
-      // Milestone C14 — fire-and-forget, same convention as every other
-      // catalog-persistence call below: product creation has already fully
-      // succeeded by this point (id is real), so a history-recording
-      // failure must never be treated as a creation failure.
-      void recordProductHistoryEvent({ productId: id, eventType: 'product_created', metadata: { source } }).catch(
-        (err: any) => {
-          console.error(`Product history: failed to record product_created for ${id}:`, err?.message ?? err)
-        }
-      )
+      // Fire-and-forget, same convention as every other product-history
+      // call in this file — a history-recording failure must never affect
+      // the already-successful product creation above.
+      void recordProductHistoryEvent({ productId: id, eventType: 'product_created', metadata: { source } }).catch((err: any) => {
+        console.error(`Product history: failed to record product_created for ${id}:`, err?.message ?? err)
+      })
       return id
     })()
 
@@ -2256,7 +2307,14 @@ export default function CatalogueWorkspace() {
   ) {
     let serverId: string
     try {
-      serverId = await ensureServerProduct(product)
+      // By generation time a product has always already gone through one
+      // of the three ensureServerProduct call sites in commitAddProduct/
+      // commitCsvUpload — this call almost always just resolves the
+      // already-in-flight/already-set serverId (see ensureServerProduct's
+      // own early-return above). 'manual' is a defensive fallback for the
+      // otherwise-unreachable case where it isn't, never a claim about how
+      // this specific product was actually added.
+      serverId = await ensureServerProduct(product, 'manual')
     } catch (err: any) {
       console.error(
         `Catalog persistence: failed to create/resolve catalog_products for draft product ${product.id}:`,
@@ -2265,14 +2323,9 @@ export default function CatalogueWorkspace() {
       return
     }
 
-    // Milestone C14 — captured BEFORE the upsert below, from the caller's
-    // own snapshot: a marketplace that already had a persisted
-    // catalog_listings row means this call is regenerating/overwriting
-    // existing content (listing_edited); no prior row means this is the
-    // first successful generation for this (product, marketplace) pair
-    // (listing_generated). upsertListing itself can't tell these apart —
-    // it's the same upsert either way — so the distinction is made here,
-    // the one place that already knows the "before" state.
+    // Milestone C14 — captured BEFORE the upsert below, so a listing that
+    // already existed for this (product, marketplace) pair is correctly
+    // recorded as an edit, not a fresh generation.
     const hadExistingListing = !!product.listingServerIds?.[marketplace]
 
     try {
@@ -2293,17 +2346,16 @@ export default function CatalogueWorkspace() {
           p.id === product.id ? { ...p, listingServerIds: { ...p.listingServerIds, [marketplace]: listing.id } } : p
         )
       )
-      // Milestone C14 — fire-and-forget, same convention as every other
-      // catalog-persistence call in this function: the listing write above
-      // has already fully succeeded by this point, so a history-recording
-      // failure must never be treated as a generation failure.
       void recordProductHistoryEvent({
         productId: serverId,
         eventType: hadExistingListing ? 'listing_edited' : 'listing_generated',
         marketplace,
         listingId: listing.id
       }).catch((err: any) => {
-        console.error(`Product history: failed to record listing event for ${serverId}/${marketplace}:`, err?.message ?? err)
+        console.error(
+          `Product history: failed to record ${hadExistingListing ? 'listing_edited' : 'listing_generated'} for ${serverId}:`,
+          err?.message ?? err
+        )
       })
     } catch (err: any) {
       console.error(
@@ -2477,25 +2529,17 @@ export default function CatalogueWorkspace() {
     }
     try {
       await setApproval(listingId, approved)
-      // Milestone C14 — this codebase's approval workflow is a single
-      // boolean toggle (approved/unapproved), not a separate reject
-      // action, so "unapprove" is what maps to listing_rejected here —
-      // same existing workflow, no second approval mechanism, just the
-      // two event types the toggle's two states already correspond to.
-      // Fire-and-forget, same convention as every other catalog-
-      // persistence call: the approval write above already succeeded, so
-      // a history-recording failure must never be treated as an approval
-      // failure.
-      if (product?.serverId) {
-        void recordProductHistoryEvent({
-          productId: product.serverId,
-          eventType: approved ? 'listing_approved' : 'listing_rejected',
-          marketplace,
-          listingId
-        }).catch((err: any) => {
-          console.error(`Product history: failed to record approval event for listing ${listingId}:`, err?.message ?? err)
-        })
-      }
+      void recordProductHistoryEvent({
+        productId: product!.serverId!,
+        eventType: approved ? 'listing_approved' : 'listing_rejected',
+        marketplace,
+        listingId
+      }).catch((err: any) => {
+        console.error(
+          `Product history: failed to record ${approved ? 'listing_approved' : 'listing_rejected'} for ${listingId}:`,
+          err?.message ?? err
+        )
+      })
     } catch (err: any) {
       console.error(
         `Catalog persistence: failed to upsert catalog_listing_approvals for listing ${listingId}:`,
@@ -2522,86 +2566,6 @@ export default function CatalogueWorkspace() {
   // that has at least one — including 'partial' products, so a product that
   // only half-finished (see computeProductStatus) still gets its successful
   // marketplaces approved rather than being held back by the ones that failed.
-  // --- Milestone C14 — bulk selection + orchestration -----------------
-  // Every handler below operates on the CURRENT selection and reuses an
-  // already-existing per-item operation (never a second implementation of
-  // analyze/generate/approve/export); see BulkActionBar's own header
-  // comment for the exact mapping.
-
-  function toggleSelectProduct(id: string) {
-    setSelectedProductIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
-
-  // Selects/deselects every currently VISIBLE (filtered) product — never the
-  // full draftProducts — so "select all" respects whatever search/filters
-  // are active, per C14's own requirement.
-  function toggleSelectAllVisible() {
-    const allVisibleSelected = visibleProducts.length > 0 && visibleProducts.every((p) => selectedProductIds.has(p.id))
-    setSelectedProductIds((prev) => {
-      const next = new Set(prev)
-      for (const p of visibleProducts) {
-        if (allVisibleSelected) next.delete(p.id)
-        else next.add(p.id)
-      }
-      return next
-    })
-  }
-
-  function clearSelection() {
-    setSelectedProductIds(new Set())
-  }
-
-  // Reuses handleAnalyzeProduct (the exact same /api/enrich-product call the
-  // drawer's "Analyze Product" button makes) sequentially per selected
-  // product — credit-neutral (enrichment never calls deductCredits, see
-  // app/api/enrich-product/route.ts), and skips any selected product with no
-  // serverId (guests, or a create-product write still in flight) exactly
-  // the way the single-product button already does via its own disabled
-  // state.
-  async function handleBulkAnalyzeSelected() {
-    const targets = draftProducts.filter((p) => selectedProductIds.has(p.id) && p.serverId)
-    if (targets.length === 0 || bulkRunning) return
-    setBulkRunning(true)
-    for (let i = 0; i < targets.length; i++) {
-      setBulkProgressLabel(`Analyzing ${i + 1} of ${targets.length}…`)
-      await handleAnalyzeProduct(targets[i].id)
-    }
-    setBulkProgressLabel(null)
-    setBulkRunning(false)
-  }
-
-  // Reuses runGenerationBatch, scoped to whatever's currently selected —
-  // doubles as "Bulk Regenerate" per the C17 correction (selecting already-
-  // generated products and running this re-runs generation for them, the
-  // same way the single-product "Regenerate" button already overwrites
-  // that one marketplace's content via generateForProductMarketplace's own
-  // spread). No status filter: a selected draft product generates for the
-  // first time, a selected generated/partial product regenerates — same
-  // call, same credit-authority/stop behavior, no new billing path.
-  async function handleBulkGenerateSelected() {
-    if (selectedMarketplaces.length === 0) {
-      flagMissingMarketplace()
-      return
-    }
-    const targets = draftProducts.filter((p) => selectedProductIds.has(p.id))
-    if (targets.length === 0 || bulkRunning) return
-    setBulkRunning(true)
-    await runGenerationBatch(targets, selectedMarketplaces)
-    setBulkRunning(false)
-  }
-
-  // Milestone C17 (corrected) — restored as the PRIMARY, zero-selection
-  // approval action: "Bulk Approve means approve all eligible generated
-  // listings" when nothing is selected. Every draft product with
-  // status 'generated' or 'partial' gets every marketplace it actually
-  // has content for marked approved. handleBulkApproveSelected (below)
-  // remains the secondary, selection-scoped variant for approving a
-  // narrower subset.
   function handleBulkApprove() {
     if (!requireMarketplace()) return
     setDraftProducts((prev) =>
@@ -2614,95 +2578,6 @@ export default function CatalogueWorkspace() {
         return { ...p, approved }
       })
     )
-  }
-
-  // Secondary, selection-scoped approval — same generated-content-implies-
-  // approvable rule as handleBulkApprove, narrowed to selectedProductIds.
-  // Same lack of a persistApprovalToCatalog call — that's an existing
-  // C1-C13 property of bulk approval this milestone doesn't change.
-  function handleBulkApproveSelected() {
-    if (!requireMarketplace()) return
-    setDraftProducts((prev) =>
-      prev.map((p) => {
-        if (!selectedProductIds.has(p.id)) return p
-        if (p.status !== 'generated' && p.status !== 'partial') return p
-        const approved = { ...p.approved }
-        for (const marketplace of SUPPORTED_MARKETPLACES) {
-          if (p.generatedContent[marketplace] !== null) approved[marketplace] = true
-        }
-        return { ...p, approved }
-      })
-    )
-  }
-
-  // Opens the SAME ExportSummaryModal/performExport pipeline the header's
-  // "Export Listings" button uses — exportScopeIds is the only difference,
-  // and it only ever narrows which approved rows the C11 readiness gate and
-  // the export loop itself consider (see the useEffect below and
-  // performExport's own scopedProducts). No second readiness judgment.
-  function handleBulkExportSelected() {
-    if (!hasSession) {
-      setShowExportGateModal(true)
-      return
-    }
-    if (!requireMarketplace()) return
-    setExportError(null)
-    setExportReadiness(null)
-    setExportSkipped(null)
-    setExportScopeIds(new Set(selectedProductIds))
-    setShowExportSummary(true)
-  }
-
-  // Milestone C15 — Action Center dispatch. Every branch here calls an
-  // ALREADY-EXISTING handler (the exact same function QueueTable's row
-  // actions, the drawer's buttons, or the header's own Export Listings
-  // button already call) — this function contains no new business logic,
-  // it only routes a recommendation's actionType to the one existing
-  // handler that already implements it. Clicking is therefore the same
-  // explicit user action C1-C14 already required; the recommendation only
-  // ever suggested it.
-  function handleExecuteRecommendation(rec: CatalogActionRecommendation) {
-    switch (rec.actionType) {
-      case 'ANALYZE':
-        if (rec.productId) void handleAnalyzeProduct(rec.productId)
-        return
-      case 'GENERATE':
-        if (rec.productId && rec.marketplace) void runGeneration(rec.productId, rec.marketplace)
-        return
-      case 'APPROVE':
-        if (rec.productId && rec.marketplace) handleApproveMarketplace(rec.productId, rec.marketplace)
-        return
-      case 'EXPORT':
-        // Marketplace-level, not product-specific — opens the SAME
-        // C11-gated export summary the header's own Export Listings button
-        // uses (unscoped: every currently-approved, currently-READY row).
-        handleOpenExportSummary()
-        return
-      case 'FIX_LISTING':
-        // Opens the existing product/listing drawer at exactly this
-        // (product, marketplace) pair — never a second listing-editing UI.
-        if (rec.productId && rec.marketplace) setViewingTarget({ productId: rec.productId, marketplace: rec.marketplace })
-        return
-      case 'COMPLETE_INFORMATION': {
-        // Product-level (not marketplace-specific) — opens the drawer on
-        // whichever marketplace this product has already attempted (the
-        // Product Intelligence section it's about renders above the
-        // marketplace-specific section regardless of which one is shown),
-        // falling back to the first supported marketplace for a product
-        // with nothing generated yet.
-        if (!rec.productId) return
-        const product = draftProducts.find((p) => p.id === rec.productId)
-        if (!product) return
-        const attemptedMarketplace = SUPPORTED_MARKETPLACES.find(
-          (m) => product.generatedContent[m] !== null || product.generationError[m] !== null
-        )
-        setViewingTarget({ productId: product.id, marketplace: attemptedMarketplace ?? SUPPORTED_MARKETPLACES[0] })
-        return
-      }
-      case 'REVIEW_BRAND':
-        setShowBrandProfile(true)
-        return
-    }
   }
 
   function handleSignInFromExportGate() {
@@ -2746,10 +2621,6 @@ export default function CatalogueWorkspace() {
     // (§11/§21, C11-AC21/AC22).
     setExportReadiness(null)
     setExportSkipped(null)
-    // Milestone C14 — the header's own global Export Listings button always
-    // means "every approved row," so any scope left over from a previous
-    // Bulk Export Selected run is cleared here.
-    setExportScopeIds(null)
     setShowExportSummary(true)
   }
 
@@ -2763,18 +2634,13 @@ export default function CatalogueWorkspace() {
   // spinner for work that already finished.
   useEffect(() => {
     if (!showExportSummary) return
-    // Milestone C14 — scoped to exportScopeIds when Bulk Export Selected
-    // opened this modal, otherwise every product (unchanged C11 behavior).
-    // Still the one and only readiness judgment: evaluateMarketplaceExportReadiness
-    // itself is untouched, only the candidate set feeding it is narrowed.
-    const scopedProducts = exportScopeIds ? draftProducts.filter((p) => exportScopeIds.has(p.id)) : draftProducts
-    const marketplacesInPlay = computeExportableCounts(scopedProducts).map((c) => c.marketplace)
+    const marketplacesInPlay = computeExportableCounts(draftProducts).map((c) => c.marketplace)
     const results = marketplacesInPlay.map((m) =>
-      evaluateMarketplaceExportReadiness(m, gatherExportCandidateItems(scopedProducts, m))
+      evaluateMarketplaceExportReadiness(m, gatherExportCandidateItems(draftProducts, m))
     )
     setExportReadiness(results)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showExportSummary, exportScopeIds])
+  }, [showExportSummary])
 
   // Milestone C11 — `marketplaces` is the READY subset from the readiness
   // gate (never the full SUPPORTED_MARKETPLACES list) — a NOT_READY or
@@ -2783,19 +2649,25 @@ export default function CatalogueWorkspace() {
   // queue-clearing logic below no matter what. This is the one and only
   // call site; there is no path that bypasses the gate.
   async function performExport(marketplaces: Marketplace[]) {
-    // Milestone C14 — scoped to exportScopeIds when set (Bulk Export
-    // Selected), otherwise every product, unchanged from C11. Every
-    // downstream step (the clearing flatMap over the FULL draftProducts
-    // further below) already keys off exportedByProduct, itself built only
-    // from flattenedRows — so a product outside this scope is structurally
-    // untouched regardless, no separate scoping needed there.
-    const scopedProducts = exportScopeIds ? draftProducts.filter((p) => exportScopeIds.has(p.id)) : draftProducts
+    // Every exported row is the seller's own raw input (Original Brand/
+    // Category/Description/Image — untouched by generation, see
+    // buildRawColumnsRow) merged with that marketplace's AI-generated
+    // columns, each renamed to its "Generated *" label (generatedColumnLabels)
+    // so the two are never ambiguous side by side in a spreadsheet. Raw
+    // columns always come first (object key order = column order below).
+    // flattenRow/exportColumns themselves are untouched — this only adds a
+    // layer on top, so the marketplace-specific generated shape (and every
+    // existing test/adapter built on flattenRow) is unaffected.
     const flattenedRows: { id: string; marketplace: Marketplace; row: Record<string, string> }[] = []
-    for (const p of scopedProducts) {
+    for (const p of draftProducts) {
       for (const marketplace of marketplaces) {
         if (!p.approved[marketplace]) continue
-        const row = flattenRow(marketplace, p.generatedContent[marketplace])
-        if (row) flattenedRows.push({ id: p.id, marketplace, row })
+        const generated = flattenRow(marketplace, p.generatedContent[marketplace])
+        if (!generated) continue
+        const labels = generatedColumnLabels[marketplace] ?? {}
+        const labeledGenerated = Object.fromEntries(Object.entries(generated).map(([key, value]) => [labels[key] ?? key, value]))
+        const row = { ...buildRawColumnsRow(p), ...labeledGenerated }
+        flattenedRows.push({ id: p.id, marketplace, row })
       }
     }
 
@@ -2834,7 +2706,14 @@ export default function CatalogueWorkspace() {
       const csvByMarketplace = new Map<Marketplace, string>(
         Array.from(rowsByMarketplace.entries()).map(([marketplace, rows]) => [
           marketplace,
-          UTF8_BOM + Papa.unparse(rows, { columns: exportColumns[marketplace] })
+          // Column order matches how each row was built above: raw input
+          // first (RAW_COLUMNS), then this marketplace's generated columns
+          // under their "Generated *" labels — never the raw exportColumns
+          // keys directly, since the row itself was already relabeled.
+          UTF8_BOM +
+            Papa.unparse(rows, {
+              columns: [...RAW_COLUMNS, ...exportColumns[marketplace].map((key) => generatedColumnLabels[marketplace][key])]
+            })
         ])
       )
 
@@ -2873,18 +2752,11 @@ export default function CatalogueWorkspace() {
       if (hasSession) {
         for (const [marketplace, rows] of rowsByMarketplace) {
           const listingIds: string[] = []
-          // Milestone C14 — tracked alongside listingIds (not re-derived
-          // later) so the exported event recorded below points at exactly
-          // the same listings recordExport itself was just given, per
-          // product, for the product-centric timeline.
-          const exportedListings: { productServerId: string; listingId: string }[] = []
           for (const r of flattenedRows) {
             if (r.marketplace !== marketplace) continue
-            const exportedProduct = draftProducts.find((p) => p.id === r.id)
-            const listingId = exportedProduct?.listingServerIds?.[marketplace]
+            const listingId = draftProducts.find((p) => p.id === r.id)?.listingServerIds?.[marketplace]
             if (listingId) {
               listingIds.push(listingId)
-              if (exportedProduct.serverId) exportedListings.push({ productServerId: exportedProduct.serverId, listingId })
             } else {
               console.error(
                 `Catalog persistence: export of ${marketplace} includes draft product ${r.id} with no persisted catalog_listings id — excluded from the catalog export record.`
@@ -2899,26 +2771,24 @@ export default function CatalogueWorkspace() {
             continue
           }
 
-          // Milestone C14 — the product-centric `exported` event is
-          // recorded only AFTER recordExport (C7's own authoritative
-          // export record) actually succeeds, one per (product, listing)
-          // in this batch, each pointing at the SAME export row via
-          // metadata.export_id — never a duplicate export record, just a
-          // product-scoped pointer to the one C7 already created.
+          // Milestone C14 — one 'exported' event per actually-exported
+          // product for this marketplace, only after recordExport's own
+          // write resolves, carrying that same export row's id so the
+          // timeline can point back to the real C7 export record rather
+          // than a second, disconnected one.
           void recordExport(marketplace, listingIds, `${marketplace}-listings.csv`)
             .then((exportRow) => {
-              for (const { productServerId, listingId } of exportedListings) {
+              for (const r of flattenedRows) {
+                if (r.marketplace !== marketplace) continue
+                const exportedProduct = draftProducts.find((p) => p.id === r.id)
+                if (!exportedProduct?.serverId) continue
                 void recordProductHistoryEvent({
-                  productId: productServerId,
+                  productId: exportedProduct.serverId,
                   eventType: 'exported',
                   marketplace,
-                  listingId,
-                  metadata: { export_id: exportRow.id, format: 'csv' }
+                  metadata: { export_id: exportRow.id }
                 }).catch((err: any) => {
-                  console.error(
-                    `Product history: failed to record exported event for ${productServerId}/${marketplace}:`,
-                    err?.message ?? err
-                  )
+                  console.error(`Product history: failed to record exported for ${exportedProduct.serverId}:`, err?.message ?? err)
                 })
               }
             })
@@ -3022,66 +2892,27 @@ export default function CatalogueWorkspace() {
   }
 
   const hasApproved = draftProducts.some((p) => SUPPORTED_MARKETPLACES.some((m) => p.approved[m]))
-  // Display-only — Bulk Approve/Export above still read the full,
-  // unfiltered draftProducts (via hasApproved and their own
+  const pendingCount = draftProducts.filter((p) => p.status === 'draft').length
+  // Display-only — Generate/Bulk Approve/Export above still read the full,
+  // unfiltered draftProducts (via pendingCount/hasApproved and their own
   // handlers), so a "Ready" filter never narrows what an action operates
   // on, only what the table currently shows.
-  // Milestone C14 — Catalog Command Center derived view. All display-only
-  // (see catalogFilters/sortKey's own comment above): Generate All/Bulk
-  // Approve/Export above still read the full, unfiltered draftProducts.
-  // Milestone C17 — brand-first scoping: a specific selected brand (the
-  // same selectedClient that already drives brand voice at creation time)
-  // narrows "My Products" to only that brand's own products, via the
-  // client_id association mirrored locally as DraftProduct.clientId (see
-  // lib/types.ts's own comment). "No brand selected" (selectedClient ===
-  // null) is the "All Brands" state — nothing is hidden. A product added
-  // before this milestone shipped (clientId undefined) simply has no
-  // brand association yet, same as any other additive field's honest
-  // default — it shows under "All Brands," not under a specific one.
-  const brandScopedProducts = selectedClient ? draftProducts.filter((p) => p.clientId === selectedClient.id) : draftProducts
-  const needsAttention = computeNeedsAttention(brandScopedProducts)
-  const availableBrands = getAvailableBrands(brandScopedProducts)
-  const availableCategories = getAvailableCategories(brandScopedProducts)
-  const visibleProducts = sortProducts(filterProducts(brandScopedProducts, catalogFilters), sortKey)
-  const selectedCount = selectedProductIds.size
-  const canBulkAnalyze = hasSession && draftProducts.some((p) => selectedProductIds.has(p.id) && p.serverId)
-  // Milestone C17 (corrected) — no status filter: a selected draft product
-  // generates for the first time, a selected already-generated product
-  // regenerates. Any selected product makes this "Bulk Generate"/"Bulk
-  // Regenerate" available (see handleBulkGenerateSelected's own comment).
-  const canBulkGenerate = draftProducts.some((p) => selectedProductIds.has(p.id))
-  const isBulkRegenerate = draftProducts.some((p) => selectedProductIds.has(p.id) && (p.status === 'generated' || p.status === 'partial'))
-  const canBulkApprove = draftProducts.some(
-    (p) => selectedProductIds.has(p.id) && (p.status === 'generated' || p.status === 'partial')
-  )
-  const canBulkExport = draftProducts.some(
-    (p) => selectedProductIds.has(p.id) && SUPPORTED_MARKETPLACES.some((m) => p.approved[m])
-  )
-  // Milestone C17 (corrected) — drives the primary/enabled states AND the
-  // credit-cost preview text of QueueTable's zero-selection toolbar
-  // (Generate Listings/Approve All/Export Listings), the actual primary
-  // workflow now that selection is confirmed secondary. A count, not just
-  // a boolean, so the toolbar can say "Uses N credits" honestly.
-  const pendingGenerationCount = draftProducts.filter((p) => p.status === 'draft').length
-  const hasUnapprovedContent = draftProducts.some(
-    (p) =>
-      (p.status === 'generated' || p.status === 'partial') &&
-      SUPPORTED_MARKETPLACES.some((m) => p.generatedContent[m] !== null && !p.approved[m])
-  )
-  // Milestone C15 — pure, synchronous, side-effect-free derivation (see
-  // lib/catalogRecommendations.ts's own header comment). useMemo here is
-  // purely a render-cost optimization (avoids re-deriving on every
-  // unrelated re-render, e.g. a text input keystroke elsewhere in this
-  // component) — it changes no behavior, since the underlying function is
-  // pure regardless.
-  const recommendations = useMemo(
-    () => computeCatalogRecommendations(draftProducts, selectedClient),
-    [draftProducts, selectedClient]
-  )
+  const listingSummary = computeListingSummary(draftProducts)
   const viewingProduct = viewingTarget ? draftProducts.find((p) => p.id === viewingTarget.productId) || null : null
   const editingProduct = editingId ? draftProducts.find((p) => p.id === editingId) || null : null
   const formPreviewUrl = imageFile ? null : editingProduct?.imageUrl ?? null
   const guestLimitReached = !hasSession && draftProducts.length >= GUEST_PRODUCT_LIMIT
+
+  // Derived, not raw state: an explicit stored choice (see the mount-time
+  // effect above) always wins; with no explicit choice yet, falls back to
+  // "expanded while the queue is empty, collapsed once a product exists."
+  const addProductsCollapsed = addProductsCollapsedPreference !== null ? addProductsCollapsedPreference : draftProducts.length > 0
+
+  function toggleAddProductsCollapsed() {
+    const next = !addProductsCollapsed
+    setAddProductsCollapsedPreference(next)
+    localStorage.setItem(ADD_PRODUCTS_COLLAPSE_STORAGE_KEY, String(next))
+  }
 
   // What TopHeader shows in its usage slot — guests never accrue credits
   // (they're on the separate free-preview counter), signed-in users get the
@@ -3107,270 +2938,259 @@ export default function CatalogueWorkspace() {
           the page on mobile, where the nav bar adds its own height on top. */}
       <div className="pt-16 h-screen flex flex-col">
         <AppSidebar>
-          {/* Milestone C17 — Seller Core Experience redesign. One column,
-              product-centric flow (brand context -> create hero -> My
-              Products), replacing the old permanent Add-Products sidebar
-              column and the C15 Action Center's global card-stack. Every
-              handler either of those used is unchanged and reused (see
-              openCreatePanel above, handleExecuteRecommendation below,
-              QueueTable's per-card recommendation hint) — this is a
-              presentation/information-architecture change only, no new
-              business logic. */}
-          <div className="flex-1 min-h-0 overflow-y-auto p-6">
-            <div className="max-w-5xl mx-auto flex flex-col gap-6">
-              {outdatedSessionDiscarded && (
-                <div className={`flex items-center justify-between gap-4 ${warningBannerClass}`}>
-                  <p className={warningTextClass}>Previous session format outdated, please start fresh.</p>
-                  <button onClick={() => setOutdatedSessionDiscarded(false)} className={buttonSecondaryClass}>
-                    Dismiss
-                  </button>
-                </div>
-              )}
+          {/* Sidebar → Add Products → Listings: a normal three-column flex
+              row at lg: and above, not sidebar-plus-overlay. Add Products is
+              a fixed-width, always-mounted sibling of the Listings column,
+              each with its own independent overflow-y-auto (lg: only — see
+              AddProductsPanel) so a tall form and a long queue can each
+              scroll on their own without a page-level horizontal scrollbar.
+              Below lg, flex-col stacks Add Products above Listings instead
+              of squeezing both into a shrinking row — this is what keeps
+              the three-tab strip from ever fighting for width against the
+              Listings column at tablet sizes. */}
+          <div className="flex-1 flex flex-col lg:flex-row min-h-0">
+            <AddProductsPanel
+              collapsed={addProductsCollapsed}
+              onToggleCollapsed={toggleAddProductsCollapsed}
+              activeTab={activeTab}
+              onActiveTabChange={setActiveTab}
+              brandName={brandName}
+              onBrandNameChange={handleBrandNameChange}
+              category={category}
+              onCategoryChange={handleCategoryChange}
+              description={description}
+              onDescriptionChange={handleDescriptionChange}
+              imageFile={imageFile}
+              onImageFileChange={setImageFile}
+              formPreviewUrl={formPreviewUrl}
+              fileInputRef={fileInputRef}
+              formError={formError}
+              guestLimitReached={guestLimitReached}
+              brandMismatchPending={brandMismatchPending}
+              selectedClient={selectedClient}
+              pendingImageUrl={pendingImageUrl}
+              // Only reachable from Manual Entry's brand-mismatch resolution
+              // (LeftPanel — Photos Only has no mismatch gate, CSV has its
+              // own separate commitCsvUpload/onCsvAddOnlyMatching path), so
+              // 'manual' is always the correct source here.
+              onCommitAddProduct={(skipBrandVoice, uploadedImageUrl) => commitAddProduct(skipBrandVoice, uploadedImageUrl, undefined, 'manual')}
+              onCancelBrandMismatch={handleCancelBrandMismatch}
+              onAddProduct={handleAddProduct}
+              onAddImageOnlyProduct={handleAddImageOnlyProduct}
+              onClearForm={handleClearForm}
+              uploadingImage={uploadingImage}
+              editingId={editingId}
+              csvFile={csvFile}
+              onCsvFileChange={handleCsvFileChange}
+              csvFileInputRef={csvFileInputRef}
+              csvSummary={csvSummary}
+              isDragging={isDragging}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              pendingCsvUpload={pendingCsvUpload}
+              onUploadCsv={handleUploadCsv}
+              onCsvAddWithoutBrandVoice={handleCsvAddWithoutBrandVoice}
+              onCsvAddOnlyMatching={handleCsvAddOnlyMatching}
+              onCsvAddAllWithBrandVoice={handleCsvAddAllWithBrandVoice}
+              onCsvCancelMismatch={handleCsvCancelMismatch}
+            />
+          {/* min-h-0/overflow-y-auto gated to lg: same reasoning as the row
+              above — below lg this column takes its natural stacked
+              height instead of competing with Add Products for a shared
+              row height it no longer has, and the page's own scroll
+              (this whole block's ancestor) takes over. */}
+          <div className="flex-1 flex flex-col lg:min-h-0 p-6 lg:overflow-y-auto">
+          {/* Compact — a heading and one line, not a page-header-sized
+              banner. Establishes "what am I working on" without taking
+              space from the catalog table below it. */}
+          <div className="mb-4">
+            <h1 className={sectionHeadingClass}>Listings</h1>
+            <p className={bodyTextClass}>Create, validate and prepare marketplace listings.</p>
+          </div>
+          <AppHeader
+            hasSession={hasSession}
+            selectedMarketplaces={selectedMarketplaces}
+            onToggleMarketplace={handleToggleMarketplace}
+            marketplaceError={marketplaceError}
+            marketplaceFlash={marketplaceFlash}
+            marketplaceGroupRef={marketplaceSelectRef}
+            selectedClientId={selectedClient?.id || ''}
+            onSelectClient={setSelectedClient}
+            onOpenBrandProfile={() => setShowBrandProfile(true)}
+          />
 
-              {pendingRestoreCount !== null && (
-                <div className={`flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 ${warningBannerClass}`}>
-                  <p className={warningTextClass}>
-                    A previous session with {pendingRestoreCount} product{pendingRestoreCount === 1 ? '' : 's'} was found.
-                  </p>
-                  <div className="flex gap-2 shrink-0">
-                    <button onClick={handleRestoreSession} className={buttonSecondaryClass}>
-                      Restore
-                    </button>
-                    <button onClick={handleDiscardSession} className={buttonSecondaryClass}>
-                      Discard
-                    </button>
-                  </div>
-                </div>
-              )}
+          {outdatedSessionDiscarded && (
+            <div className={`mb-4 flex items-center justify-between gap-4 ${warningBannerClass}`}>
+              <p className={warningTextClass}>Previous session format outdated, please start fresh.</p>
+              <button onClick={() => setOutdatedSessionDiscarded(false)} className={buttonSecondaryClass}>
+                Dismiss
+              </button>
+            </div>
+          )}
 
-              {/* Top-level and impossible to miss, deliberately — running
-                  out of credits mid-batch is an account-level stop. No
-                  purchase flow exists yet, so "Buy more credits" goes to
-                  /contact (real, existing) rather than a fabricated route. */}
-              {creditsStoppedInfo && (
-                <div className={`flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 ${dangerBannerClass}`}>
-                  <div>
-                    <p className={`font-semibold ${dangerTextClass}`}>Generation stopped: you're out of credits.</p>
-                    <p className={dangerTextClass}>
-                      {creditsStoppedInfo.completedPairs} of {creditsStoppedInfo.totalPairs} items completed.
-                    </p>
-                  </div>
-                  <Link href="/contact" className={`${buttonPrimaryClass} shrink-0 text-center`}>
-                    Buy more credits
-                  </Link>
-                </div>
-              )}
-
-              {downloadMessage && (
-                <div className={`flex items-center gap-2 px-4 py-3 rounded-xl border border-[var(--success-border)] bg-[var(--success-bg)]`}>
-                  <p className="text-sm text-[var(--success-text)]">✓ {downloadMessage}</p>
-                </div>
-              )}
-
-              {deleteError && (
-                <div className={`flex items-center justify-between gap-4 ${dangerBannerClass}`}>
-                  <p className={dangerTextClass}>{deleteError}</p>
-                  <button onClick={() => setDeleteError(null)} className={buttonSecondaryClass}>
-                    Dismiss
-                  </button>
-                </div>
-              )}
-
-              {/* Milestone C11 — which marketplaces the readiness gate
-                  excluded from the export the banner above just reported,
-                  and the real reason for each. */}
-              {exportSkipped && exportSkipped.length > 0 && (
-                <div className={warningBannerClass}>
-                  <p className={`${warningTextClass} font-medium mb-1`}>Skipped (not ready):</p>
-                  <ul className="list-disc list-inside">
-                    {exportSkipped.map(({ marketplace, reason }) => (
-                      <li key={marketplace} className={warningTextClass}>
-                        {MARKETPLACE_LABELS[marketplace]} — {reason}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {/* CREATE HERO — ONE canonical creation entry point. "Create
-                  Product" and "Improve Existing Listing" are two framings
-                  of the exact same AddProductsPanel/commitAddProduct
-                  pipeline (see openCreatePanel above); Bulk Upload is an
-                  input method reached from the tab strip INSIDE the panel
-                  once it's open, never a third competing top-level button
-                  — that was the exact "form inside form" / "Create
-                  Product -> Bulk Create -> Create Product" confusion this
-                  correction removes. */}
-              <div className={`p-6 flex flex-col gap-4 ${cardClass}`}>
-                <div>
-                  <h1 className={sectionHeadingClass}>Create your next listing</h1>
-                  <p className={bodyTextClass}>
-                    Give Tesolute whatever you already have — photos, a description, or an existing listing — and it'll turn
-                    it into marketplace-ready content
-                    {selectedClient ? (
-                      <>
-                        {' '}
-                        for <span className="font-medium text-[var(--heading-text)]">{selectedClient.client_name}</span>
-                      </>
-                    ) : null}
-                    .
-                  </p>
-                </div>
-
-                {/* Brand/marketplace context — persistent and always
-                    visible (never buried inside the collapsible form
-                    below), since it's genuinely lightweight (a handful of
-                    pills + one dropdown) and other flows (bulk actions on
-                    already-existing products) also depend on knowing which
-                    marketplaces are currently selected. */}
-                <AppHeader
-                  hasSession={hasSession}
-                  selectedMarketplaces={selectedMarketplaces}
-                  onToggleMarketplace={handleToggleMarketplace}
-                  marketplaceError={marketplaceError}
-                  marketplaceFlash={marketplaceFlash}
-                  marketplaceGroupRef={marketplaceSelectRef}
-                  selectedClientId={selectedClient?.id || ''}
-                  onSelectClient={setSelectedClient}
-                  onOpenBrandProfile={() => setShowBrandProfile(true)}
-                />
-
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    onClick={() => openCreatePanel('create')}
-                    className={showCreatePanel && createIntent === 'create' ? buttonPrimaryClass : buttonSecondaryClass}
-                  >
-                    Create Product
-                  </button>
-                  <button
-                    onClick={() => openCreatePanel('improve')}
-                    className={showCreatePanel && createIntent === 'improve' ? buttonPrimaryClass : buttonSecondaryClass}
-                  >
-                    Improve Existing Listing
-                  </button>
-                  {showCreatePanel && (
-                    <button onClick={() => setShowCreatePanel(false)} className={linkButtonClass}>
-                      Close
-                    </button>
-                  )}
-                </div>
-
-                {showCreatePanel && (
-                  <div className="flex flex-col gap-3">
-                    {createIntent === 'improve' && activeTab === 'manual' && (
-                      <p className={`${warningTextClass} px-3 py-2 rounded-lg ${warningBannerClass}`}>
-                        Paste your existing listing's title, bullets, or description below — Tesolute will analyze it and
-                        create improved, marketplace-ready content.
-                      </p>
-                    )}
-                    <AddProductsPanel
-                      activeTab={activeTab}
-                      onActiveTabChange={setActiveTab}
-                      brandName={brandName}
-                      onBrandNameChange={handleBrandNameChange}
-                      category={category}
-                      onCategoryChange={handleCategoryChange}
-                      description={description}
-                      onDescriptionChange={handleDescriptionChange}
-                      imageFile={imageFile}
-                      onImageFileChange={setImageFile}
-                      formPreviewUrl={formPreviewUrl}
-                      fileInputRef={fileInputRef}
-                      formError={formError}
-                      guestLimitReached={guestLimitReached}
-                      brandMismatchPending={brandMismatchPending}
-                      selectedClient={selectedClient}
-                      pendingImageUrl={pendingImageUrl}
-                      onCommitAddProduct={commitAddProduct}
-                      onCancelBrandMismatch={handleCancelBrandMismatch}
-                      onAddProduct={handleAddProduct}
-                      onAddImageOnlyProduct={handleAddImageOnlyProduct}
-                      onClearForm={handleClearForm}
-                      uploadingImage={uploadingImage}
-                      editingId={editingId}
-                      csvFile={csvFile}
-                      onCsvFileChange={handleCsvFileChange}
-                      csvFileInputRef={csvFileInputRef}
-                      csvSummary={csvSummary}
-                      isDragging={isDragging}
-                      onDragOver={handleDragOver}
-                      onDragLeave={handleDragLeave}
-                      onDrop={handleDrop}
-                      pendingCsvUpload={pendingCsvUpload}
-                      onUploadCsv={handleUploadCsv}
-                      onCsvAddWithoutBrandVoice={handleCsvAddWithoutBrandVoice}
-                      onCsvAddOnlyMatching={handleCsvAddOnlyMatching}
-                      onCsvAddAllWithBrandVoice={handleCsvAddAllWithBrandVoice}
-                      onCsvCancelMismatch={handleCsvCancelMismatch}
-                    />
-                  </div>
-                )}
-              </div>
-
-              {/* MY PRODUCTS — the primary object the seller thinks in
-                  terms of, not "my marketplace tasks." */}
-              <div className="flex flex-col gap-3">
-                <h2 className={sectionHeadingClass}>My Products</h2>
-                {sessionReady && brandScopedProducts.length === 0 ? (
-                  <WorkspaceEmptyState onOpenCreate={() => openCreatePanel('create')} />
-                ) : (
-                  <>
-                    {brandScopedProducts.length > 0 && (
-                      <CatalogFilterBar
-                        filters={catalogFilters}
-                        onFiltersChange={setCatalogFilters}
-                        sortKey={sortKey}
-                        onSortKeyChange={setSortKey}
-                        availableBrands={availableBrands}
-                        availableCategories={availableCategories}
-                        needsAttention={needsAttention}
-                        onClearFilters={() => setCatalogFilters(DEFAULT_PRODUCT_FILTERS)}
-                        readinessFilter={readinessFilter}
-                        onReadinessFilterChange={setReadinessFilter}
-                      />
-                    )}
-                    <BulkActionBar
-                      selectedCount={selectedCount}
-                      onClear={clearSelection}
-                      onAnalyze={handleBulkAnalyzeSelected}
-                      onGenerate={handleBulkGenerateSelected}
-                      onApprove={handleBulkApproveSelected}
-                      onExport={handleBulkExportSelected}
-                      canAnalyze={canBulkAnalyze}
-                      canGenerate={canBulkGenerate}
-                      canApprove={canBulkApprove}
-                      canExport={canBulkExport}
-                      isRegenerate={isBulkRegenerate}
-                      busy={bulkRunning || generating}
-                      progressLabel={bulkProgressLabel}
-                    />
-                    <QueueTable
-                      draftProducts={visibleProducts}
-                      totalProductCount={brandScopedProducts.length}
-                      readinessFilter={readinessFilter}
-                      currentlyGenerating={currentlyGenerating}
-                      selectedMarketplaces={selectedMarketplaces}
-                      generating={generating}
-                      pendingGenerationCount={pendingGenerationCount}
-                      hasUnapprovedContent={hasUnapprovedContent}
-                      hasApproved={hasApproved}
-                      loading={!sessionReady}
-                      selectedIds={selectedProductIds}
-                      onToggleSelect={toggleSelectProduct}
-                      onToggleSelectAll={toggleSelectAllVisible}
-                      recommendations={recommendations}
-                      onExecuteRecommendation={handleExecuteRecommendation}
-                      onGenerateAll={handleGenerateAll}
-                      onBulkApprove={handleBulkApprove}
-                      onDownloadApproved={handleOpenExportSummary}
-                      onView={(id, marketplace) => setViewingTarget({ productId: id, marketplace })}
-                      onEdit={handleEditProduct}
-                      onDelete={handleDeleteProduct}
-                    />
-                  </>
-                )}
+          {pendingRestoreCount !== null && (
+            <div className={`mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 ${warningBannerClass}`}>
+              <p className={warningTextClass}>
+                A previous session with {pendingRestoreCount} product{pendingRestoreCount === 1 ? '' : 's'} was found.
+              </p>
+              <div className="flex gap-2 shrink-0">
+                <button onClick={handleRestoreSession} className={buttonSecondaryClass}>
+                  Restore
+                </button>
+                <button onClick={handleDiscardSession} className={buttonSecondaryClass}>
+                  Discard
+                </button>
               </div>
             </div>
+          )}
+
+          {/* Top-level and impossible to miss, deliberately — distinct from
+              the per-row "One or more marketplaces failed" text in
+              QueueTable, which is a different, per-item concern (a bad
+              image, a transient error). Running out of credits mid-batch is
+              an account-level stop, not a per-row one, so it gets the same
+              prominent placement as the session banners above rather than
+              being buried inside the queue card. No purchase flow exists
+              yet, so "Buy more credits" goes to /contact (real, existing)
+              rather than a fabricated /billing route. */}
+          {creditsStoppedInfo && (
+            <div className={`mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 ${dangerBannerClass}`}>
+              <div>
+                <p className={`font-semibold ${dangerTextClass}`}>Generation stopped: you're out of credits.</p>
+                <p className={dangerTextClass}>
+                  {creditsStoppedInfo.completedPairs} of {creditsStoppedInfo.totalPairs} items completed.
+                </p>
+              </div>
+              <Link href="/contact" className={`${buttonPrimaryClass} shrink-0 text-center`}>
+                Buy more credits
+              </Link>
+            </div>
+          )}
+
+          {deleteError && (
+            <div className={`mb-4 flex items-center justify-between gap-4 ${dangerBannerClass}`}>
+              <p className={dangerTextClass}>{deleteError}</p>
+              <button onClick={() => setDeleteError(null)} className={buttonSecondaryClass}>
+                Dismiss
+              </button>
+            </div>
+          )}
+
+          {/* Grouped with the other transient status banners above (not
+              left trailing under whatever renders below it, which could be
+              the empty state right after a full export clears the queue) —
+              same bordered-banner shape as those, success-tinted with the
+              existing theme variables. */}
+          {downloadMessage && (
+            <div className={`mb-4 flex items-center gap-2 px-4 py-3 rounded-xl border border-[var(--success-border)] bg-[var(--success-bg)]`}>
+              <p className="text-sm text-[var(--success-text)]">✓ {downloadMessage}</p>
+            </div>
+          )}
+
+          {/* Milestone C11 — which marketplaces the readiness gate excluded
+              from the export the banner above just reported, and the real
+              reason for each (never a generic "skipped some marketplaces"). */}
+          {exportSkipped && exportSkipped.length > 0 && (
+            <div className={`mb-4 ${warningBannerClass}`}>
+              <p className={`${warningTextClass} font-medium mb-1`}>Skipped (not ready):</p>
+              <ul className="list-disc list-inside">
+                {exportSkipped.map(({ marketplace, reason }) => (
+                  <li key={marketplace} className={warningTextClass}>
+                    {MARKETPLACE_LABELS[marketplace]} — {reason}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Listings — the primary content of this column. Add Products is
+              the persistent sibling column to the left, not an action
+              triggered from here anymore. */}
+          <div className="flex-1 min-h-0 flex flex-col">
+            {sessionReady && draftProducts.length === 0 ? (
+              <WorkspaceEmptyState />
+            ) : (
+              <>
+                {draftProducts.length > 0 && (
+                  <div className="mb-3 flex flex-wrap items-center gap-4">
+                    {/* Real counts of attempted (product, marketplace) pairs
+                        from computeListingSummary — the same per-row health
+                        computation QueueTable itself uses, just tallied.
+                        Never shown as a percentage or score. */}
+                    <p className={bodyTextClass}>
+                      <span className="font-semibold text-[var(--heading-text)]">{listingSummary.total}</span>{' '}
+                      Listing{listingSummary.total === 1 ? '' : 's'}
+                      {listingSummary.ready > 0 && (
+                        <>
+                          {' '}
+                          · <span className="text-[var(--success-text)]">{listingSummary.ready} Ready</span>
+                        </>
+                      )}
+                      {listingSummary.needsReview > 0 && (
+                        <>
+                          {' '}
+                          · <span className="text-[var(--warn-text)]">{listingSummary.needsReview} Needs Review</span>
+                        </>
+                      )}
+                      {listingSummary.missingData > 0 && (
+                        <>
+                          {' '}
+                          · <span className="text-[var(--warn-text)]">{listingSummary.missingData} Missing Data</span>
+                        </>
+                      )}
+                      {listingSummary.error > 0 && (
+                        <>
+                          {' '}
+                          · <span className="text-[var(--danger-text)]">{listingSummary.error} Error{listingSummary.error === 1 ? '' : 's'}</span>
+                        </>
+                      )}
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {FILTER_OPTIONS.map((option) => {
+                        const isActive = readinessFilter === option.id
+                        return (
+                          <button
+                            key={option.id}
+                            type="button"
+                            onClick={() => setReadinessFilter(option.id)}
+                            aria-pressed={isActive}
+                            className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[var(--page-bg)] focus:ring-blue-500 ${
+                              isActive
+                                ? 'bg-blue-600 border-blue-600 text-white'
+                                : 'bg-[var(--secondary-btn-bg)] border-[var(--secondary-btn-border)] text-[var(--secondary-btn-text)] hover:bg-[var(--secondary-btn-bg-hover)]'
+                            }`}
+                          >
+                            {option.label}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+                <QueueTable
+                  draftProducts={draftProducts}
+                  readinessFilter={readinessFilter}
+                  currentlyGenerating={currentlyGenerating}
+                  selectedMarketplaces={selectedMarketplaces}
+                  generating={generating}
+                  hasApproved={hasApproved}
+                  loading={!sessionReady}
+                  hasSession={hasSession}
+                  pendingCount={pendingCount}
+                  onGenerateAll={handleGenerateAll}
+                  onBulkApprove={handleBulkApprove}
+                  onDownloadApproved={handleOpenExportSummary}
+                  onView={(id, marketplace) => setViewingTarget({ productId: id, marketplace })}
+                  onEdit={handleEditProduct}
+                  onDelete={handleDeleteProduct}
+                  onRetry={handleRetryProductMarketplace}
+                  onClearAll={() => setShowClearAllConfirm(true)}
+                />
+              </>
+            )}
+          </div>
+        </div>
           </div>
         </AppSidebar>
       </div>
@@ -3388,7 +3208,6 @@ export default function CatalogueWorkspace() {
           onRetryMarketplace={handleRetryProductMarketplace}
           onRegenerateField={handleRegenerateField}
           onAnalyzeProduct={handleAnalyzeProduct}
-          onSwitchMarketplace={(m) => setViewingTarget({ productId: viewingProduct.id, marketplace: m })}
         />
       )}
 
@@ -3415,13 +3234,18 @@ export default function CatalogueWorkspace() {
           }}
         />
       )}
+      {showClearAllConfirm && (
+        <ClearAllConfirmModal
+          count={listingSummary.total}
+          clearing={clearingAll}
+          onCancel={() => setShowClearAllConfirm(false)}
+          onConfirm={handleClearAll}
+        />
+      )}
       {showExportSummary && (
         <ExportSummaryModal
-          // Milestone C14 — shows the SCOPED counts/summary when Bulk Export
-          // Selected opened this modal, so the confirmation surface never
-          // shows counts for products outside the export it's about to run.
-          exportableCounts={computeExportableCounts(exportScopeIds ? draftProducts.filter((p) => exportScopeIds.has(p.id)) : draftProducts)}
-          summary={computeListingSummary(exportScopeIds ? draftProducts.filter((p) => exportScopeIds.has(p.id)) : draftProducts)}
+          exportableCounts={computeExportableCounts(draftProducts)}
+          summary={listingSummary}
           exportError={exportError}
           readiness={exportReadiness}
           onClose={() => {

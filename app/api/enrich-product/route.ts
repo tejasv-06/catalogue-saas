@@ -2,7 +2,6 @@ import Groq from 'groq-sdk'
 import { NextResponse } from 'next/server'
 import { createClient as createAuthClient } from '@/lib/supabase/server'
 import { getProductById, setProductIntelligence } from '@/lib/catalog'
-import { recordProductHistoryEvent } from '@/lib/productHistory'
 import {
   PRODUCT_INTELLIGENCE_FIELD_KEYS,
   EXAMPLE_PRODUCT_INTELLIGENCE_DATA,
@@ -179,15 +178,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Could not start enrichment' }, { status: 500 })
   }
 
-  // Milestone C14 — recorded only once the 'processing' state above has
-  // actually persisted (enrichment genuinely started), server-side, using
-  // the same session-bound authClient every other write in this route
-  // already uses. Fire-and-forget: a history-recording failure must never
-  // turn an already-started enrichment into an error response.
-  void recordProductHistoryEvent({ productId, eventType: 'enrichment_started' }, authClient).catch((err: any) => {
-    console.error('enrich-product: failed to record enrichment_started:', err?.message ?? err)
-  })
-
   const hasDescription = !!(product.description && product.description.trim())
   const promptText = hasDescription
     ? `Brand: ${product.brand_name || 'N/A'}\nCategory: ${product.category || 'unspecified'}\nRaw description: ${product.description}`
@@ -197,9 +187,6 @@ export async function POST(request: Request) {
     const failed = buildFailedIntelligence(previous, 'Product has neither a description nor an image to analyze')
     try {
       await setProductIntelligence(productId, failed, authClient)
-      void recordProductHistoryEvent({ productId, eventType: 'enrichment_failed' }, authClient).catch((err: any) => {
-        console.error('enrich-product: failed to record enrichment_failed:', err?.message ?? err)
-      })
     } catch (err: any) {
       console.error('enrich-product: failed to persist failure state:', err?.message ?? err)
     }
@@ -223,12 +210,6 @@ export async function POST(request: Request) {
     const completed = buildCompletedIntelligence(data, missingInformation)
     const row = await setProductIntelligence(productId, completed, authClient)
     persisted = row.product_intelligence as ProductIntelligence
-    void recordProductHistoryEvent(
-      { productId, eventType: 'enrichment_completed', metadata: { intelligence_status: 'completed' } },
-      authClient
-    ).catch((err: any) => {
-      console.error('enrich-product: failed to record enrichment_completed:', err?.message ?? err)
-    })
   } catch (err: any) {
     const message = err?.message || 'Enrichment failed'
     console.error(`enrich-product: enrichment failed for product ${productId}:`, message)
@@ -236,9 +217,6 @@ export async function POST(request: Request) {
     try {
       const row = await setProductIntelligence(productId, failed, authClient)
       persisted = row.product_intelligence as ProductIntelligence
-      void recordProductHistoryEvent({ productId, eventType: 'enrichment_failed' }, authClient).catch((histErr: any) => {
-        console.error('enrich-product: failed to record enrichment_failed:', histErr?.message ?? histErr)
-      })
     } catch (persistErr: any) {
       console.error('enrich-product: failed to persist failure state:', persistErr?.message ?? persistErr)
       // The raw product itself was never touched — only its own

@@ -2,358 +2,354 @@
 
 import type { DraftProduct, Marketplace } from '@/lib/types'
 import type { ReadinessFilter } from '@/components/CatalogueWorkspace'
-import type { CatalogActionRecommendation } from '@/lib/catalogRecommendations'
 import { SUPPORTED_MARKETPLACES, MARKETPLACE_LABELS } from '@/lib/platformShapers'
 import { computeListingHealth } from '@/lib/listingHealth'
-import { marketplaceChipFor, explainMissing, CHIP_TONE_CLASS } from '@/components/workspace/humanCopy'
 import ProductThumbnail from '@/components/ProductThumbnail'
+import ListingHealthBadge, { type RowHealthStatus } from '@/components/workspace/ListingHealthBadge'
 import EmptyQueueState from '@/components/workspace/EmptyQueueState'
+import TableSkeleton from '@/components/workspace/TableSkeleton'
+import { CREDIT_COSTS } from '@/lib/creditCosts'
 import {
   buttonPrimaryClass,
   buttonSecondaryClass,
-  buttonSecondarySmallClass,
+  buttonDestructiveSmallClass,
   linkButtonClass,
   linkButtonDestructiveClass,
   cardClass
 } from '@/lib/uiClasses'
 
-// Milestone C17 — "My Products." Renamed conceptually (still QueueTable.tsx
-// as a file — a rename would only touch code, this is a seller-facing IA
-// change, not a code-cleanliness one) from a per-(product, marketplace) row
-// table into one CARD per PRODUCT: the product is the object the seller
-// interacts with, marketplace status is a compact chip row within it, and
-// the "Health"/"Issues" column jargon is gone — every fact shown here still
-// comes from the exact same computeListingHealth call C1-C16 already made,
-// just translated to plain language (see humanCopy.ts) and grouped by
-// product instead of exploded into one row per marketplace.
+const COLUMN_COUNT = 5
 
-// Whether a product has at least one marketplace whose real health matches
-// the (de-emphasized, still-available) status filter — same
-// computeListingHealth call every other status view in this app already
-// uses, just deciding "does this product show" instead of "does this row
-// show," since there's one card per product now, not one row per
-// marketplace.
-function productMatchesReadinessFilter(product: DraftProduct, generatingMarketplace: Marketplace | null, filter: ReadinessFilter): boolean {
-  if (filter === 'all') return true
-  return SUPPORTED_MARKETPLACES.some((m) => {
-    const content = product.generatedContent[m]
-    const error = product.generationError[m]
-    if (content === null && error === null) return false
-    if (m === generatingMarketplace) return false
-    return computeListingHealth(m, content, error, product.generationMeta[m]).status === filter
+// One row per (product, marketplace) pair that's actually been attempted —
+// answers "is this specific listing ready to upload," which a single
+// product-level row couldn't when a product spans several marketplaces. The
+// marketplace currently generating is included too, even before it has any
+// content/error of its own, so it gets its own "Generating…" row instead of
+// silently having no row at all until it resolves. A product with nothing
+// attempted or in flight yet still gets exactly one row (marketplace slot
+// null) so it doesn't disappear from the queue before generation runs.
+function getDisplayMarketplaces(product: DraftProduct, generatingMarketplace: Marketplace | null): Marketplace[] {
+  const displaySet = new Set(
+    SUPPORTED_MARKETPLACES.filter((m) => product.generatedContent[m] !== null || product.generationError[m] !== null)
+  )
+  if (generatingMarketplace) displaySet.add(generatingMarketplace)
+  return SUPPORTED_MARKETPLACES.filter((m) => displaySet.has(m))
+}
+
+// One row's worth of pre-computed display facts — built once per candidate
+// marketplace so filtering (below) and rendering both work off the exact
+// same computeListingHealth call, never a second one that could drift from it.
+type RowData = {
+  marketplace: Marketplace | null
+  isGenerating: boolean
+  content: any | null
+  error: string | null
+  health: ReturnType<typeof computeListingHealth> | null
+  rowStatus: RowHealthStatus
+}
+
+function buildRowData(product: DraftProduct, generatingMarketplace: Marketplace | null): RowData[] {
+  const displayMarketplaces = getDisplayMarketplaces(product, generatingMarketplace)
+  const marketplaceRows: (Marketplace | null)[] = displayMarketplaces.length > 0 ? displayMarketplaces : [null]
+
+  return marketplaceRows.map((marketplace) => {
+    const isGenerating = marketplace !== null && marketplace === generatingMarketplace
+    const content = marketplace ? product.generatedContent[marketplace] : null
+    const error = marketplace ? product.generationError[marketplace] : null
+    const health =
+      marketplace && !isGenerating ? computeListingHealth(marketplace, content, error, product.generationMeta[marketplace]) : null
+
+    const rowStatus: RowHealthStatus = isGenerating
+      ? 'generating'
+      : !marketplace
+        ? 'not-generated'
+        : (health!.status as RowHealthStatus)
+
+    return { marketplace, isGenerating, content, error, health, rowStatus }
   })
 }
 
-function ProductCard({
+// A product can span several marketplaces at different readiness states
+// (Amazon Ready, Flipkart Needs Review) — filtering must operate at the same
+// (product, marketplace) granularity QueueRows renders at, not hide/show a
+// whole product's rows as one unit. 'all' keeps everything, including the
+// in-flight/not-yet-attempted placeholder rows; any specific status keeps
+// only the rows whose own real health.status matches it — a row still
+// generating (health null) or never attempted (health null) never matches a
+// specific filter.
+function filterRowData(rows: RowData[], filter: ReadinessFilter): RowData[] {
+  if (filter === 'all') return rows
+  return rows.filter((r) => r.health?.status === filter)
+}
+
+// Whether this product has at least one row visible under the current
+// filter — used by QueueTable to decide which products to render at all,
+// using the exact same per-row data (and therefore the exact same
+// computeListingHealth calls) QueueRows itself renders from.
+function productHasVisibleRow(product: DraftProduct, generatingMarketplace: Marketplace | null, filter: ReadinessFilter): boolean {
+  return filterRowData(buildRowData(product, generatingMarketplace), filter).length > 0
+}
+
+function QueueRows({
   product,
   generatingMarketplace,
-  selected,
-  onToggleSelect,
-  topRecommendation,
-  onExecuteRecommendation,
+  filter,
   onView,
   onEdit,
-  onDelete
+  onDelete,
+  onRetry
 }: {
   product: DraftProduct
+  // The one marketplace of THIS product currently generating, or null — not
+  // a product-wide flag, so a row whose own marketplace already finished
+  // doesn't get stuck showing "Generating…" just because a sibling row for
+  // the same product is still in flight.
   generatingMarketplace: Marketplace | null
-  selected: boolean
-  onToggleSelect: (id: string) => void
-  topRecommendation: CatalogActionRecommendation | null
-  onExecuteRecommendation: (rec: CatalogActionRecommendation) => void
+  filter: ReadinessFilter
   onView: (id: string, marketplace: Marketplace) => void
   onEdit: (product: DraftProduct) => void
   onDelete: (id: string) => void
+  onRetry: (id: string, marketplace: Marketplace) => void
 }) {
-  const attemptedMarketplaces = SUPPORTED_MARKETPLACES.filter(
-    (m) => product.generatedContent[m] !== null || product.generationError[m] !== null
-  )
-  // Milestone C17 (corrected) — only marketplaces this product has actually
-  // been worked on for get a chip; an untouched marketplace the seller
-  // never asked Tesolute to create simply isn't shown at all (no "Not
-  // Started" clutter for all four every time). The in-flight marketplace
-  // is folded in too so a "Creating…" chip appears the instant generation
-  // starts, even before it has content/error of its own yet.
-  const visibleMarketplaces = generatingMarketplace && !attemptedMarketplaces.includes(generatingMarketplace)
-    ? [...attemptedMarketplaces, generatingMarketplace]
-    : attemptedMarketplaces
-  const firstOpenTarget = attemptedMarketplaces[0] ?? SUPPORTED_MARKETPLACES[0]
-
-  const understoodStatus = product.productIntelligence?.status
-  const understandingLabel =
-    understoodStatus === 'completed'
-      ? '✓ Product understood'
-      : understoodStatus === 'processing'
-        ? 'Understanding your product…'
-        : understoodStatus === 'failed'
-          ? 'Needs more information'
-          : null
+  const marketplaceRows = filterRowData(buildRowData(product, generatingMarketplace), filter)
+  if (marketplaceRows.length === 0) return null
 
   return (
-    <div className={`p-4 flex flex-col gap-3 ${cardClass}`}>
-      <div className="flex items-start gap-3">
-        <input
-          type="checkbox"
-          checked={selected}
-          onChange={() => onToggleSelect(product.id)}
-          aria-label={`Select ${product.brandName || 'product'}`}
-          className="mt-1 w-4 h-4 rounded border-[var(--card-border)] shrink-0"
-        />
-        <ProductThumbnail imageFile={product.imageFile} imageUrl={product.imageUrl} alt={product.brandName} size={56} />
-        <div className="min-w-0 flex-1">
-          <p className="font-medium text-sm text-[var(--heading-text)] truncate">{product.brandName || 'Untitled product'}</p>
-          <p className="text-xs text-[var(--muted-text)] truncate">{product.category || 'No category yet'}</p>
-          {understandingLabel && (
-            <p className={`text-xs mt-0.5 ${understoodStatus === 'completed' ? 'text-[var(--success-text)]' : 'text-[var(--muted-text)]'}`}>
-              {understandingLabel}
-            </p>
-          )}
-        </div>
-      </div>
+    <>
+      {marketplaceRows.map(({ marketplace, isGenerating, content, error, health, rowStatus }, i) => {
+        const failedChecks = health ? health.checks.filter((c) => c.applicable && !c.passed).length : 0
 
-      {/* Only the marketplace(s) actually worked on for this product, in
-          plain language — never the raw ready/needs-review/missing-data/
-          error vocabulary, and never a "Not Started" badge for a
-          marketplace the seller hasn't asked Tesolute about yet. Clicking
-          a chip opens this product's studio at exactly that marketplace. */}
-      {visibleMarketplaces.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          {visibleMarketplaces.map((m) => {
-            const isGenerating = m === generatingMarketplace
-            const attempted = attemptedMarketplaces.includes(m)
-            const health = attempted && !isGenerating
-              ? computeListingHealth(m, product.generatedContent[m], product.generationError[m], product.generationMeta[m])
-              : null
-            const chip = isGenerating ? { tone: 'attention' as const, label: 'Creating…' } : marketplaceChipFor(attempted, health)
-            return (
-              <button
-                key={m}
-                type="button"
-                onClick={() => onView(product.id, m)}
-                className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors hover:opacity-90 ${CHIP_TONE_CLASS[chip.tone]}`}
-                title={health ? explainMissing(MARKETPLACE_LABELS[m], health) ?? undefined : undefined}
-              >
-                {MARKETPLACE_LABELS[m]} · {chip.label}
-              </button>
-            )
-          })}
-        </div>
-      )}
-
-      {/* One contextual next step, reusing C15's already-computed,
-          already-sorted recommendation for this exact product — never a
-          second priority judgment made here. */}
-      {topRecommendation && (
-        <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-[var(--secondary-btn-bg)] text-xs">
-          <p className="text-[var(--body-text)] min-w-0 truncate">{topRecommendation.reason}</p>
-          <button
-            type="button"
-            onClick={() => onExecuteRecommendation(topRecommendation)}
-            className="shrink-0 text-[var(--link-text)] underline hover:text-[var(--link-text-hover)]"
-          >
-            {topRecommendation.actionType === 'ANALYZE'
-              ? 'Analyze'
-              : topRecommendation.actionType === 'GENERATE'
-                ? 'Create it'
-                : topRecommendation.actionType === 'APPROVE'
-                  ? 'Approve'
-                  : topRecommendation.actionType === 'EXPORT'
-                    ? 'Download'
-                    : 'Review'}
-          </button>
-        </div>
-      )}
-
-      <div className="flex items-center justify-between gap-2 pt-1 border-t border-[var(--card-border)]">
-        <div className="flex gap-3">
-          <button onClick={() => onEdit(product)} className={linkButtonClass}>
-            Edit
-          </button>
-          <button onClick={() => onDelete(product.id)} className={linkButtonDestructiveClass}>
-            Delete
-          </button>
-        </div>
-        <button onClick={() => onView(product.id, firstOpenTarget)} className={buttonSecondarySmallClass}>
-          Open Product
-        </button>
-      </div>
-    </div>
+        return (
+          <tr key={`${product.id}-${marketplace ?? 'none'}`} className="border-b border-[var(--row-border)]">
+            {i === 0 && (
+              <td className="py-3 px-4 align-top" rowSpan={marketplaceRows.length}>
+                <div className="flex items-center gap-3">
+                  <ProductThumbnail imageFile={product.imageFile} imageUrl={product.imageUrl} alt={product.brandName} size={56} />
+                  <div className="min-w-0">
+                    <p className="font-medium text-sm text-[var(--heading-text)] truncate">{product.brandName || '-'}</p>
+                    <p className="text-xs text-[var(--muted-text)] truncate">{product.category || '-'}</p>
+                    <div className="flex gap-2 mt-1">
+                      <button onClick={() => onEdit(product)} className={linkButtonClass}>
+                        Edit
+                      </button>
+                      <button onClick={() => onDelete(product.id)} className={linkButtonDestructiveClass}>
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </td>
+            )}
+            <td className="py-3 px-4 text-sm text-[var(--body-text)]">
+              {marketplace ? MARKETPLACE_LABELS[marketplace] : '—'}
+            </td>
+            <td className="py-3 px-4">
+              <div className="flex flex-col gap-0.5">
+                <ListingHealthBadge status={rowStatus} />
+                {health && <span className="text-xs text-[var(--muted-text)]">{health.percentComplete}% complete</span>}
+              </div>
+            </td>
+            <td className="py-3 px-4 text-sm text-[var(--body-text)]">{health ? failedChecks : '—'}</td>
+            <td className="py-3 px-4 whitespace-nowrap space-x-2">
+              {/* marketplace narrowed explicitly (not just content||error)
+                  so onView always carries the exact row's own marketplace —
+                  this is the one (product, marketplace) pair this row
+                  represents, and the drawer it opens must show only this
+                  one, not every marketplace this product has ever attempted. */}
+              {marketplace && (content || error) && (
+                <button onClick={() => onView(product.id, marketplace)} className={linkButtonClass}>
+                  View
+                </button>
+              )}
+              {error && marketplace && (
+                <button
+                  onClick={() => onRetry(product.id, marketplace)}
+                  disabled={isGenerating}
+                  className={buttonDestructiveSmallClass}
+                >
+                  Retry
+                </button>
+              )}
+            </td>
+          </tr>
+        )
+      })}
+    </>
   )
 }
 
 export default function QueueTable({
   draftProducts,
-  totalProductCount,
   readinessFilter,
   currentlyGenerating,
   selectedMarketplaces,
   generating,
-  pendingGenerationCount,
-  hasUnapprovedContent,
   hasApproved,
   loading,
-  selectedIds,
-  onToggleSelect,
-  onToggleSelectAll,
-  recommendations,
-  onExecuteRecommendation,
+  hasSession,
+  pendingCount,
   onGenerateAll,
   onBulkApprove,
   onDownloadApproved,
   onView,
   onEdit,
-  onDelete
+  onDelete,
+  onRetry
 }: {
   draftProducts: DraftProduct[]
-  totalProductCount: number
+  // Filtering happens here, at the same (product, marketplace) granularity
+  // the rows themselves render at (see filterRowData/productHasVisibleRow
+  // above) — draftProducts is passed in unfiltered so a product with, say,
+  // one Ready and one Needs Review marketplace can show just the matching
+  // row under either filter instead of both.
   readinessFilter: ReadinessFilter
+  // Only one (product, marketplace) pair is ever generating at a time (the
+  // generation loop is sequential) — passed through as-is so each row can
+  // tell whether it specifically is the one in flight, not just its product.
   currentlyGenerating: { productId: string; marketplace: Marketplace } | null
   selectedMarketplaces: Marketplace[]
   generating: boolean
-  // Milestone C17 (corrected) — count (not filtered-view-scoped) of
-  // never-yet-generated products across the WHOLE current batch, driving
-  // both "Generate Listings"'s enabled state and its "Uses N credits"
-  // preview text.
-  pendingGenerationCount: number
-  hasUnapprovedContent: boolean
   hasApproved: boolean
   loading: boolean
-  selectedIds: Set<string>
-  onToggleSelect: (id: string) => void
-  onToggleSelectAll: () => void
-  // Milestone C17 — the same already-sorted C15 recommendation list, used
-  // to show each card's own single most relevant next step. Purely a read;
-  // execution still goes through the caller's existing dispatcher.
-  recommendations: CatalogActionRecommendation[]
-  onExecuteRecommendation: (rec: CatalogActionRecommendation) => void
-  // Milestone C17 (corrected) — restored as the PRIMARY, zero-selection
-  // actions: "selection is not the primary workflow." Generate Listings
-  // acts on every draft product in the current batch; Approve All acts on
-  // every eligible generated/partial product. Select all + the (still
-  // available, now explicitly secondary) Bulk Action Bar remains for
-  // narrowing either action to a subset.
+  hasSession: boolean
+  pendingCount: number
   onGenerateAll: () => void
   onBulkApprove: () => void
   onDownloadApproved: () => void
   onView: (id: string, marketplace: Marketplace) => void
   onEdit: (product: DraftProduct) => void
   onDelete: (id: string) => void
+  onRetry: (id: string, marketplace: Marketplace) => void
 }) {
-  const visibleProducts = draftProducts.filter((p) =>
-    productMatchesReadinessFilter(p, currentlyGenerating?.productId === p.id ? currentlyGenerating.marketplace : null, readinessFilter)
-  )
-  const allVisibleSelected = visibleProducts.length > 0 && visibleProducts.every((p) => selectedIds.has(p.id))
   const hasSelectedMarketplaces = selectedMarketplaces.length > 0
-  const hasDraft = pendingGenerationCount > 0
 
-  // Milestone C17 (corrected) — pipeline-position primary: whichever
-  // zero-selection action the CURRENT batch is actually ready for next
-  // gets the one blue "primary" treatment, mirroring the original C14
-  // pattern (generate -> approve -> export). The other two stay visible
-  // but secondary, never hidden — the whole point is these three are
-  // ALWAYS on screen, not conjured only once selection happens.
+  // Sequential "what's next" highlight: exactly one of the three actions is
+  // primary blue at a time, based on where the queue actually is — not the
+  // active tab or any manual toggle.
+  //
+  // Two things `status` alone can no longer answer, now that a product can
+  // span several marketplaces generated independently:
+  //   1. "hasGenerated" (status 'generated'/'partial' existing anywhere) can
+  //      go true mid-batch — a product flips to 'partial' the instant its
+  //      FIRST marketplace lands, while its others are still in flight in
+  //      the very same run. Gating on `generating` fixes Bulk Approve
+  //      lighting up before the batch actually finishes.
+  //   2. Approving a marketplace never changes `status` (approval is fully
+  //      independent of it) — so "no generated-status product exists" is
+  //      never true again once anything has ever been generated, which
+  //      made Download practically unreachable. What actually matters is
+  //      whether any generated marketplace is still *unapproved* anywhere,
+  //      not whether `status` ever resets.
+  const hasDraft = draftProducts.some((p) => p.status === 'draft')
+  const hasUnapprovedContent = draftProducts.some((p) =>
+    SUPPORTED_MARKETPLACES.some((m) => p.generatedContent[m] !== null && !p.approved[m])
+  )
+
   const generateIsPrimary = hasDraft
-  const bulkApproveIsPrimary = !generateIsPrimary && hasUnapprovedContent
-  const downloadIsPrimary = !generateIsPrimary && !bulkApproveIsPrimary && hasApproved
-  const creditCost = pendingGenerationCount * selectedMarketplaces.length
+  const bulkApproveIsPrimary = !generating && !hasDraft && hasUnapprovedContent
+  const downloadIsPrimary = !generating && !hasDraft && !hasUnapprovedContent && hasApproved
 
-  const recommendationByProduct = new Map(recommendations.filter((r) => r.productId).map((r) => [r.productId!, r] as const))
-  // Only the FIRST (highest-priority, since recommendations arrives
-  // pre-sorted) recommendation per product — a card shows one next step,
-  // never a stacked list.
-  for (const r of recommendations) {
-    if (r.productId && !recommendationByProduct.has(r.productId)) recommendationByProduct.set(r.productId, r)
-  }
+  // Guests aren't credit-metered (they have the separate free-preview count
+  // shown in the header), so the cost preview only applies once signed in —
+  // computed from the actual pending count and selected marketplaces, not
+  // hardcoded, so it can't drift from what generating will actually cost.
+  // Total cost is simply products × marketplaces (one credit per pair), the
+  // same sum the generation loop actually charges, not a separate formula.
+  const totalGenerations = pendingCount * selectedMarketplaces.length
+  const creditCost = totalGenerations * CREDIT_COSTS.listingGeneration
+  // Plain label on the button itself; the cost (when it applies) is small
+  // secondary text underneath instead of folded into one long sentence —
+  // Generate Listings is the thing being decided, not the arithmetic.
+  const generateLabel = generating ? 'Generating...' : 'Generate Listings'
+  const showCreditCost = !generating && hasSession && pendingCount > 0 && hasSelectedMarketplaces
 
   return (
-    <div className="w-full min-w-0 flex flex-col gap-3">
-      {/* Milestone C17 (corrected) — the PRIMARY workflow toolbar: three
-          always-visible, zero-selection actions covering the whole current
-          batch (Generate Listings -> Approve All -> Export Listings), each
-          individually enabled by real batch eligibility, with exactly one
-          highlighted as primary based on pipeline position. "Select all" +
-          the Bulk Action Bar (rendered by the caller above this component)
-          remains available underneath as the SECONDARY, subset-narrowing
-          mechanism — selection is never a prerequisite for these. */}
-      {draftProducts.length > 0 && (
-        <div className="flex flex-col gap-2">
-          <div className="flex flex-wrap items-center gap-3">
-            <label className="flex items-center gap-2 text-xs text-[var(--muted-text)]">
-              <input
-                type="checkbox"
-                checked={allVisibleSelected}
-                onChange={onToggleSelectAll}
-                aria-label="Select all visible products"
-                className="w-4 h-4 rounded border-[var(--card-border)]"
-              />
-              Select all
-            </label>
-            <div className="flex-1" />
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="flex flex-col items-end">
-                <button
-                  onClick={onGenerateAll}
-                  disabled={!hasSelectedMarketplaces || !hasDraft || generating}
-                  className={generateIsPrimary ? buttonPrimaryClass : buttonSecondaryClass}
-                >
-                  Generate Listings
-                </button>
-                {hasDraft && hasSelectedMarketplaces && (
-                  <span className="text-[11px] text-[var(--muted-text)] mt-0.5">Uses {creditCost} credits</span>
-                )}
-              </div>
-              <button
-                onClick={onBulkApprove}
-                disabled={!hasUnapprovedContent || generating}
-                className={bulkApproveIsPrimary ? buttonPrimaryClass : buttonSecondaryClass}
-              >
-                Approve All
-              </button>
-              <button
-                onClick={onDownloadApproved}
-                disabled={!hasSelectedMarketplaces || !hasApproved || generating}
-                className={downloadIsPrimary ? buttonPrimaryClass : buttonSecondaryClass}
-              >
-                Export Listings
-              </button>
-            </div>
+    <div className={`w-full min-w-0 h-full flex flex-col p-6 ${cardClass}`}>
+      <div className="flex flex-row flex-wrap items-center justify-between gap-3 mb-4 shrink-0">
+        <div className="flex flex-row flex-wrap items-start gap-3">
+          <div>
+            <button
+              onClick={onGenerateAll}
+              // Deliberately NOT gated on hasSelectedMarketplaces — this
+              // button must stay clickable with zero marketplaces selected
+              // so the click reaches handleGenerateAll's own
+              // requireMarketplace() check, which is what actually shows
+              // "Please select at least one target marketplace." A disabled
+              // button here would silently swallow that click and make the
+              // warning unreachable, the same problem the old
+              // Add-Product-side gate had.
+              disabled={!hasDraft || generating}
+              className={generateIsPrimary ? buttonPrimaryClass : buttonSecondaryClass}
+            >
+              {generateLabel}
+            </button>
+            {showCreditCost && (
+              <p className="text-xs text-[var(--muted-text)] mt-1">
+                Uses {creditCost} credit{creditCost === 1 ? '' : 's'}
+              </p>
+            )}
           </div>
-          {!hasSelectedMarketplaces && hasDraft && (
-            <p className="text-xs text-[var(--muted-text)] text-right">Choose where to sell above to generate listings.</p>
-          )}
+          <button
+            onClick={onBulkApprove}
+            disabled={!hasSelectedMarketplaces || !hasUnapprovedContent}
+            className={bulkApproveIsPrimary ? buttonPrimaryClass : buttonSecondaryClass}
+          >
+            Bulk Approve
+          </button>
         </div>
-      )}
-
-      {loading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-          {[0, 1, 2].map((i) => (
-            <div key={i} className={`p-4 h-40 animate-pulse ${cardClass}`}>
-              <div className="h-4 w-2/3 rounded bg-[var(--skeleton-bg)]" />
-            </div>
-          ))}
-        </div>
-      ) : draftProducts.length === 0 ? (
-        <EmptyQueueState message={totalProductCount > 0 ? 'No products match your filters or search.' : undefined} />
-      ) : visibleProducts.length === 0 ? (
-        <EmptyQueueState message="No products match this filter." />
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-          {visibleProducts.map((product) => (
-            <ProductCard
-              key={product.id}
-              product={product}
-              generatingMarketplace={currentlyGenerating?.productId === product.id ? currentlyGenerating.marketplace : null}
-              selected={selectedIds.has(product.id)}
-              onToggleSelect={onToggleSelect}
-              topRecommendation={recommendationByProduct.get(product.id) ?? null}
-              onExecuteRecommendation={onExecuteRecommendation}
-              onView={onView}
-              onEdit={onEdit}
-              onDelete={onDelete}
-            />
-          ))}
-        </div>
-      )}
+        <button
+          onClick={onDownloadApproved}
+          disabled={!hasSelectedMarketplaces || !hasApproved}
+          className={downloadIsPrimary ? buttonPrimaryClass : buttonSecondaryClass}
+        >
+          Export Listings
+        </button>
+      </div>
+      {/* flex-1 + min-h-0 lets this fill the card down to its border on a
+          short queue instead of leaving empty space beneath the table, and
+          scroll internally (rather than growing the page) once the queue
+          outgrows the available height. */}
+      <div className="flex-1 min-h-0 overflow-auto rounded-xl border border-[var(--card-border)]">
+        <table className="w-full border-collapse">
+          <thead>
+            <tr className="border-b border-[var(--row-border)] bg-[var(--table-head-bg)] text-left text-xs text-[var(--muted-text)]">
+              <th className="py-3 px-4">Product</th>
+              <th className="py-3 px-4">Marketplace</th>
+              <th className="py-3 px-4">Health</th>
+              <th className="py-3 px-4">Issues</th>
+              <th className="py-3 px-4">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <TableSkeleton columns={COLUMN_COUNT} />
+            ) : draftProducts.length === 0 ? (
+              <EmptyQueueState colSpan={COLUMN_COUNT} />
+            ) : !draftProducts.some((p) =>
+                productHasVisibleRow(
+                  p,
+                  currentlyGenerating?.productId === p.id ? currentlyGenerating.marketplace : null,
+                  readinessFilter
+                )
+              ) ? (
+              <EmptyQueueState colSpan={COLUMN_COUNT} message="No listings match this filter." />
+            ) : (
+              draftProducts.map((product) => (
+                <QueueRows
+                  key={product.id}
+                  product={product}
+                  generatingMarketplace={currentlyGenerating?.productId === product.id ? currentlyGenerating.marketplace : null}
+                  filter={readinessFilter}
+                  onView={onView}
+                  onEdit={onEdit}
+                  onDelete={onDelete}
+                  onRetry={onRetry}
+                />
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }

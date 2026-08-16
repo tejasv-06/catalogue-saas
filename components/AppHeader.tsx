@@ -37,7 +37,7 @@ export default function AppHeader({
   onOpenBrandProfile: () => void
 }) {
   return (
-    <div className="mb-6 flex flex-wrap items-end gap-4 sm:gap-6">
+    <div className="mb-6 flex flex-wrap items-end gap-6">
       <div className="flex flex-col gap-1">
         <p className={labelClass}>Target Marketplaces</p>
         <div
