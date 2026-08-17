@@ -169,3 +169,31 @@ h1, h2, h3, h4, h5, h6 {
   letter-spacing: -0.02em;
   line-height: 1.2;
 }
+
+/* Milestone C15 — themed scrollbar for internally-scrolling surfaces (the
+   performance import preview table's own scroll container). Reads the
+   same --card-bg/--secondary-btn-bg/--secondary-btn-bg-hover variables
+   every other themed surface already uses, so it matches both the dark
+   ("Night") and light ("Day") theme automatically rather than a
+   hardcoded slate palette that would look wrong in light mode.
+   scrollbar-color/-width covers Firefox; the ::-webkit-scrollbar rules
+   cover Chrome/Edge/Safari. */
+.themed-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: var(--secondary-btn-bg-hover) var(--card-bg);
+}
+.themed-scrollbar::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.themed-scrollbar::-webkit-scrollbar-track {
+  background: var(--card-bg);
+}
+.themed-scrollbar::-webkit-scrollbar-thumb {
+  background-color: var(--secondary-btn-bg-hover);
+  border-radius: 9999px;
+  border: 2px solid var(--card-bg);
+}
+.themed-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: var(--muted-text);
+}

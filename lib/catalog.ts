@@ -29,6 +29,13 @@ export type CatalogProductFields = {
   description: string | null
   category: string | null
   image_url: string | null
+  // Milestone C17.1 — optional so every pre-existing caller (guest-path
+  // code that never touches images, and any fixture predating this
+  // milestone) keeps compiling unchanged; real callers always pass it now
+  // (see ensureServerProduct/commitAddProduct in CatalogueWorkspace.tsx).
+  // Ordered, primary image first — image_url above is always kept in sync
+  // as image_urls[0] (or null) by every caller, never derived here.
+  image_urls?: string[]
   client_id?: string | null
 }
 
@@ -40,6 +47,10 @@ export type CatalogProductRow = {
   description: string | null
   category: string | null
   image_url: string | null
+  // Milestone C17.1 — supabase/migrations/20260810_15_catalog_products_multi_image.sql,
+  // not null, defaults to '{}'. Every row genuinely has a real array (never
+  // null), so this is required here, matching the DB guarantee.
+  image_urls: string[]
   created_at: string
   updated_at: string
   // Milestone 32 (C9) — additive and optional, same convention as every
@@ -91,10 +102,9 @@ export type CatalogExportRow = {
   created_at: string
 }
 
-// Exported (Milestone C14) so lib/productHistory.ts can reuse the exact
-// same "derive the session's own user id, never trust a caller-supplied
-// one" check instead of duplicating it — the only change this milestone
-// makes to this file.
+// Exported so lib/productHistory.ts can reuse the exact same "derive the
+// session's own user id, never trust a caller-supplied one" check instead
+// of duplicating it.
 export async function requireUserId(client: SupabaseClient): Promise<string> {
   const { data, error } = await client.auth.getUser()
   if (error) throw error
@@ -116,6 +126,7 @@ export async function createProduct(
       description: fields.description,
       category: fields.category,
       image_url: fields.image_url,
+      image_urls: fields.image_urls ?? [],
       client_id: fields.client_id ?? null
     })
     .select('id')
@@ -278,7 +289,7 @@ export async function getProductById(
   return data as CatalogProductRow | null
 }
 
-// Milestone C17 — fixes a confirmed persistence bug: handleDeleteProduct in
+// Fixes a confirmed persistence bug: handleDeleteProduct in
 // CatalogueWorkspace.tsx only ever removed a product from LOCAL React
 // state, never called any server-side delete, so a reload's own
 // reconciliation (getCatalog + reconcileCatalog) pulled the still-present
@@ -301,6 +312,28 @@ export async function deleteProduct(productId: string, client: SupabaseClient = 
   if (!data || data.length === 0) {
     throw new Error('catalog: delete affected no rows (product not found, or not owned by this session)')
   }
+}
+
+// Read-only safety check for bulk-delete flows (Clear All) — marketplace_performance.product_id
+// carries `on delete cascade` (supabase/migrations/20260810_11_performance_intelligence.sql), so
+// deleting a product with linked performance history would silently take that history with it.
+// This never deletes anything itself; callers use the returned set to skip those products rather
+// than lose imported performance data as a side effect of clearing the session queue.
+export async function getProductIdsWithPerformanceHistory(
+  productIds: string[],
+  client: SupabaseClient = createClient()
+): Promise<Set<string>> {
+  if (productIds.length === 0) return new Set()
+
+  await requireUserId(client)
+
+  const { data, error } = await client
+    .from('marketplace_performance')
+    .select('product_id')
+    .in('product_id', productIds)
+
+  if (error) throw error
+  return new Set((data ?? []).map((row) => row.product_id).filter((id): id is string => id !== null))
 }
 
 // Milestone 32 (C9) — persists a full ProductIntelligence object (not a
@@ -329,17 +362,15 @@ export async function setProductIntelligence(
   return data as CatalogProductRow
 }
 
-// Milestone C14 — additive. Before this, catalog_products had no way to
-// persist an edit to brand_name/description/category/image_url after
-// creation: commitAddProduct's `editingId` branch only ever called
-// setDraftProducts (local state), so an "edited" product was never
-// actually written back to the server at all. That made C14's own
-// required `product_updated` event impossible to record honestly (there
-// was nothing real to point it at). This mirrors setProductIntelligence's
-// exact pattern one field-set over — same ownership enforcement (RLS's
-// existing UPDATE policy, unchanged, no new policy needed), same
-// single-row .update().select().single() shape, only a partial field set
-// so a caller only ever writes the fields it actually has a new value for.
+// Additive. Before this, catalog_products had no way to persist an edit to
+// brand_name/description/category/image_url after creation:
+// commitAddProduct's `editingId` branch only ever called setDraftProducts
+// (local state), so an "edited" product was never actually written back to
+// the server at all. This mirrors setProductIntelligence's exact pattern
+// one field-set over — same ownership enforcement (RLS's existing UPDATE
+// policy, unchanged, no new policy needed), same single-row
+// .update().select().single() shape, only a partial field set so a caller
+// only ever writes the fields it actually has a new value for.
 export async function updateProduct(
   productId: string,
   fields: Partial<CatalogProductFields>,

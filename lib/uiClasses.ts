@@ -32,6 +32,13 @@ export const buttonSecondaryClass =
 export const buttonDestructiveClass =
   `bg-red-600 hover:bg-red-500 text-white font-medium text-sm px-4 py-2.5 rounded-xl shadow-lg shadow-red-500/20 ${focusRing} focus:ring-red-500 ${disabledState} transition`
 
+// Same shape/weight as buttonSecondaryClass (muted surface, not a solid
+// fill) — a destructive action that must sit next to a primary blue button
+// without visually competing with it, only its text tinted toward danger so
+// it still reads as "remove," not just another secondary action.
+export const buttonMutedDestructiveClass =
+  `bg-[var(--secondary-btn-bg)] hover:bg-[var(--secondary-btn-bg-hover)] text-[var(--danger-text)] border border-[var(--secondary-btn-border)] rounded-xl px-4 py-2.5 text-sm font-medium ${focusRing} focus:ring-red-500 ${disabledState} transition`
+
 export const buttonWarningClass =
   `bg-amber-600 hover:bg-amber-500 text-white font-medium text-sm px-4 py-2.5 rounded-xl shadow-lg shadow-amber-500/20 ${focusRing} focus:ring-amber-500 ${disabledState} transition`
 

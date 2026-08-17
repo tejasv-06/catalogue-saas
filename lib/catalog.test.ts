@@ -70,6 +70,8 @@ test('createProduct maps fields correctly and derives owner_user_id from the ses
     description: 'desc',
     category: 'cat',
     image_url: 'https://x/y.jpg',
+    // Milestone C17.1 — defaults to [] when the caller omits image_urls.
+    image_urls: [],
     client_id: 'client-1'
   })
 })

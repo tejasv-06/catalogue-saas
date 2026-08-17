@@ -59,9 +59,11 @@ function applyListing(
 
 // A local DraftProduct with a matching serverId — server listing data wins
 // per marketplace only when non-null (see applyListing); brandName,
-// description, category, imageUrl, imageFile, skipBrandVoice, and
-// visualAttributes are NOT touched here and stay exactly as the local copy
-// has them (Rules 9–11) — none of those are reconstructed from the server.
+// description, category, imageUrl, imageFile, imageUrls, skipBrandVoice,
+// and visualAttributes are NOT touched here and stay exactly as the local
+// copy has them (Rules 9–11) — none of those are reconstructed from the
+// server (imageUrls is covered automatically by the `...local` spread
+// below, same as imageUrl always has been).
 export function mergeDraftWithServer(
   local: DraftProduct,
   serverProduct: CatalogProductRow,
@@ -118,6 +120,12 @@ export function buildDraftFromServer(
     category: serverProduct.category ?? '',
     imageFile: null,
     imageUrl: serverProduct.image_url,
+    // Milestone C17.1 — server rows always have a real array (schema
+    // default '{}'), but a stale/mocked CatalogProductRow predating the
+    // migration might not; falling back to [image_url] (not []) keeps a
+    // single-image server product showing its one real image here rather
+    // than silently going imageless.
+    imageUrls: serverProduct.image_urls ?? (serverProduct.image_url ? [serverProduct.image_url] : []),
     generatedContent,
     approved,
     status: computeStatus(generatedContent, attemptedMarketplacesOf(generatedContent, generationError)),

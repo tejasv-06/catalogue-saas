@@ -1,9 +1,9 @@
 "use client"
 
 import type { DragEvent, RefObject } from 'react'
-import ProductThumbnail from '@/components/ProductThumbnail'
+import ManualEntryImages from '@/components/workspace/ManualEntryImages'
 import type { Client } from '@/components/ClientSelector'
-import type { CsvSummary, PendingCsvUpload } from '@/lib/types'
+import type { CsvSummary, PendingCsvUpload, ManualImageSlot } from '@/lib/types'
 import {
   buttonPrimaryClass,
   buttonSecondaryClass,
@@ -25,15 +25,16 @@ export default function LeftPanel({
   onCategoryChange,
   description,
   onDescriptionChange,
-  imageFile,
-  onImageFileChange,
-  formPreviewUrl,
-  fileInputRef,
+  manualImages,
+  onAddManualImages,
+  onRemoveManualImage,
+  onMoveManualImage,
+  manualImageInputRef,
   formError,
   guestLimitReached,
   brandMismatchPending,
   selectedClient,
-  pendingImageUrl,
+  pendingImageUrls,
   onCommitAddProduct,
   onCancelBrandMismatch,
   onAddProduct,
@@ -62,16 +63,17 @@ export default function LeftPanel({
   onCategoryChange: (value: string) => void
   description: string
   onDescriptionChange: (value: string) => void
-  imageFile: File | null
-  onImageFileChange: (file: File | null) => void
-  formPreviewUrl: string | null
-  fileInputRef: RefObject<HTMLInputElement | null>
+  manualImages: ManualImageSlot[]
+  onAddManualImages: (files: File[]) => void
+  onRemoveManualImage: (index: number) => void
+  onMoveManualImage: (index: number, direction: -1 | 1) => void
+  manualImageInputRef: RefObject<HTMLInputElement | null>
   formError: string | null
   guestLimitReached: boolean
   brandMismatchPending: boolean
   selectedClient: Client | null
-  pendingImageUrl: string | null
-  onCommitAddProduct: (skipBrandVoice: boolean, uploadedImageUrl: string | null) => void
+  pendingImageUrls: string[]
+  onCommitAddProduct: (skipBrandVoice: boolean, uploadedImageUrls: string[]) => void
   onCancelBrandMismatch: () => void
   onAddProduct: () => void
   onClearForm: () => void
@@ -102,6 +104,17 @@ export default function LeftPanel({
                 Entry") named the mechanism but not the purpose; this closes
                 that gap for consistency across all three methods. */}
             <p className={bodyTextClass}>Add a product manually.</p>
+            {/* Milestone C17.1 — images first: this is one product with up
+                to 5 images, not a single-image field among several text
+                fields, so it leads the form rather than trailing after
+                Description like the old single-image picker did. */}
+            <ManualEntryImages
+              images={manualImages}
+              onAddFiles={onAddManualImages}
+              onRemove={onRemoveManualImage}
+              onMove={onMoveManualImage}
+              inputRef={manualImageInputRef}
+            />
             <input
               type="text"
               placeholder="Brand name"
@@ -111,38 +124,17 @@ export default function LeftPanel({
             />
             <input
               type="text"
-              placeholder="Category"
+              placeholder="Category (optional)"
               value={category}
               onChange={(e) => onCategoryChange(e.target.value)}
               className={inputClass}
             />
-            {/* Limited to what the app already knows going into generation —
-                not a new attribute taxonomy, just surfacing the one gap that
-                affects listing quality before the user submits instead of
-                only after. Only shown once the user has actually started
-                filling the form, not on a blank first load. */}
-            {!category.trim() && (brandName.trim() || description.trim()) && (
-              <p className="text-xs text-[var(--warn-text)]">⚠ Category missing — add category for better results</p>
-            )}
             <textarea
               placeholder="Description"
               value={description}
               onChange={(e) => onDescriptionChange(e.target.value)}
               className={inputClass}
             />
-            <div className="flex items-center gap-2 min-w-0">
-              <label className={`flex-1 min-w-0 truncate text-center cursor-pointer ${buttonSecondaryClass}`}>
-                Upload Product Image
-                <input
-                  type="file"
-                  accept="image/*"
-                  ref={fileInputRef}
-                  onChange={(e) => onImageFileChange(e.target.files?.[0] ?? null)}
-                  className="hidden"
-                />
-              </label>
-              <ProductThumbnail imageFile={imageFile} imageUrl={formPreviewUrl} alt="Preview" size={48} />
-            </div>
             {formError && <p className="text-sm text-[var(--danger-link-text)]">{formError}</p>}
             {guestLimitReached && (
               <p className="text-sm text-[var(--danger-link-text)]">Free preview limit reached (10/10) - sign in to continue.</p>
@@ -153,10 +145,10 @@ export default function LeftPanel({
                   This product's brand doesn't match your selected brand voice ({selectedClient.client_name}).
                 </p>
                 <div className="flex flex-wrap gap-3">
-                  <button onClick={() => onCommitAddProduct(true, pendingImageUrl)} className={buttonAmberOutlineClass}>
+                  <button onClick={() => onCommitAddProduct(true, pendingImageUrls)} className={buttonAmberOutlineClass}>
                     Add without brand voice
                   </button>
-                  <button onClick={() => onCommitAddProduct(false, pendingImageUrl)} className={buttonAmberSolidClass}>
+                  <button onClick={() => onCommitAddProduct(false, pendingImageUrls)} className={buttonAmberSolidClass}>
                     Add anyway with {selectedClient.client_name} voice
                   </button>
                   <button onClick={onCancelBrandMismatch} className={linkButtonClass}>

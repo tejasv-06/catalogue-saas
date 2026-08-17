@@ -16,7 +16,7 @@ import type { Marketplace } from '@/lib/types'
 // app/api/enrich-product/route.ts for the established convention this
 // follows). No service-role client is used anywhere in this file.
 //
-// Ownership is enforced by supabase/migrations/20260810_09_product_history.sql's
+// Ownership is enforced by supabase/migrations/20260810_10_product_history.sql's
 // RLS policies (owner_user_id = auth.uid(), plus a product-ownership
 // subquery on insert) — never by application code re-checking anything,
 // same division of responsibility as every other C1-C13 write in
@@ -34,7 +34,12 @@ export const PRODUCT_HISTORY_EVENT_TYPES = [
   'listing_edited',
   'listing_approved',
   'listing_rejected',
-  'exported'
+  'exported',
+  // Milestone C15 — added by supabase/migrations/20260810_12_product_history_performance_event.sql,
+  // which extends the DB's own CHECK constraint to match. A performance
+  // report import is a real, product-scoped event this timeline already
+  // has a natural place for — see components/reports/PerformanceImportPanel.tsx.
+  'performance_imported'
 ] as const
 
 export type ProductHistoryEventType = (typeof PRODUCT_HISTORY_EVENT_TYPES)[number]
@@ -174,7 +179,8 @@ export const EVENT_TYPE_LABELS: Record<ProductHistoryEventType, string> = {
   listing_edited: 'Listing edited',
   listing_approved: 'Listing approved',
   listing_rejected: 'Listing rejected',
-  exported: 'Exported'
+  exported: 'Exported',
+  performance_imported: 'Performance data imported'
 }
 
 // "source" metadata values actually written by this milestone's own
@@ -206,6 +212,9 @@ export function describeProductHistoryEvent(event: ProductHistoryEventRow): Prod
 
   if (event.event_type === 'exported' && marketplaceLabel) {
     return { title: `Exported to ${marketplaceLabel}`, marketplaceLabel: null, sourceLabel }
+  }
+  if (event.event_type === 'performance_imported' && marketplaceLabel) {
+    return { title: `${marketplaceLabel} performance imported`, marketplaceLabel: null, sourceLabel }
   }
 
   return { title: EVENT_TYPE_LABELS[event.event_type], marketplaceLabel, sourceLabel }

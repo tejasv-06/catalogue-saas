@@ -7,14 +7,14 @@
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { readFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 
 const workspaceSource = readFileSync(join(__dirname, 'CatalogueWorkspace.tsx'), 'utf8')
 const enrichRouteSource = readFileSync(join(__dirname, '..', 'app', 'api', 'enrich-product', 'route.ts'), 'utf8')
 const catalogSource = readFileSync(join(__dirname, '..', 'lib', 'catalog.ts'), 'utf8')
 
-function bodyOf(source: string, fnSignature: string, window = 3000): string {
+function bodyOf(source: string, fnSignature: string, window = 3200): string {
   const start = source.indexOf(fnSignature)
   assert.ok(start !== -1, `expected to find "${fnSignature}"`)
   return source.slice(start, start + window)
@@ -23,38 +23,42 @@ function bodyOf(source: string, fnSignature: string, window = 3000): string {
 // --- C14-AC13. Product creation generates product_created ------------------
 
 test('AC13. ensureServerProduct records product_created only in the branch that actually calls createProduct (never on the early-return/in-flight-reuse paths)', () => {
-  const body = bodyOf(workspaceSource, 'async function ensureServerProduct(', 1600)
+  const body = bodyOf(workspaceSource, 'async function ensureServerProduct(', 1800)
   const createIdx = body.indexOf('const id = await createProduct(')
   const recordIdx = body.indexOf("eventType: 'product_created'")
   assert.ok(createIdx !== -1 && recordIdx !== -1)
   assert.ok(createIdx < recordIdx, 'product_created must be recorded AFTER createProduct succeeds, not before')
-  // The early return (already has a serverId) and the in-flight-promise
-  // reuse both happen before this point in the function body — recording
-  // only inside the async IIFE that calls createProduct is what makes a
-  // duplicate product_created structurally impossible (same guards that
-  // already prevent a duplicate createProduct call).
   const earlyReturnIdx = body.indexOf('if (product.serverId) return product.serverId')
   assert.ok(earlyReturnIdx !== -1 && earlyReturnIdx < createIdx)
 })
 
 test('ensureServerProduct threads an explicit source (manual/csv/photo) into product_created metadata — never a guess made at record time', () => {
-  const body = bodyOf(workspaceSource, 'async function ensureServerProduct(', 1600)
+  const body = bodyOf(workspaceSource, 'async function ensureServerProduct(', 1800)
   assert.match(body, /metadata:\s*\{\s*source\s*\}/)
 })
 
 test('all three ensureServerProduct call sites pass an explicit, correct source', () => {
   assert.match(workspaceSource, /ensureServerProduct\(newProduct,\s*source\)/, 'commitAddProduct must thread its own source parameter through')
   assert.match(workspaceSource, /ensureServerProduct\(product,\s*'csv'\)/, 'commitCsvUpload must tag its rows as csv')
-  assert.match(workspaceSource, /commitAddProduct\(true, uploadedImageUrl, '', 'photo'\)/, 'handleAddImageOnlyProduct must tag its product as photo')
+  // Milestone C17.1 — uploadedImageUrl (single) became uploadedImageUrl ?
+  // [uploadedImageUrl] : undefined (array-or-undefined, see commitAddProduct's
+  // own comment on why undefined specifically means "no new image, don't
+  // touch existing images" for Photos Only) — the 'photo' source tag itself
+  // is unchanged.
+  assert.match(
+    workspaceSource,
+    /commitAddProduct\(true, uploadedImageUrl \? \[uploadedImageUrl\] : undefined, '', 'photo'\)/,
+    'handleAddImageOnlyProduct must tag its product as photo'
+  )
 })
 
 // --- C14-AC14. Meaningful product updates generate product_updated ---------
 
-test('AC14. the editingId branch of commitAddProduct persists via the new updateProduct before recording product_updated', () => {
+test('AC14. the editingId branch of commitAddProduct persists via updateProduct before recording product_updated', () => {
   const body = bodyOf(workspaceSource, 'function commitAddProduct(', 2600)
   const editBranchIdx = body.indexOf('if (editingId) {')
   const updateIdx = body.indexOf('void updateProduct(serverId,')
-  const recordIdx = body.indexOf(".then(() => recordProductHistoryEvent({ productId: serverId, eventType: 'product_updated' }))")
+  const recordIdx = body.indexOf("recordProductHistoryEvent({ productId: serverId, eventType: 'product_updated' })")
   assert.ok(editBranchIdx !== -1 && updateIdx !== -1 && recordIdx !== -1)
   assert.ok(editBranchIdx < updateIdx && updateIdx < recordIdx)
 })
@@ -64,7 +68,7 @@ test('the edit path is skipped entirely for a product with no serverId yet or no
   assert.match(body, /if \(hasSession && existing\?\.serverId\) \{/)
 })
 
-test('lib/catalog.ts exports a new, additive updateProduct that mirrors setProductIntelligence\'s own ownership pattern (RLS-only, no owner param)', () => {
+test("lib/catalog.ts exports updateProduct, mirroring setProductIntelligence's own ownership pattern (RLS-only, no owner param)", () => {
   const start = catalogSource.indexOf('export async function updateProduct(')
   assert.ok(start !== -1, 'expected lib/catalog.ts to export updateProduct')
   const body = catalogSource.slice(start, start + 500)
@@ -93,9 +97,6 @@ test('AC15/AC22. enrich-product route records enrichment_failed on both failure 
   const failedEventMatches = enrichRouteSource.match(/eventType: 'enrichment_failed'/g) ?? []
   assert.equal(failedEventMatches.length, 2, 'expected exactly two enrichment_failed recording sites: the no-input-data 400 case and the generation-error case')
 
-  // The 401 (no session) / 404 (not found/not yours) / 409 (already
-  // processing) responses all return BEFORE buildProcessingIntelligence is
-  // ever persisted — none of them should have any history call near them.
   const authCheckIdx = enrichRouteSource.indexOf("return NextResponse.json({ error: 'Sign in required' }, { status: 401 })")
   const notFoundIdx = enrichRouteSource.indexOf("return NextResponse.json({ error: 'Product not found' }, { status: 404 })")
   const alreadyProcessingIdx = enrichRouteSource.indexOf('Enrichment is already in progress')
@@ -152,7 +153,7 @@ test('handleApproveMarketplace/handleUnapproveMarketplace are unchanged — pers
 
 test('AC20/AC21. the exported event is recorded only after recordExport (C7) resolves, and carries that export row\'s own id — never a duplicate export record', () => {
   const start = workspaceSource.indexOf('async function performExport(')
-  const end = workspaceSource.indexOf('const exportedByProduct = new Map')
+  const end = workspaceSource.indexOf('const exportedByProduct = new Map', start)
   const body = workspaceSource.slice(start, end)
   const recordExportIdx = body.indexOf('void recordExport(marketplace, listingIds,')
   const thenIdx = body.indexOf('.then((exportRow) => {')
@@ -170,33 +171,16 @@ test('C7 catalog.ts exports (recordExport, getExportHistory) are byte-identical 
 // --- C14-AC23. History failure never corrupts the primary operation --------
 
 test('AC23. every recordProductHistoryEvent call site in CatalogueWorkspace.tsx is fire-and-forget, never awaited into a path that could fail the primary operation', () => {
-  // Two shapes both count as fire-and-forget here: a direct
-  // `void recordProductHistoryEvent(...)` (product_created,
-  // listing_generated/edited, approved/rejected, exported — 4 sites), and
-  // product_updated's `void updateProduct(...).then(() =>
-  // recordProductHistoryEvent(...)).catch(...)` — still a single `void`-led
-  // chain with one .catch() covering both calls, just not literally
-  // prefixed with "void recordProductHistoryEvent(" itself.
   const directCalls = workspaceSource.match(/void recordProductHistoryEvent\(/g) ?? []
-  const chainedCalls = workspaceSource.match(/\.then\(\(\) => recordProductHistoryEvent\(/g) ?? []
+  const chainedCalls = workspaceSource.match(/recordProductHistoryEvent\(\{ productId: serverId, eventType: 'product_updated' \}\)\.catch\(/g) ?? []
   assert.equal(directCalls.length, 4)
   assert.equal(chainedCalls.length, 1)
 
   const totalRecordCalls = (workspaceSource.match(/recordProductHistoryEvent\(/g) ?? []).length
   assert.equal(totalRecordCalls, 5, 'expected exactly 5 total recordProductHistoryEvent call sites in CatalogueWorkspace.tsx')
 
-  // Each of the 4 direct call sites logs under its own "Product history:"
-  // prefix. The 1 chained site (product_updated) is covered by the
-  // enclosing chain's own .catch(...) instead (verified separately below)
-  // — still fire-and-forget, just one shared handler for both the
-  // updateProduct call and the history call chained onto it.
   const productHistoryCatches = (workspaceSource.match(/console\.error\(\s*`Product history:/g) ?? []).length
-  assert.equal(productHistoryCatches, 4)
-
-  const chainedCallIdx = workspaceSource.indexOf('.then(() => recordProductHistoryEvent(')
-  assert.ok(chainedCallIdx !== -1)
-  const afterChainedCall = workspaceSource.slice(chainedCallIdx, chainedCallIdx + 120)
-  assert.match(afterChainedCall, /\.catch\(/, 'the chained product_updated history call must still be covered by a .catch(...)')
+  assert.equal(productHistoryCatches, 5)
 })
 
 // --- C14-AC24. Timeline inside the existing drawer, no new nav route -------
@@ -204,19 +188,13 @@ test('AC23. every recordProductHistoryEvent call site in CatalogueWorkspace.tsx 
 test('AC24/AC40. ProductHistory is mounted inside the existing GeneratedListingDrawer, not a new page/route', () => {
   const drawerStart = workspaceSource.indexOf('function GeneratedListingDrawer(')
   const productHistoryIdx = workspaceSource.indexOf('<ProductHistory')
-  // The next top-level construct after the drawer in the real file — used
-  // only as an upper bound to confirm <ProductHistory /> renders BEFORE
-  // the drawer function ends, not to pin an exact closing-brace offset.
-  const nextSectionIdx = workspaceSource.indexOf('The three input methods (Bulk Upload')
+  const nextSectionIdx = workspaceSource.indexOf('function AddProductsPanel(')
   assert.ok(drawerStart !== -1 && productHistoryIdx !== -1 && nextSectionIdx !== -1)
   assert.ok(drawerStart < productHistoryIdx && productHistoryIdx < nextSectionIdx, '<ProductHistory /> must render inside GeneratedListingDrawer')
   assert.match(workspaceSource, /<ProductHistory productId=\{product\.serverId\} \/>/)
 })
 
 test('no new route/page files were introduced for history — app/ has no product-history route', () => {
-  // app/api/enrich-product, app/api/export, app/api/generate-single etc.
-  // already exist; this just confirms no NEW app/**/history-ish route was
-  // added by this milestone.
   const fs = require('fs') as typeof import('fs')
   const path = require('path') as typeof import('path')
   const appDir = path.join(__dirname, '..', 'app')
@@ -230,4 +208,8 @@ test('no new route/page files were introduced for history — app/ has no produc
   }
   walk(appDir)
   assert.deepEqual(found, [])
+})
+
+test('the product_history migration file exists and is additive', () => {
+  assert.ok(existsSync(join(__dirname, '..', 'supabase', 'migrations', '20260810_10_product_history.sql')))
 })

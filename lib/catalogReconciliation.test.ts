@@ -27,6 +27,7 @@ function makeLocalProduct(overrides: Partial<DraftProduct> = {}): DraftProduct {
     category: 'cat',
     imageFile: null,
     imageUrl: null,
+    imageUrls: [],
     generatedContent: emptyGeneratedContent(),
     approved: emptyApproved(),
     status: 'draft',
@@ -47,6 +48,7 @@ function makeServerProduct(overrides: Partial<CatalogProductRow> = {}): CatalogP
     description: 'server desc',
     category: 'server cat',
     image_url: 'https://x/y.jpg',
+    image_urls: ['https://x/y.jpg'],
     created_at: '',
     updated_at: '',
     ...overrides

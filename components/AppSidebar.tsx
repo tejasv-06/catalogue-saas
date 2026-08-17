@@ -37,8 +37,10 @@ function AuditIcon() {
 }
 
 // Points at the panel edge it collapses toward — left-facing chevron means
-// "collapse" (content retreats left), right-facing means "expand."
-function ChevronIcon({ pointingRight }: { pointingRight: boolean }) {
+// "collapse" (content retreats left), right-facing means "expand." Exported
+// so any other collapsible-to-a-narrow-rail panel (e.g. CatalogueWorkspace's
+// Add Products panel) reuses this exact icon instead of a second copy.
+export function ChevronIcon({ pointingRight }: { pointingRight: boolean }) {
   return (
     <svg
       width="16"

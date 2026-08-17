@@ -4,7 +4,7 @@ import TopHeader from '@/components/TopHeader'
 import AppSidebar from '@/components/AppSidebar'
 import CreditsBalance from '@/components/CreditsBalance'
 import AuditHeader from '@/components/reports/AuditHeader'
-import AccountAuditPanel from '@/components/reports/AccountAuditPanel'
+import AuditTabs from '@/components/reports/AuditTabs'
 
 // Unlike /workspace (deliberately guest-accessible), this touches a seller's
 // real revenue data — signed in only, no guest preview. This check runs
@@ -30,7 +30,7 @@ export default async function AuditPage() {
           <div className="flex-1 min-h-0 overflow-y-auto">
             <div className="max-w-7xl mx-auto px-4 py-6">
               <AuditHeader />
-              <AccountAuditPanel />
+              <AuditTabs />
             </div>
           </div>
         </AppSidebar>

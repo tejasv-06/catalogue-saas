@@ -13,6 +13,56 @@ export const exportColumns: Record<string, string[]> = {
   ]
 }
 
+// snake_case export key -> "Title Case" words, e.g. 'generic_keywords' ->
+// 'Generic Keywords', 'bullet_1' -> 'Bullet 1'. Derived straight from
+// exportColumns' own keys (never a hand-authored parallel list) so a header
+// label can never drift out of sync with the actual column key it labels.
+function humanizeColumnKey(key: string): string {
+  return key
+    .split('_')
+    .map((word) => (word[0] ?? '').toUpperCase() + word.slice(1))
+    .join(' ')
+}
+
+// Human-readable CSV header for every generated column, per marketplace —
+// same keys as exportColumns, "Generated " + Title Case instead of the raw
+// snake_case key. Exists so a raw-vs-AI-output column can be told apart at a
+// glance in a spreadsheet (see performExport in CatalogueWorkspace.tsx,
+// which prepends its own "Original *" raw-input columns ahead of these).
+export const generatedColumnLabels: Record<string, Record<string, string>> = Object.fromEntries(
+  Object.entries(exportColumns).map(([marketplace, columns]) => [
+    marketplace,
+    Object.fromEntries(columns.map((key) => [key, `Generated ${humanizeColumnKey(key)}`]))
+  ])
+)
+
+// The seller's own raw input, never touched by generation (see
+// lib/types.ts's DraftProduct — brandName/category/description/imageUrl are
+// written once at add-time, whether from Manual Entry, Photos Only, or a
+// Bulk Upload CSV row, and generation only ever writes into
+// generatedContent, a separate field). Positioned before a marketplace's
+// generated columns in every export so a spreadsheet reader sees input
+// before output, left to right.
+export const RAW_COLUMNS = ['Original Brand', 'Original Category', 'Original Description', 'Original Image'] as const
+
+export function buildRawColumnsRow(product: {
+  brandName: string
+  category: string
+  description: string
+  imageUrl: string | null
+}): Record<string, string> {
+  return {
+    'Original Brand': product.brandName || '',
+    'Original Category': product.category || '',
+    'Original Description': product.description || '',
+    // product.imageUrl already holds whichever real reference applies — the
+    // Supabase Storage URL for an uploaded image (Manual Entry/Photos Only)
+    // or the raw URL string from a Bulk Upload CSV's own image column —
+    // never a placeholder; null only when no image was ever provided.
+    'Original Image': product.imageUrl || 'No image provided'
+  }
+}
+
 export function flattenRow(marketplace: string, generatedContent: any): Record<string, string> | null {
   const gc = generatedContent || {}
 

@@ -401,7 +401,7 @@ test('18. this module never imports lib/credits.ts or touches user_credits/credi
 
 test('15. the migration grants only SELECT + INSERT policies for product_history_events — no UPDATE/DELETE policy for any client role', () => {
   const migration = readFileSync(
-    join(__dirname, '..', 'supabase', 'migrations', '20260810_09_product_history.sql'),
+    join(__dirname, '..', 'supabase', 'migrations', '20260810_10_product_history.sql'),
     'utf8'
   )
   assert.match(migration, /create policy "product_history_events_owner_select"/)
@@ -414,7 +414,7 @@ test('15. the migration grants only SELECT + INSERT policies for product_history
 
 test("the insert policy's WITH CHECK verifies both owner_user_id and product ownership via catalog_products — never a caller-supplied id alone", () => {
   const migration = readFileSync(
-    join(__dirname, '..', 'supabase', 'migrations', '20260810_09_product_history.sql'),
+    join(__dirname, '..', 'supabase', 'migrations', '20260810_10_product_history.sql'),
     'utf8'
   )
   const start = migration.indexOf('product_history_events_owner_insert')

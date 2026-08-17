@@ -13,6 +13,7 @@ import {
   buttonPrimaryClass,
   buttonSecondaryClass,
   buttonDestructiveSmallClass,
+  buttonMutedDestructiveClass,
   linkButtonClass,
   linkButtonDestructiveClass,
   cardClass
@@ -194,7 +195,8 @@ export default function QueueTable({
   onView,
   onEdit,
   onDelete,
-  onRetry
+  onRetry,
+  onClearAll
 }: {
   draftProducts: DraftProduct[]
   // Filtering happens here, at the same (product, marketplace) granularity
@@ -220,6 +222,10 @@ export default function QueueTable({
   onEdit: (product: DraftProduct) => void
   onDelete: (id: string) => void
   onRetry: (id: string, marketplace: Marketplace) => void
+  // Opens the confirm dialog in CatalogueWorkspace (owns showClearAllConfirm
+  // and the actual clear-all logic) — this button never clears anything
+  // itself.
+  onClearAll: () => void
 }) {
   const hasSelectedMarketplaces = selectedMarketplaces.length > 0
 
@@ -265,7 +271,7 @@ export default function QueueTable({
 
   return (
     <div className={`w-full min-w-0 h-full flex flex-col p-6 ${cardClass}`}>
-      <div className="flex flex-row flex-wrap items-center justify-between gap-3 mb-4 shrink-0">
+      <div id="queue-toolbar" className="flex flex-row flex-wrap items-center justify-between gap-3 mb-4 shrink-0">
         <div className="flex flex-row flex-wrap items-start gap-3">
           <div>
             <button
@@ -297,13 +303,27 @@ export default function QueueTable({
             Bulk Approve
           </button>
         </div>
-        <button
-          onClick={onDownloadApproved}
-          disabled={!hasSelectedMarketplaces || !hasApproved}
-          className={downloadIsPrimary ? buttonPrimaryClass : buttonSecondaryClass}
-        >
-          Export Listings
-        </button>
+        <div className="flex flex-row items-center gap-3">
+          <button
+            onClick={onDownloadApproved}
+            disabled={!hasSelectedMarketplaces || !hasApproved}
+            className={downloadIsPrimary ? buttonPrimaryClass : buttonSecondaryClass}
+          >
+            Export Listings
+          </button>
+          {/* Muted/secondary destructive treatment (buttonMutedDestructiveClass:
+              same shape as buttonSecondaryClass, danger-tinted text only) —
+              deliberately never buttonPrimaryClass/buttonDestructiveClass's
+              solid fill, so it can't be mistaken for the row's one primary
+              action or read as more urgent than a plain secondary button. */}
+          <button
+            onClick={onClearAll}
+            disabled={draftProducts.length === 0}
+            className={buttonMutedDestructiveClass}
+          >
+            Clear All
+          </button>
+        </div>
       </div>
       {/* flex-1 + min-h-0 lets this fill the card down to its border on a
           short queue instead of leaving empty space beneath the table, and

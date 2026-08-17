@@ -21,6 +21,20 @@ export type MarketplaceErrorMap = Record<Marketplace, string | null>
 // truncated" rather than a false failure, so this is safe to be sparse.
 export type MarketplaceMetaMap = Record<Marketplace, GenerationMeta | null>
 
+// Milestone C17.1 — Manual Entry's multi-image cap, and one slot in its
+// in-progress (not-yet-submitted) image picker. A slot is either a freshly
+// picked, not-yet-uploaded File, or an already-uploaded/persisted URL —
+// never both at once, mirroring the existing single-image imageFile/imageUrl
+// mutual-exclusivity, just per-slot. Purely form state (LeftPanel/
+// CatalogueWorkspace); DraftProduct.imageUrls above is always the resolved
+// string[] once a slot's file (if any) has been uploaded.
+export const MAX_MANUAL_IMAGES = 5
+
+export type ManualImageSlot = {
+  file: File | null
+  url: string | null
+}
+
 export type DraftProduct = {
   id: string
   // Milestone 22 (Step C2) — the server-side catalog_products.id once a
@@ -42,6 +56,20 @@ export type DraftProduct = {
   category: string
   imageFile: File | null
   imageUrl: string | null
+  // Milestone C17.1 — up to MAX_MANUAL_IMAGES uploaded image URLs, in the
+  // seller's chosen display order; imageUrl above always mirrors
+  // imageUrls[0] (or null when empty) so every existing single-image
+  // consumer (generation, Product Intelligence, thumbnails, exports) keeps
+  // working unchanged, reading only the primary image. Always populated at
+  // every construction site going forward (commitAddProduct, CSV bulk
+  // upload, catalog hydration) — a product legitimately has zero images,
+  // never a missing field, so this is required, not optional, in the type.
+  // A product restored from a saved LOCAL session created before this
+  // shipped won't actually have this key after JSON.parse despite what the
+  // type claims (same caveat as generationMeta/visualAttributes below) —
+  // the one restore call site falls back to imageUrl-as-a-single-element-
+  // array for that case.
+  imageUrls: string[]
   generatedContent: MarketplaceContentMap
   approved: MarketplaceApprovalMap
   // Generation progress only — approval is tracked independently per
