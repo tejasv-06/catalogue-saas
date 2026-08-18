@@ -12,7 +12,7 @@ import ProductThumbnail from '@/components/ProductThumbnail'
 import AppHeader from '@/components/AppHeader'
 import TopHeader from '@/components/TopHeader'
 import LeftPanel from '@/components/workspace/LeftPanel'
-import ImageOnlyPanel from '@/components/workspace/ImageOnlyPanel'
+import ImageOnlyPanel, { type ImageGroupImportState } from '@/components/workspace/ImageOnlyPanel'
 import AppSidebar, { ChevronIcon, type WorkspaceDestination } from '@/components/AppSidebar'
 import QueueTable from '@/components/workspace/QueueTable'
 import ListingHealthBadge from '@/components/workspace/ListingHealthBadge'
@@ -56,6 +56,12 @@ import {
   emptyGenerationMeta
 } from '@/lib/types'
 import {
+  MAX_IMAGE_GROUPING_BATCH,
+  buildImageGroupCandidates,
+  buildSingleGroupFallback,
+  type ImageGroupCandidate
+} from '@/lib/imageGrouping'
+import {
   buttonPrimaryClass,
   buttonSecondaryClass,
   buttonDestructiveClass,
@@ -75,13 +81,13 @@ import Link from 'next/link'
 
 const SESSION_STORAGE_KEY = 'catalogue-draft-session'
 // Same UI-preference persistence pattern as AppSidebar's own
-// COLLAPSE_STORAGE_KEY ('workspace-sidebar-collapsed') — a plain
+// COLLAPSE_STORAGE_KEY ('workspace-sidebar-collapsed'): a plain
 // localStorage 'true'/'false' flag, not part of the session-restore
 // payload above (which is product data, not a UI preference).
 const ADD_PRODUCTS_COLLAPSE_STORAGE_KEY = 'workspace-add-products-collapsed'
 const SESSION_MAX_AGE_MS = 4 * 60 * 60 * 1000
 // Bumped whenever the saved-session payload's shape changes in a way a
-// straight JSON restore can't safely absorb — e.g. this refactor, which
+// straight JSON restore can't safely absorb: e.g. this refactor, which
 // replaced generatedContent/status/approved's flat shape with a nested
 // per-marketplace one. A session saved under a different version is
 // discarded rather than restored (see the mount-time read effect below):
@@ -107,13 +113,13 @@ function fileToBase64(file: File): Promise<string> {
 }
 
 // Which shaped-content keys count as "the title" / "the bullets" / "the
-// description" varies per marketplace (Myntra has no single title field —
+// description" varies per marketplace (Myntra has no single title field:
 // vendorArticleName, listViewName, and productDisplayName are all
 // title-derived; Etsy/Myntra have no bullets-equivalent field at all).
 // Field-level regenerate uses this to know which keys from a fresh
 // generation response to keep, and which to discard in favor of the
-// existing content — see generateForProductMarketplace's fieldGroup param.
-// The three ways to add products — previously top-level sidebar nav items,
+// existing content: see generateForProductMarketplace's fieldGroup param.
+// The three ways to add products: previously top-level sidebar nav items,
 // now an in-panel tab-strip (see the "Add Products" section in the render
 // below) since they're input methods into one Listings workspace, not
 // separate destinations. Same WorkspaceDestination values AppSidebar
@@ -125,16 +131,16 @@ const ADD_METHOD_TABS: { id: WorkspaceDestination; label: string }[] = [
 ]
 
 // Same states computeListingHealth already reports per (product, marketplace)
-// row — 'all' is the only addition, and it's just "no filter applied," not a
+// row: 'all' is the only addition, and it's just "no filter applied," not a
 // new status. No second health engine, no new statuses invented. Exported so
 // QueueTable can filter its own rows at the exact same (product, marketplace)
-// granularity it renders at — filtering lives entirely in QueueTable now
+// granularity it renders at: filtering lives entirely in QueueTable now
 // (see filterRowData/productHasVisibleRow there), not here, so a product with
 // one Ready and one Needs Review marketplace shows only the matching row
 // under either filter instead of both.
 export type ReadinessFilter = 'all' | 'ready' | 'needs-review' | 'missing-data' | 'error'
 
-// Generate Listings loading experience — see the generationStage state
+// Generate Listings loading experience: see the generationStage state
 // declaration inside CatalogueWorkspace for what sets each field and when.
 export type GenerationStageInfo = {
   phase: 'preparing' | 'generating' | 'validating' | 'complete' | 'failed'
@@ -145,12 +151,12 @@ export type GenerationStageInfo = {
 }
 
 // Pure formatter, deliberately taking enrichingProductId as an explicit
-// parameter rather than reading it off some shared "current state" object —
+// parameter rather than reading it off some shared "current state" object:
 // it IS the real, live signal for stage 1 ("Analyzing Product"): true for
 // exactly the span of a genuine /api/enrich-product call, set/cleared by
 // runProductIntelligenceAnalysis (unmodified). A product whose intelligence
 // was already complete never makes enrichingProductId truthy, so this
-// correctly skips straight to "Preparing content" for it — never a fake
+// correctly skips straight to "Preparing content" for it: never a fake
 // "Analyzing" flash for work that didn't happen.
 function describeGenerationStage(stage: GenerationStageInfo, enrichingProductId: string | null): string {
   if (stage.phase === 'complete') return 'Listings generated.'
@@ -181,14 +187,14 @@ const FILTER_OPTIONS: { id: ReadinessFilter; label: string }[] = [
 // getDisplayMarketplaces in components/workspace/QueueTable.tsx): each
 // (product, marketplace) pair that's actually been attempted (content or
 // error present) is one row, and a product with NOTHING attempted yet
-// still renders as exactly one fallback row (marketplace slot null) —
+// still renders as exactly one fallback row (marketplace slot null):
 // counted here as 1, not 0. Regression guard: this used to skip that
 // fallback case entirely, so the header could read "0 Listings" while the
 // table directly beneath it visibly showed real rows for not-yet-generated
-// products — this keeps the two permanently in sync instead of measuring
+// products: this keeps the two permanently in sync instead of measuring
 // two different things. The ready/needsReview/missingData/error
 // sub-counts still only ever tally real computeListingHealth statuses
-// (the same call QueueTable's own rows use) — a fallback row has no
+// (the same call QueueTable's own rows use): a fallback row has no
 // health status yet, so it contributes to `total` without incrementing
 // any of them, which is why the breakdown doesn't always sum to `total`.
 function computeListingSummary(draftProducts: DraftProduct[]) {
@@ -217,7 +223,7 @@ function computeListingSummary(draftProducts: DraftProduct[]) {
   return counts
 }
 
-// Real per-marketplace export-eligibility tally — approved[marketplace],
+// Real per-marketplace export-eligibility tally: approved[marketplace],
 // NOT health/Ready status (a seller can approve a Needs-Review listing
 // after reviewing it, and it stays exportable). Mirrors the same
 // approved[marketplace] check performExport's export logic
@@ -236,10 +242,10 @@ function computeExportableCounts(draftProducts: DraftProduct[]): { marketplace: 
   }))
 }
 
-// Milestone C11 — the exact inputs lib/exportReadiness.ts's
+// Milestone C11: the exact inputs lib/exportReadiness.ts's
 // evaluateMarketplaceExportReadiness() needs for one marketplace, gathered
 // from every approved row for that marketplace (same eligibility rule
-// computeExportableCounts above already uses — approved[marketplace], not
+// computeExportableCounts above already uses: approved[marketplace], not
 // health/Ready status). Pure extraction, no marketplace-rule logic lives
 // here; that's entirely inside the C10 adapter this data gets handed to.
 function gatherExportCandidateItems(draftProducts: DraftProduct[], marketplace: Marketplace): ExportCandidateItem[] {
@@ -262,7 +268,7 @@ const FIELD_GROUPS: Record<Marketplace, Partial<Record<FieldGroup, string[]>>> =
 }
 
 // Friendly labels for every shaped-content key across all four marketplaces
-// — used only for display grouping below, doesn't affect what's generated.
+//: used only for display grouping below, doesn't affect what's generated.
 const KEY_LABELS: Record<string, string> = {
   title: 'Title',
   description: 'Description',
@@ -283,7 +289,7 @@ type FieldSectionData = { role: FieldGroup | 'keywords' | 'other'; heading: stri
 
 // Groups one marketplace's shaped content by role (Title/Bullets/Description/
 // Keywords/other required fields) using the same FIELD_SPECS + FIELD_GROUPS
-// maps computeListingHealth checks against — so a section's inline
+// maps computeListingHealth checks against: so a section's inline
 // pass/fail annotation and the content shown under it are guaranteed to be
 // talking about the same keys. "other" catches marketplace-specific required
 // fields that aren't title/bullets/description/keywords (e.g. Myntra's
@@ -317,7 +323,7 @@ function isEmptyFieldValue(value: string | string[]): boolean {
 
 // One field group's label line + its own small pass/fail annotation (pulled
 // straight from computeListingHealth's checks, never a separate score) with
-// the actual generated content directly beneath — content stays the larger,
+// the actual generated content directly beneath: content stays the larger,
 // dominant text throughout, the check is a compact suffix on the label only.
 function FieldSection({
   section,
@@ -336,7 +342,7 @@ function FieldSection({
               {check.passed ? '✓' : '⚠'} {check.detail}
             </span>
             {/* Second line explaining WHAT the count means, e.g. "Title
-                exceeds Amazon's limit" / "Within Amazon title limit" —
+                exceeds Amazon's limit" / "Within Amazon title limit":
                 not just a bare number the user has to interpret. */}
             {check.subDetail && <span className="block opacity-80">{check.subDetail}</span>}
           </span>
@@ -353,7 +359,7 @@ function FieldSection({
                 ))}
               </ul>
             ) : (
-              <p className="text-sm text-[var(--body-text)]">{field.value || '—'}</p>
+              <p className="text-sm text-[var(--body-text)]">{field.value || 'N/A'}</p>
             )}
           </div>
         ))}
@@ -363,20 +369,20 @@ function FieldSection({
 }
 
 // A QueueTable row is one (product, marketplace) pair, and "View Content"
-// on that row must review exactly that pair — not every marketplace the
+// on that row must review exactly that pair, not every marketplace the
 // product has ever been generated for. `marketplace` is the one the row was
 // clicked for; attemptedMarketplaces is now always that single value (never
 // derived from the product as a whole), so every per-marketplace read below
-// — content, error, health, regenerate, approve — reads that one
+// (content, error, health, regenerate, approve) reads that one
 // marketplace's own state and nothing else.
-// Milestone 32 (C9) — small formatting helper for a ProductIntelligenceField
+// Milestone 32 (C9): small formatting helper for a ProductIntelligenceField
 // value (string | string[] | null) shared by every row in the Product
-// Intelligence section below. Never fabricates a value for null — renders
-// the same "—" placeholder convention already used elsewhere in this file.
+// Intelligence section below. Never fabricates a value for null; renders
+// the same "N/A" placeholder convention already used elsewhere in this file.
 function formatIntelligenceValue(value: string | string[] | null): string {
-  if (value == null) return '—'
-  if (Array.isArray(value)) return value.length > 0 ? value.join(', ') : '—'
-  return value.trim() || '—'
+  if (value == null) return 'N/A'
+  if (Array.isArray(value)) return value.length > 0 ? value.join(', ') : 'N/A'
+  return value.trim() || 'N/A'
 }
 
 const INTELLIGENCE_FIELD_LABELS: Record<ProductIntelligenceFieldKey, string> = {
@@ -421,7 +427,7 @@ function GeneratedListingDrawer({
   const containerRef = useRef<HTMLDivElement>(null)
   useFocusTrap(containerRef, onClose)
 
-  // Only ever surfaced when at least one attribute has a real value — an
+  // Only ever surfaced when at least one attribute has a real value: an
   // image analyzed with every key coming back null shouldn't present an
   // empty "Detected from image" section as if something had been found.
   const detectedAttributes = product.visualAttributes
@@ -453,7 +459,7 @@ function GeneratedListingDrawer({
           </div>
         </div>
 
-        {/* Milestone 32 (C9), extended — the canonical Product Intelligence
+        {/* Milestone 32 (C9), extended: the canonical Product Intelligence
             section. This is the intelligence layer INSIDE listing
             generation, not a separate workflow the seller must run first
             (see ensureProductIntelligence): Generate Listings triggers this
@@ -464,7 +470,7 @@ function GeneratedListingDrawer({
             Content-first even here: the trigger/status/re-analyze action
             sits on one compact header line, the fields themselves render as
             plain label/value rows (same visual weight as "Detected from
-            image" below), and missing-information is a small warning list —
+            image" below), and missing-information is a small warning list:
             never a score dashboard preceding the product's own data. */}
         <div className="mb-4 pb-4 border-b border-[var(--card-border)]">
           <div className="flex items-center justify-between mb-1">
@@ -472,7 +478,7 @@ function GeneratedListingDrawer({
             <button
               onClick={() => onAnalyzeProduct(product.id)}
               disabled={isAnalyzing || !product.serverId}
-              title={!product.serverId ? 'Product is still being saved — try again in a moment' : undefined}
+              title={!product.serverId ? 'Product is still being saved: try again in a moment' : undefined}
               className={buttonSecondarySmallClass}
             >
               {isAnalyzing
@@ -487,7 +493,7 @@ function GeneratedListingDrawer({
 
           {(!product.productIntelligence || product.productIntelligence.status === 'not_started') && !isAnalyzing && (
             <p className="text-xs text-[var(--muted-text)]">
-              Product Intelligence will be generated when you generate listings — a deeper, confidence-scored
+              Product Intelligence will be generated when you generate listings: a deeper, confidence-scored
               read (occasion, target customer, key selling points, and more) than the visual details detected
               below, used as context for the generated content. Run it now to preview it first, or re-analyze
               anytime.
@@ -552,7 +558,7 @@ function GeneratedListingDrawer({
           {/* Product → Marketplace → Listing Content → Validation/Issues →
               Approve, per marketplace: content is the dominant element in
               every section below, health is a compact status chip up top
-              and small inline annotations on each field's own label line —
+              and small inline annotations on each field's own label line:
               never a separate checklist preceding the content. */}
           {attemptedMarketplaces.map((marketplace) => {
             const content = product.generatedContent[marketplace]
@@ -567,7 +573,7 @@ function GeneratedListingDrawer({
               currentlyGenerating?.productId === product.id && currentlyGenerating?.marketplace === marketplace
 
             // A failed field-level regenerate leaves the old content in
-            // place (see runGeneration/generateForProductMarketplace) — so
+            // place (see runGeneration/generateForProductMarketplace): so
             // content and error can be true at once here. That combination
             // only ever means "a regenerate attempt on an existing listing
             // failed," never "the whole listing is broken," and the UI
@@ -589,7 +595,7 @@ function GeneratedListingDrawer({
             // Scoped to exactly this section's own fields (e.g. just Myntra's
             // Style Note) rather than the overall Required Fields check,
             // which also covers title/description/keywords keys already
-            // annotated in their own sections above — reusing that check's
+            // annotated in their own sections above: reusing that check's
             // text here would restate "vendorArticleName missing" a second
             // time under an unrelated field.
             const otherMissing = otherSection ? otherSection.fields.filter((f) => isEmptyFieldValue(f.value)).map((f) => f.label) : []
@@ -633,7 +639,7 @@ function GeneratedListingDrawer({
                   </div>
                 </div>
 
-                {/* True first-ever-attempt failure (no content exists yet) —
+                {/* True first-ever-attempt failure (no content exists yet):
                     unchanged from before: full-width banner, generic retry. */}
                 {error && !content && (
                   <div className={`mb-3 ${dangerBannerClass}`}>
@@ -642,11 +648,11 @@ function GeneratedListingDrawer({
                 )}
 
                 {/* A "Regenerate Entire Listing" attempt failed but the old
-                    listing is still intact — a small note, not an alarming
+                    listing is still intact: a small note, not an alarming
                     banner, and no field section to attach it to. */}
                 {error && content && failedGroup === 'full' && (
                   <p className="mb-3 text-xs text-[var(--warn-text)]">
-                    ⚠ Full listing regeneration failed — your existing listing is unchanged
+                    ⚠ Full listing regeneration failed: your existing listing is unchanged
                   </p>
                 )}
 
@@ -709,7 +715,7 @@ function GeneratedListingDrawer({
                     </button>
                   )}
                   {/* Only the true first-attempt failure (no prior content)
-                      gets this generic full-listing retry — a failed
+                      gets this generic full-listing retry: a failed
                       regenerate on an existing listing is recovered via the
                       matching Regenerate button above instead, never this. */}
                   {error && !content && (
@@ -737,7 +743,7 @@ function GeneratedListingDrawer({
 }
 
 // The three input methods (Bulk Upload / Manual Entry / Photos Only),
-// unchanged from Milestone 1's tab-strip — a persistent workspace column
+// unchanged from Milestone 1's tab-strip: a persistent workspace column
 // now (sidebar → Add Products → Listings), not a modal/drawer: always
 // mounted, no backdrop, no focus trap, no close action. None of
 // LeftPanel/ImageOnlyPanel's own props, fields, or submit logic changed,
@@ -774,6 +780,23 @@ function AddProductsPanel({
   onClearForm,
   uploadingImage,
   editingId,
+  hasSession,
+  onChooseSingleProductMode,
+  onChooseMultipleProductsMode,
+  onStageImageFiles,
+  onRemoveStagedImage,
+  onCreateSingleProductFromStaged,
+  onStartGroupingFromStaged,
+  imageGroupImport,
+  onRetryImageGrouping,
+  onOrganizeManually,
+  onCancelImageGrouping,
+  onRemoveGroupImage,
+  onMoveGroupImage,
+  onMergeImageGroup,
+  onSplitImageGroup,
+  onResolveGroupReview,
+  onConfirmImageGroups,
   csvFile,
   onCsvFileChange,
   csvFileInputRef,
@@ -820,6 +843,23 @@ function AddProductsPanel({
   onClearForm: () => void
   uploadingImage: boolean
   editingId: string | null
+  hasSession: boolean
+  onChooseSingleProductMode: () => void
+  onChooseMultipleProductsMode: () => void
+  onStageImageFiles: (files: File[]) => void
+  onRemoveStagedImage: (index: number) => void
+  onCreateSingleProductFromStaged: () => void
+  onStartGroupingFromStaged: () => void
+  imageGroupImport: ImageGroupImportState | null
+  onRetryImageGrouping: () => void
+  onOrganizeManually: () => void
+  onCancelImageGrouping: () => void
+  onRemoveGroupImage: (groupId: string, imageUrl: string) => void
+  onMoveGroupImage: (groupId: string, imageUrl: string, targetGroupId: string | 'new') => void
+  onMergeImageGroup: (groupId: string, targetGroupId: string) => void
+  onSplitImageGroup: (groupId: string) => void
+  onResolveGroupReview: (groupId: string, action: 'keep' | 'split') => void
+  onConfirmImageGroups: () => void
   csvFile: File | null
   onCsvFileChange: (file: File | null) => void
   csvFileInputRef: RefObject<HTMLInputElement | null>
@@ -837,21 +877,21 @@ function AddProductsPanel({
 }) {
   return (
     // Same collapse-to-narrow-rail mechanism as AppSidebar's own nav
-    // (components/AppSidebar.tsx) — same ChevronIcon, same
+    // (components/AppSidebar.tsx): same ChevronIcon, same
     // transition-[width] duration-200 + overflow-hidden approach, same
-    // click/toggle/localStorage-persisted pattern — reused directly, not
+    // click/toggle/localStorage-persisted pattern: reused directly, not
     // reimplemented. The one necessary adaptation: AppSidebar's nav is
     // position:fixed (spans the viewport height on its own), while this
     // panel is a normal flex-row sibling of the Listings column, so a
     // collapsed narrow rail would otherwise still get stretched to match
     // the Listings column's full height (flex's default cross-axis
-    // stretch) — lg:self-start overrides that specifically while
+    // stretch): lg:self-start overrides that specifically while
     // collapsed, so it shrinks to its own natural (just-the-button)
     // height instead of leaving a tall empty box. Expanded keeps the
     // original lg:h-full/overflow-y-auto stretch-and-scroll behavior,
     // matching the Listings column's height either way. Collapse is a
     // desktop-only concept here too (same as AppSidebar's own mobile
-    // behavior) — below lg every class below is inert, so the panel
+    // behavior): below lg every class below is inert, so the panel
     // always renders full-width/full-content on mobile regardless of
     // `collapsed`.
     <aside
@@ -871,7 +911,7 @@ function AddProductsPanel({
         }`}
       >
         {!collapsed && <h2 className={sectionHeadingClass}>Add Products</h2>}
-        {/* No text label (bare word next to the icon read as clutter) — the
+        {/* No text label (bare word next to the icon read as clutter): the
             chevron itself gets a visible pill chip (border + tinted
             background, not just on hover) so it reads as its own
             distinct, clickable control instead of a faint stray stroke
@@ -884,7 +924,7 @@ function AddProductsPanel({
 
       {/* Always mounted (never a JS-level unmount) so scrollIntoView/focus
           targeting from WorkspaceEmptyState's "+ Add Products" button
-          keeps working — lg:hidden only ever applies at the desktop
+          keeps working: lg:hidden only ever applies at the desktop
           breakpoint collapse actually affects; mobile always shows this
           regardless of `collapsed`, matching AppSidebar's own mobile
           behavior. */}
@@ -933,6 +973,23 @@ function AddProductsPanel({
               onSubmit={onAddImageOnlyProduct}
               uploadingImage={uploadingImage}
               editingId={editingId}
+              hasSession={hasSession}
+              onChooseSingleProductMode={onChooseSingleProductMode}
+              onChooseMultipleProductsMode={onChooseMultipleProductsMode}
+              onStageImageFiles={onStageImageFiles}
+              onRemoveStagedImage={onRemoveStagedImage}
+              onCreateSingleProductFromStaged={onCreateSingleProductFromStaged}
+              onStartGroupingFromStaged={onStartGroupingFromStaged}
+              imageGroupImport={imageGroupImport}
+              onRetryImageGrouping={onRetryImageGrouping}
+              onOrganizeManually={onOrganizeManually}
+              onCancelImageGrouping={onCancelImageGrouping}
+              onRemoveGroupImage={onRemoveGroupImage}
+              onMoveGroupImage={onMoveGroupImage}
+              onMergeImageGroup={onMergeImageGroup}
+              onSplitImageGroup={onSplitImageGroup}
+              onResolveGroupReview={onResolveGroupReview}
+              onConfirmImageGroups={onConfirmImageGroups}
             />
           ) : (
             <LeftPanel
@@ -1010,7 +1067,7 @@ function ExportGateModal({ onClose, onSignIn }: { onClose: () => void; onSignIn:
 }
 
 // Confirm-before-destroy surface for the Listings toolbar's "Clear All"
-// button — same structural convention as ExportGateModal (fixed inset-0 z-40
+// button: same structural convention as ExportGateModal (fixed inset-0 z-40
 // centered overlay + backdrop + useFocusTrap + cardClass panel), the one
 // existing modal pattern in this workspace, reused rather than a third
 // bespoke dialog shape. `count` is the same listingSummary.total already
@@ -1061,12 +1118,12 @@ function ClearAllConfirmModal({
 // exact structural convention above (fixed inset-0 z-40 centered overlay +
 // backdrop + useFocusTrap + cardClass panel) for visual consistency with the
 // one existing modal in this workspace. Eligibility copy says "approved,"
-// not "Ready" — the real export rule is approved[marketplace], and a seller
+// not "Ready": the real export rule is approved[marketplace], and a seller
 // can approve a Needs Review listing after reviewing it, so it stays
 // exportable. The Ready/Needs Review/Missing Data/Error breakdown shown here
 // is purely informational context (via the same computeListingSummary()
 // QueueTable's own filters use), not a second eligibility rule.
-// Milestone C11 — one readiness row's icon/color, derived purely from the
+// Milestone C11: one readiness row's icon/color, derived purely from the
 // same status the gate already computed (never a second judgment made
 // here). MISSING_FIELDS reads as an amber warning, NOT_READY as a hard
 // error, matching the same severity distinction lib/exportReadiness.ts
@@ -1095,10 +1152,10 @@ function ExportSummaryModal({
   const containerRef = useRef<HTMLDivElement>(null)
   useFocusTrap(containerRef, onClose)
   const totalExportable = exportableCounts.reduce((sum, c) => sum + c.count, 0)
-  // Milestone C11 — §11/§21/§22 (C11-AC21/AC22): readiness is recomputed
+  // Milestone C11: §11/§21/§22 (C11-AC21/AC22): readiness is recomputed
   // fresh every time this modal opens (see the effect in the parent) and is
   // null until that finishes, which is what drives the loading state and
-  // keeps Export All Ready disabled until real results exist — never a
+  // keeps Export All Ready disabled until real results exist: never a
   // fabricated delay for something that already resolved.
   const isCheckingReadiness = totalExportable > 0 && readiness === null
   const ready = readiness ? readyMarketplaces(readiness) : []
@@ -1147,10 +1204,10 @@ function ExportSummaryModal({
               </p>
             )}
 
-            {/* Milestone C11 — the readiness gate itself: one row per
+            {/* Milestone C11: the readiness gate itself: one row per
                 marketplace that has at least one approved listing, backed
                 entirely by the C10 adapter (lib/exportReadiness.ts calls
-                getMarketplaceAdapter(...).validate() — no marketplace rule
+                getMarketplaceAdapter(...).validate(): no marketplace rule
                 is re-derived here). */}
             <div className="mb-4 pb-4 border-b border-[var(--card-border)]">
               <p className={`${labelClass} mb-1`}>Marketplace readiness</p>
@@ -1171,7 +1228,7 @@ function ExportSummaryModal({
                         {r.issues.length > 0 && (
                           <ul className="ml-4 list-disc list-inside text-xs text-[var(--muted-text)]">
                             {r.issues.map((issue, i) => (
-                              <li key={i}>{issue.field}{issue.message ? ` — ${issue.message}` : ''}</li>
+                              <li key={i}>{issue.field}{issue.message ? `: ${issue.message}` : ''}</li>
                             ))}
                           </ul>
                         )}
@@ -1209,7 +1266,7 @@ function ExportSummaryModal({
   )
 }
 
-// Replaces the queue table entirely when there's nothing in it yet — not a
+// Replaces the queue table entirely when there's nothing in it yet: not a
 // decorated illustration, just the one thing the seller needs to know
 // ("nothing here yet"). No Add Products button here anymore: the panel to
 // its left is always visible, so a second entry point would be redundant.
@@ -1217,7 +1274,7 @@ function ExportSummaryModal({
 // between the two doesn't change the page's visual rhythm.
 function WorkspaceEmptyState() {
   // The Add Products panel is always visible on desktop, but stacks above
-  // Listings below the lg breakpoint — this scrolls it into view (and
+  // Listings below the lg breakpoint: this scrolls it into view (and
   // focuses its first field) rather than being a purely decorative button,
   // since there's no show/hide state left to toggle.
   function focusAddProducts() {
@@ -1240,7 +1297,7 @@ function WorkspaceEmptyState() {
 }
 
 export default function CatalogueWorkspace() {
-  // Global/session-scoped, same as the old single-value dropdown — not
+  // Global/session-scoped, same as the old single-value dropdown: not
   // frozen onto individual products at add time. The generation loop always
   // reads whatever's currently selected here, applied to every product it
   // touches in that run (see handleGenerateAll).
@@ -1248,7 +1305,7 @@ export default function CatalogueWorkspace() {
   const [draftProducts, setDraftProducts] = useState<DraftProduct[]>([])
   const [activeTab, setActiveTab] = useState<WorkspaceDestination>('manual')
   const [readinessFilter, setReadinessFilter] = useState<ReadinessFilter>('all')
-  // A QueueTable row is a (product, marketplace) pair — View Content must
+  // A QueueTable row is a (product, marketplace) pair: View Content must
   // review exactly that pair, so this carries both instead of just a
   // product id (which previously left the drawer to guess/show every
   // marketplace the product had ever attempted).
@@ -1257,39 +1314,50 @@ export default function CatalogueWorkspace() {
   const [pendingRestoreCount, setPendingRestoreCount] = useState<number | null>(null)
   const [sessionReady, setSessionReady] = useState(false)
   const [selectedClient, setSelectedClient] = useState<Client | null>(null)
-  // Milestone C12 — Edit Brand Profile modal.
+  // Milestone C12: Edit Brand Profile modal.
   const [showBrandProfile, setShowBrandProfile] = useState(false)
   // Saved session read from localStorage on mount, held here until we also know
-  // whether the visitor is authenticated — that decides auto-restore vs. banner.
+  // whether the visitor is authenticated: that decides auto-restore vs. banner.
   const [savedSessionData, setSavedSessionData] = useState<any | null>(null)
 
   const [brandName, setBrandName] = useState('')
   const [category, setCategory] = useState('')
   const [description, setDescription] = useState('')
-  // Milestone C17.1 — imageFile/imageFileDataUrl/fileInputRef below are now
+  // Milestone C17.1: imageFile/imageFileDataUrl/fileInputRef below are now
   // Photos Only's exclusively (single image, unchanged). Manual Entry's own
   // multi-image state is manualImages/manualImageInputRef, further down.
   const [imageFile, setImageFile] = useState<File | null>(null)
   // Base64 mirror of imageFile (when small enough), so the form's in-progress,
-  // not-yet-submitted image pick can survive a redirect/refresh via localStorage —
+  // not-yet-submitted image pick can survive a redirect/refresh via localStorage:
   // a raw File object can't be JSON-serialized.
   const [imageFileDataUrl, setImageFileDataUrl] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  // Milestone C17.1 — Manual Entry's in-progress (not-yet-submitted) image
+  // Milestone C17.1: Manual Entry's in-progress (not-yet-submitted) image
   // picker: an ordered list of up to MAX_MANUAL_IMAGES slots, each either a
   // freshly picked File (not yet uploaded) or an already-uploaded/persisted
-  // URL (editing an existing product) — never both. Deliberately NOT
+  // URL (editing an existing product): never both. Deliberately NOT
   // mirrored into the localStorage formDraft the way imageFileDataUrl is
   // above (a multi-file base64 mirror would multiply that persistence
-  // mechanism's size/complexity for a rare edge case — an accidental
+  // mechanism's size/complexity for a rare edge case: an accidental
   // refresh mid-fill loses picked-but-not-yet-uploaded images, same as it
   // already loses any other never-submitted form state that isn't
   // explicitly persisted). Resolved into a real string[] (uploading
   // whichever slots are still Files) only at Add Product / Save Changes
-  // time — see resolveManualImageUrls.
+  // time: see resolveManualImageUrls.
   const [manualImages, setManualImages] = useState<ManualImageSlot[]>([])
   const manualImageInputRef = useRef<HTMLInputElement>(null)
-  // A native <input type="file"> is uncontrolled — resetting csvFile (React
+  // Milestone C18: Photos Only's batch/grouping import, entirely separate
+  // from the single-image imageFile state and from manualImages above (this
+  // is Photos Only's own flow, not Manual Entry's). null whenever no batch
+  // import is in progress: the panel then renders its normal single-image
+  // form untouched. Ephemeral only: nothing here is persisted or becomes a
+  // real product until commitConfirmedImageGroups runs.
+  const [imageGroupImport, setImageGroupImport] = useState<ImageGroupImportState | null>(null)
+  // Remembers the already-uploaded Storage URLs for the CURRENT batch so
+  // "Try Again" after a grouping failure re-runs only the grouping call,
+  // never re-uploads files the seller already picked once.
+  const imageGroupBatchUrlsRef = useRef<string[]>([])
+  // A native <input type="file"> is uncontrolled: resetting csvFile (React
   // state) to null after a successful upload does NOT clear the input's own
   // internal .value, so re-selecting the same filename (or in some browsers,
   // any file, depending on how the picker dialog resolves) silently fails
@@ -1303,49 +1371,49 @@ export default function CatalogueWorkspace() {
 
   const [generating, setGenerating] = useState(false)
   const [generationProgress, setGenerationProgress] = useState<{ current: number; total: number } | null>(null)
-  // Which single (product, marketplace) pair is in flight right now — not
+  // Which single (product, marketplace) pair is in flight right now: not
   // just which product, since a product can have several marketplace rows
   // and only one of them is actually generating at any instant (the
   // generation loop is sequential, never parallel across marketplaces).
   const [currentlyGenerating, setCurrentlyGenerating] = useState<{ productId: string; marketplace: Marketplace } | null>(
     null
   )
-  // Milestone 32 (C9) — client-side single-flight guard, same purpose as
+  // Milestone 32 (C9): client-side single-flight guard, same purpose as
   // currentlyGenerating above: disables the "Analyze Product" button for the
   // one product currently being enriched, so a double-click can't fire two
   // concurrent requests for the same product from this tab. The server route
   // has its own independent 'processing'-status check for the same reason
   // (a second tab/device, or a request that outlives this component).
   const [enrichingProductId, setEnrichingProductId] = useState<string | null>(null)
-  // Generate Listings loading experience — set only at real transition
+  // Generate Listings loading experience: set only at real transition
   // points inside generateForProductMarketplace/handleGenerateAll/
   // runGeneration (never a timer): 'preparing' is set before
   // ensureProductIntelligence is even awaited, so the render layer's
   // "Analyzing Product X of Y" label (derived below from enrichingProductId,
   // never stored here) can overlay it for exactly as long as a real
-  // /api/enrich-product call is genuinely in flight — for a product whose
+  // /api/enrich-product call is genuinely in flight: for a product whose
   // intelligence was already complete, enrichingProductId never sets and
   // 'preparing' shows directly, which is correct: no real analysis ran.
   // 'generating' is set once the request is about to be sent (with the
   // marketplace it's for), 'validating' once a successful response has
   // arrived and is being merged into state. 'complete'/'failed' are set by
   // the caller (handleGenerateAll after its whole batch, runGeneration
-  // after its one call) — never per-pair inside a bulk batch, so the
+  // after its one call): never per-pair inside a bulk batch, so the
   // banner doesn't flash "complete" after every individual pair.
   const [generationStage, setGenerationStage] = useState<GenerationStageInfo | null>(null)
-  // Milestone 22 (Step C2) — memoizes the in-flight/completed catalog_products
+  // Milestone 22 (Step C2): memoizes the in-flight/completed catalog_products
   // creation per DraftProduct.id, keyed by the stable client-local `id` (never
   // the possibly-stale `serverId` snapshot a caller might be holding). A ref,
   // not state: it must never trigger a re-render, and must survive across the
   // whole component's lifetime, not reset per render. This closes the one
   // realistic same-tab race the comment above already rules out for the bulk
   // path (sequential, never parallel) but doesn't rule out for two individual
-  // regenerate/retry actions fired close together for the same product — see
+  // regenerate/retry actions fired close together for the same product: see
   // ensureServerProduct below and the Milestone 22 report for what this does
   // and does not protect against.
   const serverProductPromises = useRef<Map<string, Promise<string>>>(new Map())
   // Product Intelligence, as the intelligence layer INSIDE generation (not a
-  // separate manual prerequisite) — see ensureProductIntelligence below.
+  // separate manual prerequisite): see ensureProductIntelligence below.
   // Same memoization pattern/reasoning as serverProductPromises just above:
   // keyed by the stable client-local product.id, a ref (never state) so it
   // survives the component's whole lifetime without triggering a re-render,
@@ -1356,13 +1424,13 @@ export default function CatalogueWorkspace() {
   const productIntelligencePromises = useRef<Map<string, Promise<ProductIntelligenceData | null>>>(new Map())
   // Remembers which field group (title/bullets/description/'full') the most
   // recent FAILED generate attempt was for, per (product, marketplace) pair
-  // — so a failed "Regenerate Title" can be reported and retried as exactly
+  //: so a failed "Regenerate Title" can be reported and retried as exactly
   // that, never silently widened into a full-listing retry. Keyed by
   // `${productId}:${marketplace}`; an entry is removed the moment that pair
   // next succeeds. Deliberately separate from generationError (which only
   // holds the message) since this tracks *scope*, not the error text.
   const [failedRegenFieldGroup, setFailedRegenFieldGroup] = useState<Record<string, FieldGroup | 'full'>>({})
-  // Structured rather than a pre-formatted string — rendered as a top-level,
+  // Structured rather than a pre-formatted string: rendered as a top-level,
   // impossible-to-miss banner (see the JSX below), not the per-row "One or
   // more marketplaces failed" text, so it needs a heading, a body, and a
   // "Buy more credits" CTA built from these numbers, not just interpolated
@@ -1374,15 +1442,15 @@ export default function CatalogueWorkspace() {
   const [marketplaceError, setMarketplaceError] = useState<string | null>(null)
   const [marketplaceFlash, setMarketplaceFlash] = useState(false)
   const [brandMismatchPending, setBrandMismatchPending] = useState(false)
-  // Milestone C17.1 — was a single string | null; Manual Entry now resolves
+  // Milestone C17.1: was a single string | null; Manual Entry now resolves
   // to (and defers, across the brand-mismatch pause, on the exact same
-  // uploaded set) an ordered array. Photos Only never reads/sets this — it
+  // uploaded set) an ordered array. Photos Only never reads/sets this: it
   // has no brand-mismatch gate (see handleAddImageOnlyProduct).
   const [pendingImageUrls, setPendingImageUrls] = useState<string[]>([])
   const [uploadingImage, setUploadingImage] = useState(false)
   const [pendingCsvUpload, setPendingCsvUpload] = useState<PendingCsvUpload | null>(null)
   // Surfaced when a server-side product delete fails (RLS rejection, not
-  // found, network error) — the product stays visible rather than being
+  // found, network error): the product stays visible rather than being
   // optimistically removed, so the seller isn't shown a "deleted" state
   // that didn't actually happen server-side.
   const [deleteError, setDeleteError] = useState<string | null>(null)
@@ -1391,38 +1459,38 @@ export default function CatalogueWorkspace() {
   // the queue is empty, collapsed once a product exists." An explicit
   // toggle (click) sets a real true/false here AND persists it to
   // localStorage (see the effect/handler below), same pattern
-  // AppSidebar's own collapse preference already uses — from then on the
+  // AppSidebar's own collapse preference already uses: from then on the
   // stored choice always wins over the empty/non-empty default.
   const [addProductsCollapsedPreference, setAddProductsCollapsedPreference] = useState<boolean | null>(null)
   const [showClearAllConfirm, setShowClearAllConfirm] = useState(false)
   const [clearingAll, setClearingAll] = useState(false)
   const [hasSession, setHasSession] = useState(false)
-  // Distinguishes "haven't checked auth yet" from "checked, guest" — hasSession
+  // Distinguishes "haven't checked auth yet" from "checked, guest": hasSession
   // alone starts false either way, which isn't enough to gate the restore decision.
   const [hasCheckedSession, setHasCheckedSession] = useState(false)
   const [showExportGateModal, setShowExportGateModal] = useState(false)
   const [autoDownloadPending, setAutoDownloadPending] = useState(false)
   // Set when a saved session is found but its schema version doesn't match
-  // — see SESSION_SCHEMA_VERSION below. Old-shape sessions are discarded
+  //: see SESSION_SCHEMA_VERSION below. Old-shape sessions are discarded
   // rather than restored, since the nested generatedContent/approved shape
   // changed and a straight restore would silently produce broken products.
   const [outdatedSessionDiscarded, setOutdatedSessionDiscarded] = useState(false)
-  // Pre-download confirmation surface (Milestone 9) — shown after the
+  // Pre-download confirmation surface (Milestone 9): shown after the
   // existing sign-in/marketplace gates pass, before the real download runs.
   const [showExportSummary, setShowExportSummary] = useState(false)
   const [exportError, setExportError] = useState<string | null>(null)
-  // Milestone C11 — Export Readiness Gate. null means "not yet computed for
+  // Milestone C11: Export Readiness Gate. null means "not yet computed for
   // this modal opening" (renders as a brief loading state, matches §11);
   // recomputed fresh every time the modal opens so approving/regenerating a
   // listing between two export attempts is always reflected.
   const [exportReadiness, setExportReadiness] = useState<MarketplaceExportReadiness[] | null>(null)
   // Set once, right after a successful export, alongside the existing
-  // downloadMessage banner — which marketplaces the readiness gate excluded
+  // downloadMessage banner: which marketplaces the readiness gate excluded
   // from that specific export and why. Cleared on the next export attempt.
   const [exportSkipped, setExportSkipped] = useState<{ marketplace: Marketplace; reason: string }[] | null>(null)
 
   // Client-side only, purely for UI: /workspace is public, so this never gates
-  // access — it just decides whether to show the Brand/Clients dropdown at all,
+  // access: it just decides whether to show the Brand/Clients dropdown at all,
   // and (by not rendering ClientSelector) avoids ever hitting the clients table
   // for a guest, since ClientSelector fetches clients in its own effect on mount.
   useEffect(() => {
@@ -1434,7 +1502,7 @@ export default function CatalogueWorkspace() {
   }, [])
 
   // Reads an explicit prior Add Products collapse/expand choice, if one
-  // was ever made — same mount-time-read pattern as AppSidebar's own
+  // was ever made: same mount-time-read pattern as AppSidebar's own
   // collapse preference. No stored value yet means no explicit choice has
   // been made, so addProductsCollapsed (derived below) falls back to the
   // empty/non-empty default instead.
@@ -1446,7 +1514,7 @@ export default function CatalogueWorkspace() {
   }, [])
 
   // AppSidebar's csv/manual/image items link here as /workspace?tab=<id>
-  // when clicked from outside /workspace (e.g. from /audit) — this is what
+  // when clicked from outside /workspace (e.g. from /audit): this is what
   // makes that navigation land on the actual destination clicked, rather
   // than always landing on the default Manual Entry panel. Read directly
   // from window.location instead of useSearchParams() so this component
@@ -1459,7 +1527,7 @@ export default function CatalogueWorkspace() {
   }, [])
 
   // On mount, read any crash-recovery session but don't yet decide what to do
-  // with it — that depends on whether this visitor turns out to be authenticated,
+  // with it: that depends on whether this visitor turns out to be authenticated,
   // which is still resolving asynchronously via the auth-check effect above.
   // Uses localStorage (not sessionStorage) because a magic-link email typically
   // opens in a new browser tab, and sessionStorage doesn't carry across tabs.
@@ -1469,7 +1537,7 @@ export default function CatalogueWorkspace() {
       if (saved) {
         const parsed = JSON.parse(saved)
 
-        // A session saved under a different schema version — most likely
+        // A session saved under a different schema version: most likely
         // pre-refactor, back when generatedContent/status/approved had a
         // flat, single-marketplace shape. Restoring it as-is would produce
         // products whose generatedContent isn't a per-marketplace record at
@@ -1493,7 +1561,7 @@ export default function CatalogueWorkspace() {
         }
       }
     } catch {
-      // corrupted or unreadable storage — treat as no saved session
+      // corrupted or unreadable storage: treat as no saved session
     }
     setSessionReady(true)
   }, [])
@@ -1527,16 +1595,16 @@ export default function CatalogueWorkspace() {
     }
   }, [autoDownloadPending, hasSession])
 
-  // Milestone 26 (Step C4) — server-backed catalog hydration, authenticated
+  // Milestone 26 (Step C4): server-backed catalog hydration, authenticated
   // users only. Deliberately layered on top of the existing local-restore
   // flow above (fires only once `sessionReady` is already true) rather than
-  // threaded into that flow's own timing — the local-restore/guest-banner
+  // threaded into that flow's own timing: the local-restore/guest-banner
   // behavior above is already verified across many milestones and this
   // milestone is read-path-only, so it isn't touched. The tradeoff: an
   // authenticated user may briefly see their local-only view before it
   // updates with anything additional the server has, rather than the
   // loading skeleton staying up for both steps combined. A ref (not state)
-  // guards this to run exactly once per mount — StrictMode's dev
+  // guards this to run exactly once per mount: StrictMode's dev
   // double-invoke, or any incidental re-run of this effect, must not
   // re-fetch and re-merge repeatedly.
   const catalogHydrationRan = useRef(false)
@@ -1549,7 +1617,7 @@ export default function CatalogueWorkspace() {
       .then((server) => {
         setDraftProducts((prev) => {
           const reconciled = reconcileCatalog(prev, server, computeProductStatus)
-          // Milestone 32 (C9) — product_intelligence is deliberately NOT part
+          // Milestone 32 (C9): product_intelligence is deliberately NOT part
           // of C4's reconciliation contract (lib/catalogReconciliation.ts is
           // untouched by this milestone, same as every prior C-file). This is
           // a separate, thin pass applied after it: matches each reconciled
@@ -1566,7 +1634,7 @@ export default function CatalogueWorkspace() {
         })
       })
       .catch((err: any) => {
-        // Rule 14 — fail open to whatever the existing local-restore flow
+        // Rule 14: fail open to whatever the existing local-restore flow
         // already produced. Never clear draftProducts, never block the
         // workspace, never surface a fatal error over a read failure.
         console.error('Catalog hydration failed, continuing with local data only:', err?.message ?? err)
@@ -1575,7 +1643,7 @@ export default function CatalogueWorkspace() {
 
   // Mirrors the form's in-progress imageFile into a base64 data URL so it can
   // survive a redirect/refresh via localStorage (a raw File can't be
-  // JSON-serialized). Skipped above the size cap — see MAX_PERSISTABLE_IMAGE_BYTES.
+  // JSON-serialized). Skipped above the size cap: see MAX_PERSISTABLE_IMAGE_BYTES.
   useEffect(() => {
     if (!imageFile || imageFile.size > MAX_PERSISTABLE_IMAGE_BYTES) {
       setImageFileDataUrl(null)
@@ -1595,7 +1663,7 @@ export default function CatalogueWorkspace() {
   // Persist draftProducts on every change, once the initial restore/discard decision
   // is resolved (so we don't clobber a pending saved session with the initial empty array
   // before the user has seen the restore banner). File objects can't survive
-  // JSON.stringify/localStorage — imageFile is always null on a committed product now
+  // JSON.stringify/localStorage: imageFile is always null on a committed product now
   // (manual uploads are converted to a permanent Supabase Storage URL immediately on
   // add), but it's still stripped defensively in case that invariant is ever broken.
   // The marketplace, selected brand, and in-progress manual-entry form (including a
@@ -1620,21 +1688,21 @@ export default function CatalogueWorkspace() {
         })
       )
     } catch {
-      // most likely a localStorage quota error from an embedded image — this
+      // most likely a localStorage quota error from an embedded image: this
       // change just won't survive a refresh, nothing else breaks
     }
   }, [draftProducts, sessionReady, selectedMarketplaces, selectedClient, brandName, category, description, imageFileDataUrl])
 
   // Only ever called with a payload that already passed the version check
   // above, so draftProducts here is guaranteed to already be in the current
-  // nested-per-marketplace shape — no per-product migration needed.
+  // nested-per-marketplace shape: no per-product migration needed.
   async function applyRestoredState(parsed: any) {
     const products = Array.isArray(parsed.draftProducts) ? parsed.draftProducts : []
     setDraftProducts(
       products.map((p: any) => ({
         ...p,
         imageFile: null,
-        // Milestone C17.1 — a session saved before this shipped won't have
+        // Milestone C17.1: a session saved before this shipped won't have
         // imageUrls at all after JSON.parse; every real consumer (the
         // multi-image editor, exports, etc.) assumes a real array, so this
         // is the one place that backfills it, from the product's own
@@ -1663,7 +1731,7 @@ export default function CatalogueWorkspace() {
           const extension = blob.type.split('/')[1] || 'jpg'
           setImageFile(new File([blob], `restored-image.${extension}`, { type: blob.type }))
         } catch {
-          // couldn't reconstruct the image — form just comes back without one
+          // couldn't reconstruct the image: form just comes back without one
         }
       }
     }
@@ -1676,7 +1744,7 @@ export default function CatalogueWorkspace() {
         void applyRestoredState(JSON.parse(saved))
       }
     } catch {
-      // corrupted storage — nothing to restore
+      // corrupted storage: nothing to restore
     }
     setPendingRestoreCount(null)
     setSessionReady(true)
@@ -1688,9 +1756,9 @@ export default function CatalogueWorkspace() {
     setSessionReady(true)
   }
 
-  // Still used by Bulk Approve/Download (unrelated to this change — their
+  // Still used by Bulk Approve/Download (unrelated to this change: their
   // own alert-based gating is untouched). Generate Content deliberately does
-  // NOT use this — see flagMissingMarketplace below, which shows the same
+  // NOT use this: see flagMissingMarketplace below, which shows the same
   // requirement as an inline warning under Target Marketplaces instead of a
   // native alert().
   function requireMarketplace(): boolean {
@@ -1701,7 +1769,7 @@ export default function CatalogueWorkspace() {
     return true
   }
 
-  // Generate Content's own marketplace gate — inline, not a native alert(),
+  // Generate Content's own marketplace gate: inline, not a native alert(),
   // since generation (unlike Add Product) genuinely requires at least one
   // marketplace selected. Sets the same marketplaceError/marketplaceFlash
   // state AppHeader already renders as a red ring on the Target Marketplaces
@@ -1744,13 +1812,13 @@ export default function CatalogueWorkspace() {
   }
 
   // Selecting a Brand Voice auto-fills Brand Name with that brand's own
-  // name — visible, immediate confirmation of which brand's guidelines
+  // name: visible, immediate confirmation of which brand's guidelines
   // generation will actually use, rather than the seller having to type a
   // matching name themselves and only finding out it matched (or didn't)
   // via the brand-mismatch gate at submit time. brandName is the one field
   // shared by both Manual Entry and Photos Only (see LeftPanel/
   // ImageOnlyPanel, both driven by this same state), so filling it once
-  // here surfaces it in both places at once — no per-tab wiring needed.
+  // here surfaces it in both places at once: no per-tab wiring needed.
   // Two guards, both matching the existing mismatch gate's own semantics
   // (handleAddProduct's `!editingId && selectedClient && ...`):
   //   - !editingId: never overwrites an in-progress edit's own brand name
@@ -1812,10 +1880,10 @@ export default function CatalogueWorkspace() {
     return data.url as string
   }
 
-  // Milestone C17.1 — the multi-image counterparts of the single-image
+  // Milestone C17.1: the multi-image counterparts of the single-image
   // picker's onImageFileChange/setImageFile. handleAddManualImages enforces
   // the MAX_MANUAL_IMAGES cap client-side (silently drops anything beyond
-  // the remaining room, rather than erroring — picking 3 files with 2 slots
+  // the remaining room, rather than erroring: picking 3 files with 2 slots
   // left fills the 2 slots, exactly like a real multi-select file dialog
   // would be expected to behave); the DB-side CHECK constraint on
   // catalog_products.image_urls is the second, non-UI-reliant enforcement
@@ -1844,13 +1912,13 @@ export default function CatalogueWorkspace() {
 
   // Uploads only the slots that are still a raw File (an already-uploaded/
   // persisted slot, from editing an existing product, keeps its real URL
-  // untouched) and returns the final ordered string[] — same order as
+  // untouched) and returns the final ordered string[]: same order as
   // manualImages, first element always the primary image. Parallel
   // (Promise.all): each upload is independent, and order is preserved by
   // construction regardless of which one resolves first. Throws (letting
   // the caller's existing try/catch/setFormError handle it) on any single
   // failure, same fail-the-whole-submission behavior the old one-image
-  // uploadProductImage call already had — never a partially-uploaded
+  // uploadProductImage call already had: never a partially-uploaded
   // product.
   async function resolveManualImageUrls(): Promise<string[]> {
     const hasNewFiles = manualImages.some((slot) => slot.file)
@@ -1867,11 +1935,11 @@ export default function CatalogueWorkspace() {
   }
 
   async function handleAddProduct() {
-    // Marketplace selection is not required to add a product — it's only
+    // Marketplace selection is not required to add a product: it's only
     // relevant to generation (see handleGenerateAll's requireMarketplace()
     // check). A product can exist in the catalog before any marketplace has
     // been chosen; it just sits there ungenerated until one is.
-    // Category is optional — LeftPanel's own "⚠ Category missing" note
+    // Category is optional: LeftPanel's own "⚠ Category missing" note
     // still nudges toward adding one (better generation quality), but it
     // must never block Add Product the way a missing Brand Name/
     // Description does.
@@ -1899,11 +1967,11 @@ export default function CatalogueWorkspace() {
   }
 
   // Image-only adds: brand/category are optional here (unlike manual entry),
-  // and there's no brand-voice-mismatch gate — that check exists to catch a
+  // and there's no brand-voice-mismatch gate: that check exists to catch a
   // typed brand name that doesn't match the selected client, and there's
   // nothing to mismatch-check when the field was deliberately left blank.
   async function handleAddImageOnlyProduct() {
-    // Marketplace selection is not required to add a product — see the same
+    // Marketplace selection is not required to add a product: see the same
     // note in handleAddProduct.
     if (!imageFile && !editingId) {
       setFormError('An image is required.')
@@ -1925,11 +1993,11 @@ export default function CatalogueWorkspace() {
     }
 
     // Explicit '' override rather than falling through to the shared
-    // `description` state — brandName/category/imageFile are reused across
+    // `description` state: brandName/category/imageFile are reused across
     // all three destinations, but if a user typed a description while on
     // Manual Entry and then switched to this panel without clearing the
     // form, that leftover text must not silently end up on an "image only"
-    // product. uploadedImageUrl ? [uploadedImageUrl] : undefined — Photos
+    // product. uploadedImageUrl ? [uploadedImageUrl] : undefined: Photos
     // Only is still single-image and keeps its exact original semantics:
     // undefined ("no new image in this submission") leaves an existing
     // product's images untouched, matching what a bare `uploadedImageUrl ?
@@ -1937,15 +2005,374 @@ export default function CatalogueWorkspace() {
     commitAddProduct(true, uploadedImageUrl ? [uploadedImageUrl] : undefined, '', 'photo')
   }
 
-  // Milestone C17.1 — uploadedImageUrls is now an array, but its MEANING
+  // Milestone C18 (Photos Only: Single Product vs Multiple Products):
+  // Photos Only's own batch/multi-select path: handleAddImageOnlyProduct
+  // above (guest/editing single image) is completely untouched by any of
+  // it. The seller picks a mode (Single Product / Multiple Products)
+  // BEFORE any photo is selected: see handleChooseSingleProductMode/
+  // handleChooseMultipleProductsMode below, which are the only two ways
+  // imageGroupImport ever becomes a 'staging' state. Files then land in
+  // 'staging' (no upload, no AI call: just local File objects held for
+  // preview) so the seller can add more (up to MAX_IMAGE_GROUPING_BATCH) or
+  // remove any before the one mode-appropriate action commits them.
+  //
+  // Part D: never silently truncate: when more files are picked than the
+  // remaining room allows, the seller is told exactly what happened (how
+  // many were actually added vs. how many were dropped), not left to guess
+  // why the count didn't match what they selected.
+  function handleStageImageFiles(files: File[]) {
+    if (files.length === 0) return
+    setImageGroupImport((prev) => {
+      if (!prev || prev.status !== 'staging') return prev
+      const room = MAX_IMAGE_GROUPING_BATCH - prev.files.length
+      if (room <= 0) {
+        return {
+          ...prev,
+          error: `You already have ${MAX_IMAGE_GROUPING_BATCH} photos selected: that's the limit for one import.`
+        }
+      }
+      const added = files.slice(0, room)
+      const overflow = files.length - added.length
+      return {
+        ...prev,
+        files: [...prev.files, ...added],
+        error:
+          overflow > 0
+            ? `Only ${added.length} of ${files.length} photos were added: the limit is ${MAX_IMAGE_GROUPING_BATCH} per import.`
+            : undefined
+      }
+    })
+  }
+
+  function handleRemoveStagedImage(index: number) {
+    setImageGroupImport((prev) =>
+      prev && prev.status === 'staging' ? { ...prev, files: prev.files.filter((_, i) => i !== index), error: undefined } : prev
+    )
+  }
+
+  // runImageGrouping is the one function that ever calls
+  // POST /api/group-product-images (never per-image, never more than once
+  // per batch: see §13). It's also what "Try Again" re-runs, reusing
+  // imageGroupBatchUrlsRef's already-uploaded URLs rather than re-uploading
+  // (and therefore never re-charging the upload step, which has no credit
+  // cost anyway: only the grouping REQUEST itself is metered, server-side).
+  async function runImageGrouping(urls: string[]) {
+    setImageGroupImport({ status: 'grouping' })
+    try {
+      // The trivial case never needs the AI route at all: one image can't
+      // be ambiguous. Mirrors the same short-circuit the route itself also
+      // has server-side (which still charges the 1-credit grouping-request
+      // fee even here, since a request was genuinely made): this client
+      // path only skips the call for the ONE case that never reaches the
+      // network regardless: a single staged image never even calls the
+      // route (see the length===1 short-circuit is actually inside the
+      // route; this client-side mirror exists only so "Try Again" on a
+      // single-image retry doesn't need special-casing).
+      if (urls.length === 1) {
+        setImageGroupImport({
+          status: 'review',
+          totalImages: 1,
+          groups: buildSingleGroupFallback(urls)
+        })
+        return
+      }
+
+      const res = await fetch('/api/group-product-images', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageUrls: urls })
+      })
+      const data = await res.json().catch(() => null)
+
+      // Insufficient credits (403 with the same creditsRemaining/
+      // creditsRequired shape generate-single's own InsufficientCreditsError
+      // response already uses) gets its own distinct state: retrying
+      // wouldn't help, the seller needs more credits, not another attempt.
+      if (res.status === 403 && typeof data?.creditsRemaining === 'number') {
+        setImageGroupImport({
+          status: 'insufficient_credits',
+          required: typeof data.creditsRequired === 'number' ? data.creditsRequired : CREDIT_COSTS.imageGroupingRequest,
+          available: data.creditsRemaining
+        })
+        return
+      }
+
+      if (!res.ok || !Array.isArray(data?.groups)) {
+        setImageGroupImport({ status: 'error', message: data?.error || 'Grouping failed. Please try again.' })
+        return
+      }
+
+      setImageGroupImport({
+        status: 'review',
+        totalImages: urls.length,
+        groups: buildImageGroupCandidates(data.groups, urls)
+      })
+    } catch (err: any) {
+      setImageGroupImport({ status: 'error', message: err?.message || 'Grouping failed. Please try again.' })
+    }
+  }
+
+  // Uploads every staged file (reusing uploadProductImage: the exact same
+  // function every other add path already uses, no new upload
+  // infrastructure), remembers the resulting URLs for a possible retry, then
+  // hands off to runImageGrouping. Only ever called from the explicit
+  // "Group Into Multiple Products" button click (handleStartGroupingFromStaged)
+  //: never automatically when files are staged/added.
+  async function startImageGroupingFromFiles(files: File[]) {
+    if (files.length === 0) return
+    if (files.length > MAX_IMAGE_GROUPING_BATCH) {
+      setImageGroupImport({
+        status: 'error',
+        message: `Up to ${MAX_IMAGE_GROUPING_BATCH} images per import: you selected ${files.length}.`
+      })
+      return
+    }
+
+    setImageGroupImport({ status: 'grouping' })
+    try {
+      const urls = await Promise.all(files.map(uploadProductImage))
+      imageGroupBatchUrlsRef.current = urls
+      await runImageGrouping(urls)
+    } catch (err: any) {
+      setImageGroupImport({ status: 'error', message: err?.message || 'Image upload failed. Please try again.' })
+    }
+  }
+
+  // The one and only trigger for starting grouping: the seller's explicit
+  // action on the staged files, never automatic on selection (Part B: "Do
+  // NOT automatically trigger grouping upon selecting initial files"). The
+  // mode === 'multiple' guard is structural, not just "the button isn't
+  // rendered": it's what guarantees Single Product mode can never
+  // accidentally reach the grouping endpoint (Part 7), even if this were
+  // ever called from somewhere other than its one wired-up button.
+  function handleStartGroupingFromStaged() {
+    if (!imageGroupImport || imageGroupImport.status !== 'staging' || imageGroupImport.mode !== 'multiple') return
+    if (imageGroupImport.files.length === 0) return
+    void startImageGroupingFromFiles(imageGroupImport.files)
+  }
+
+  function handleRetryImageGrouping() {
+    if (imageGroupBatchUrlsRef.current.length > 0) {
+      void runImageGrouping(imageGroupBatchUrlsRef.current)
+    }
+  }
+
+  // Milestone C18 (Photos Only Product Grouping + Credit Accounting):
+  // builds DraftProducts straight from resolved image-URL groups, shared by
+  // both "Create Single Product" (exactly one group, below) and
+  // commitConfirmedImageGroups (one group per AI-confirmed product) so
+  // there is exactly one place that shapes a photo-only DraftProduct.
+  // brandName/description/category start empty: never hallucinated (§9),
+  // left for the seller/Product Intelligence to fill in, same as every
+  // other add path.
+  function buildDraftProductsFromImageGroups(groups: { imageUrls: string[] }[]): DraftProduct[] {
+    return groups.map((group) => ({
+      id: crypto.randomUUID(),
+      brandName: '',
+      description: '',
+      category: '',
+      imageFile: null,
+      imageUrl: group.imageUrls[0] ?? null,
+      imageUrls: group.imageUrls,
+      generatedContent: emptyGeneratedContent(),
+      approved: emptyApproved(),
+      status: 'draft',
+      generationError: emptyGenerationError(),
+      generationMeta: emptyGenerationMeta(),
+      visualAttributes: null,
+      skipBrandVoice: false
+    }))
+  }
+
+  // Persists via the exact same ensureServerProduct every other add path
+  // uses (source 'photo', no new persistence mechanism): a create is free,
+  // exactly like Manual Entry/Bulk Upload/the original single-image Photos
+  // Only path. The only credit charge anywhere in this milestone is the
+  // 1-credit AI grouping REQUEST itself (app/api/group-product-images), not
+  // product creation or confirmation.
+  function commitDraftProducts(products: DraftProduct[]) {
+    setDraftProducts((prev) => [...prev, ...products])
+    if (hasSession) {
+      for (const product of products) {
+        void ensureServerProduct(product, 'photo').catch((err: any) => {
+          console.error(
+            `Catalog persistence: failed to create catalog_products for image-only product ${product.id}:`,
+            err?.message ?? err
+          )
+        })
+      }
+    }
+  }
+
+  // Part 2/4: Single Product mode's one and only action: every staged
+  // image becomes ONE DraftProduct's imageUrls (first image stays primary,
+  // by construction of buildDraftProductsFromImageGroups above), whether
+  // there's 1 image or 10: the same code path handles both, no special
+  // casing for the single-image case (Part 4). Never calls
+  // /api/group-product-images and never touches runImageGrouping: this is
+  // the zero-grouping-credit sibling of startImageGroupingFromFiles, and is
+  // the only function that ever fires for mode 'single'. On success, the
+  // product lands in draftProducts (via commitDraftProducts →
+  // setDraftProducts): the same array the existing Listings/Generating
+  // queue already renders: with no separate "place into Listings" step;
+  // there's nothing else to build.
+  async function startSingleProductFromStaged(files: File[]) {
+    if (files.length === 0) return
+    if (files.length > MAX_IMAGE_GROUPING_BATCH) {
+      setImageGroupImport({
+        status: 'staging',
+        mode: 'single',
+        files,
+        error: `Up to ${MAX_IMAGE_GROUPING_BATCH} images per import: you selected ${files.length}.`
+      })
+      return
+    }
+
+    setImageGroupImport({ status: 'creating' })
+    try {
+      const urls = await Promise.all(files.map(uploadProductImage))
+      commitDraftProducts(buildDraftProductsFromImageGroups([{ imageUrls: urls }]))
+      setImageGroupImport(null)
+    } catch (err: any) {
+      // Returns to the SAME staging screen with the SAME files still
+      // selected (not the dedicated AI-grouping 'error' status below, which
+      // is specifically for a failed grouping call after upload already
+      // succeeded): an upload failure here just means "try the same
+      // action again," no separate retry mechanism needed, and no
+      // re-presentation of the Single Product / Multiple Products choice.
+      setImageGroupImport({ status: 'staging', mode: 'single', files, error: err?.message || 'Image upload failed. Please try again.' })
+    }
+  }
+
+  // Structural guard mirrors handleStartGroupingFromStaged's mode check:
+  // Single Product mode can never accidentally trigger the AI grouping
+  // path (Part 7), regardless of what calls this.
+  function handleCreateSingleProductFromStaged() {
+    if (!imageGroupImport || imageGroupImport.status !== 'staging' || imageGroupImport.mode !== 'single') return
+    if (imageGroupImport.files.length === 0) return
+    void startSingleProductFromStaged(imageGroupImport.files)
+  }
+
+  // Part 1/5: the two ways into 'staging', chosen BEFORE any photo is
+  // picked. Nothing else ever sets imageGroupImport to a 'staging' state
+  // with an empty files array: this is the sole entry point for each mode.
+  function handleChooseSingleProductMode() {
+    setImageGroupImport({ status: 'staging', mode: 'single', files: [] })
+  }
+
+  function handleChooseMultipleProductsMode() {
+    setImageGroupImport({ status: 'staging', mode: 'multiple', files: [] })
+  }
+
+  // §18's "Organize Manually": never a second grouping UI: one group
+  // containing every uploaded image, which the seller then splits/moves
+  // using the exact same review controls a successful AI grouping would
+  // have shown.
+  function handleOrganizeManually() {
+    if (imageGroupBatchUrlsRef.current.length > 0) {
+      setImageGroupImport({
+        status: 'review',
+        totalImages: imageGroupBatchUrlsRef.current.length,
+        groups: buildSingleGroupFallback(imageGroupBatchUrlsRef.current)
+      })
+    }
+  }
+
+  function handleCancelImageGrouping() {
+    setImageGroupImport(null)
+    imageGroupBatchUrlsRef.current = []
+  }
+
+  // Every group-editing action below is a pure, synchronous edit of the
+  // review-state groups array: none of them ever calls an AI route (§16).
+  // Grouping only ever runs once per uploaded batch; the seller can move/
+  // merge/split/remove as many times as they like before confirming.
+  function updateImageReviewGroups(updater: (groups: ImageGroupCandidate[]) => ImageGroupCandidate[]) {
+    setImageGroupImport((prev) => (prev && prev.status === 'review' ? { ...prev, groups: updater(prev.groups) } : prev))
+  }
+
+  function handleRemoveGroupImage(groupId: string, imageUrl: string) {
+    updateImageReviewGroups((groups) =>
+      groups
+        .map((g) => (g.id === groupId ? { ...g, imageUrls: g.imageUrls.filter((u) => u !== imageUrl) } : g))
+        .filter((g) => g.imageUrls.length > 0)
+    )
+  }
+
+  function handleMoveGroupImage(groupId: string, imageUrl: string, targetGroupId: string | 'new') {
+    updateImageReviewGroups((groups) => {
+      const withoutImage = groups
+        .map((g) => (g.id === groupId ? { ...g, imageUrls: g.imageUrls.filter((u) => u !== imageUrl) } : g))
+        .filter((g) => g.imageUrls.length > 0)
+
+      if (targetGroupId === 'new') {
+        return [...withoutImage, { id: crypto.randomUUID(), imageUrls: [imageUrl], confidence: 'high', needsReview: false }]
+      }
+      return withoutImage.map((g) => (g.id === targetGroupId ? { ...g, imageUrls: [...g.imageUrls, imageUrl] } : g))
+    })
+  }
+
+  function handleMergeImageGroup(groupId: string, targetGroupId: string) {
+    updateImageReviewGroups((groups) => {
+      const source = groups.find((g) => g.id === groupId)
+      if (!source) return groups
+      return groups
+        .filter((g) => g.id !== groupId)
+        .map((g) => (g.id === targetGroupId ? { ...g, imageUrls: [...g.imageUrls, ...source.imageUrls] } : g))
+    })
+  }
+
+  function handleSplitImageGroup(groupId: string) {
+    updateImageReviewGroups((groups) => {
+      const target = groups.find((g) => g.id === groupId)
+      if (!target) return groups
+      const singles: ImageGroupCandidate[] = target.imageUrls.map((url) => ({
+        id: crypto.randomUUID(),
+        imageUrls: [url],
+        confidence: 'high',
+        needsReview: false
+      }))
+      return groups.flatMap((g) => (g.id === groupId ? singles : [g]))
+    })
+  }
+
+  function handleResolveGroupReview(groupId: string, action: 'keep' | 'split') {
+    if (action === 'keep') {
+      updateImageReviewGroups((groups) => groups.map((g) => (g.id === groupId ? { ...g, needsReview: false } : g)))
+    } else {
+      handleSplitImageGroup(groupId)
+    }
+  }
+
+  // §21's core invariant, enforced structurally: each confirmed group here
+  // becomes exactly one DraftProduct, via the same buildDraftProductsFromImageGroups
+  // + commitDraftProducts helpers "Create Single Product" above uses: the
+  // only difference is one group per AI-confirmed product instead of one
+  // group for the whole batch. Confirming is free, exactly like every other
+  // add path (Manual Entry, Bulk Upload, plain single-image Photos Only);
+  // the AI grouping REQUEST that produced these groups was already the one
+  // and only credit charge in this milestone, already paid when the
+  // "Group Into Multiple Products" call succeeded.
+  function commitConfirmedImageGroups() {
+    if (!imageGroupImport || imageGroupImport.status !== 'review') return
+    const confirmableGroups = imageGroupImport.groups.filter((g) => g.imageUrls.length > 0)
+    if (confirmableGroups.length === 0 || confirmableGroups.some((g) => g.needsReview)) return
+
+    commitDraftProducts(buildDraftProductsFromImageGroups(confirmableGroups))
+
+    setImageGroupImport(null)
+    imageGroupBatchUrlsRef.current = []
+  }
+
+  // Milestone C17.1: uploadedImageUrls is now an array, but its MEANING
   // stays exactly what the single uploadedImageUrl parameter's truthiness
   // used to mean, generalized:
   //   - undefined = "no new image(s) provided in this submission" (only
-  //     ever passed by Photos Only when its shared imageFile is empty) —
+  //     ever passed by Photos Only when its shared imageFile is empty):
   //     an edit leaves the product's existing images completely untouched,
   //     exactly like the original `uploadedImageUrl ? {...} : {}` did.
   //   - a real array (Manual Entry ALWAYS passes one, even []) = "this is
-  //     now the complete, authoritative image set" — an edit replaces
+  //     now the complete, authoritative image set": an edit replaces
   //     imageUrls wholesale, since Manual Entry's grid IS the full editable
   //     set and a removal is a meaningful edit, not an omission.
   function commitAddProduct(
@@ -1974,10 +2401,10 @@ export default function CatalogueWorkspace() {
         )
       )
 
-      // Milestone C14 — additive persistence: before this, an edit only
+      // Milestone C14: additive persistence: before this, an edit only
       // ever updated local state. Guests and products with no server row
       // yet (nothing has been generated for them) have nothing to persist
-      // — never a fabricated update. product_updated is only recorded
+      //: never a fabricated update. product_updated is only recorded
       // AFTER updateProduct's own write actually resolves.
       if (hasSession && existing?.serverId) {
         const serverId = existing.serverId
@@ -2034,13 +2461,13 @@ export default function CatalogueWorkspace() {
 
     setDraftProducts((prev) => [...prev, newProduct])
 
-    // Milestone 30 (C8) — same fire-and-forget, best-effort persistence
+    // Milestone 30 (C8): same fire-and-forget, best-effort persistence
     // convention already established for generation (persistGenerationToCatalog
     // below): never awaited, a failure here must never block adding the
     // product locally or surface as a user-facing error. Routes through the
     // exact same ensureServerProduct used at generation time (Step C2), so a
     // product added here and later generated never double-creates its
-    // catalog_products row — ensureServerProduct's own serverId/in-flight-map
+    // catalog_products row: ensureServerProduct's own serverId/in-flight-map
     // checks (see its definition below) already de-dupe that race. Guests
     // are skipped entirely, matching every other hasSession-gated catalog
     // write in this file; their products stay local-only, unchanged from
@@ -2075,12 +2502,12 @@ export default function CatalogueWorkspace() {
     if (fileInputRef.current) {
       fileInputRef.current.value = ''
     }
-    // Milestone C17.1 — seeds the multi-image editor with this product's
+    // Milestone C17.1: seeds the multi-image editor with this product's
     // real, already-uploaded images (each as a { file: null, url } slot,
     // in their persisted order) so editing shows exactly what's already
     // there, per §10. Falls back to imageUrl for a product whose imageUrls
     // is empty/absent (a pre-C17.1 single-image product, or one restored
-    // from an old local session — see DraftProduct.imageUrls' own comment).
+    // from an old local session: see DraftProduct.imageUrls' own comment).
     setManualImages(
       (product.imageUrls.length > 0 ? product.imageUrls : product.imageUrl ? [product.imageUrl] : []).map((url) => ({
         file: null,
@@ -2092,7 +2519,7 @@ export default function CatalogueWorkspace() {
     }
     setEditingId(product.id)
     // Switches the always-visible Add Products panel to Manual Entry so
-    // the pre-filled form is immediately visible — the panel itself never
+    // the pre-filled form is immediately visible: the panel itself never
     // needs to be shown/hidden anymore, it's already on screen.
     setActiveTab('manual')
   }
@@ -2102,7 +2529,7 @@ export default function CatalogueWorkspace() {
   // reconcileCatalog (on reload) pulled the still-present row straight
   // back in. Local removal only ever happens AFTER lib/catalog.ts's
   // deleteProduct() confirms the row is actually gone (RLS-owner-scoped,
-  // cascades to catalog_listings/catalog_listing_approvals) — a failed
+  // cascades to catalog_listings/catalog_listing_approvals): a failed
   // server delete leaves the product visibly in place with deleteError
   // set, rather than silently showing a "deleted" state that isn't real.
   async function handleDeleteProduct(id: string) {
@@ -2110,7 +2537,7 @@ export default function CatalogueWorkspace() {
     setDeleteError(null)
 
     // Guests, and any product whose server row was never created (no
-    // generation attempt has run for it yet — see ensureServerProduct),
+    // generation attempt has run for it yet: see ensureServerProduct),
     // have nothing to delete server-side; removing local state is already
     // the complete, correct action for those.
     if (hasSession && product?.serverId) {
@@ -2118,7 +2545,7 @@ export default function CatalogueWorkspace() {
         await deleteProduct(product.serverId)
       } catch (err: any) {
         console.error(`Catalog persistence: failed to delete catalog_products row ${product.serverId}:`, err?.message ?? err)
-        setDeleteError(`Couldn't delete "${product.brandName || 'this product'}" — please try again.`)
+        setDeleteError(`Couldn't delete "${product.brandName || 'this product'}": please try again.`)
         return
       }
     }
@@ -2132,7 +2559,7 @@ export default function CatalogueWorkspace() {
   // handleDeleteProduct above, batched. One extra guard handleDeleteProduct
   // doesn't need: getProductIdsWithPerformanceHistory checks for linked
   // marketplace_performance rows first (that table's product_id carries `on
-  // delete cascade` — see lib/catalog.ts) and those products are left in the
+  // delete cascade`: see lib/catalog.ts) and those products are left in the
   // queue rather than deleted, so "Clear All" can never silently take
   // imported performance history down with it.
   async function handleClearAll() {
@@ -2149,7 +2576,7 @@ export default function CatalogueWorkspace() {
         protectedIds = await getProductIdsWithPerformanceHistory(candidateServerIds)
       } catch (err: any) {
         console.error('Catalog persistence: failed to check performance history before Clear All:', err?.message ?? err)
-        setDeleteError("Couldn't verify performance history before clearing — please try again.")
+        setDeleteError("Couldn't verify performance history before clearing: please try again.")
         setClearingAll(false)
         setShowClearAllConfirm(false)
         return
@@ -2200,7 +2627,7 @@ export default function CatalogueWorkspace() {
   }
 
   async function handleUploadCsv() {
-    // Marketplace selection is not required to add products — see the same
+    // Marketplace selection is not required to add products: see the same
     // note in handleAddProduct.
     if (!csvFile) {
       alert('Choose a CSV file first')
@@ -2230,19 +2657,34 @@ export default function CatalogueWorkspace() {
         continue
       }
 
-      // Bulk Upload stays single-image (C17.1 explicitly doesn't touch it —
-      // see §14/C17.2) — imageUrls is just the [imageUrl] mirror so a CSV
-      // row's product still shows/edits correctly in Manual Entry's
-      // multi-image grid if the seller opens it to edit later.
-      const csvImageUrl = pick(row, 'image url', 'image_url')
+      // Milestone C17.2: up to 5 optional "Image URL N" columns, mapped in
+      // order (Image URL 1 -> image_urls[0], etc.) with blank cells simply
+      // skipped rather than becoming empty-string entries: never more than
+      // 5 regardless of how many numbered columns a hand-edited sheet might
+      // contain, since only 1-5 are ever looked up here. normalizeKey (lib/
+      // csvMapping.ts) strips parenthetical annotations before matching, so
+      // the sample template's "Image URL 1 (optional)" header still matches
+      // 'Image URL 1' below without any special-casing.
+      const numberedImageUrls = [1, 2, 3, 4, 5]
+        .map((n) => pick(row, `Image URL ${n}`, `image_url_${n}`))
+        .filter((url): url is string => !!url)
+      // Backward compatibility (§7): a file using the old single-column
+      // format (no "Image URL 1..5" columns at all) still imports its one
+      // image correctly; a file already using the new 5-column format never
+      // falls back here, since numberedImageUrls is non-empty for it.
+      const legacyImageUrl = numberedImageUrls.length === 0 ? pick(row, 'image url', 'image_url') : null
+      const csvImageUrls = numberedImageUrls.length > 0 ? numberedImageUrls : legacyImageUrl ? [legacyImageUrl] : []
       newProducts.push({
         id: crypto.randomUUID(),
         brandName: brand,
         description: rowDescription,
         category: pick(row, 'category') || '',
         imageFile: null,
-        imageUrl: csvImageUrl,
-        imageUrls: csvImageUrl ? [csvImageUrl] : [],
+        // image_url stays the primary/first image, same convention as
+        // every other add path (Manual Entry, Photos Only): csvImageUrls[0]
+        // when there's at least one, else null.
+        imageUrl: csvImageUrls[0] ?? null,
+        imageUrls: csvImageUrls,
         generatedContent: emptyGeneratedContent(),
         approved: emptyApproved(),
         status: 'draft',
@@ -2274,7 +2716,7 @@ export default function CatalogueWorkspace() {
   function commitCsvUpload(products: DraftProduct[], fileName: string, total: number) {
     setDraftProducts((prev) => [...prev, ...products])
 
-    // Milestone 30 (C8) — same convention as commitAddProduct above, applied
+    // Milestone 30 (C8): same convention as commitAddProduct above, applied
     // per row: fire-and-forget, best-effort, guests skipped. Each row goes
     // through its own independent ensureServerProduct call/promise (keyed by
     // that row's own id in serverProductPromises), so one row's failure
@@ -2299,7 +2741,7 @@ export default function CatalogueWorkspace() {
     setCsvFile(null)
     setPendingCsvUpload(null)
     // Resetting csvFile (state) alone doesn't clear the underlying <input>'s
-    // own .value — without this, selecting another CSV right after a
+    // own .value: without this, selecting another CSV right after a
     // successful upload can silently fail to fire change (see
     // csvFileInputRef above), and only a full page refresh actually clears
     // the stuck input.
@@ -2352,7 +2794,7 @@ export default function CatalogueWorkspace() {
   }
 
   // A product's status only ever reflects the marketplaces attempted in a
-  // given run (`runMarketplaces`) — a fixed snapshot taken once at the start
+  // given run (`runMarketplaces`): a fixed snapshot taken once at the start
   // of that run, not re-read live. Otherwise an already-'generated' product
   // could silently flip to 'partial' later just because the global
   // selection changed after the fact, with nothing new actually failing.
@@ -2369,7 +2811,7 @@ export default function CatalogueWorkspace() {
   // Product-major, marketplace-minor: every marketplace for one product
   // before moving to the next (not all-products-for-marketplace-1 then
   // all-products-for-marketplace-2). Each (product, marketplace) pair is one
-  // full-price generate-single call — total cost for a batch is simply the
+  // full-price generate-single call: total cost for a batch is simply the
   // count of successful calls, not a separate bulk formula.
   async function handleGenerateAll() {
     if (selectedMarketplaces.length === 0) {
@@ -2379,12 +2821,12 @@ export default function CatalogueWorkspace() {
     const pending = draftProducts.filter((p) => p.status === 'draft')
     if (pending.length === 0) return
 
-    // A fresh "Generate Listings" click is a new request — a product whose
+    // A fresh "Generate Listings" click is a new request: a product whose
     // LAST Product Intelligence attempt failed should get a genuine retry
     // here, not permanently reuse that cached null result (see
     // ensureProductIntelligence's own comment on why the cache otherwise
     // never clears). `pending` above was just read live, so this is the one
-    // point in the batch where productIntelligence?.status is trustworthy —
+    // point in the batch where productIntelligence?.status is trustworthy:
     // every generateForProductMarketplace call below receives this same
     // now-frozen `product` object, which won't reflect updates the batch
     // makes to itself as it runs.
@@ -2394,7 +2836,7 @@ export default function CatalogueWorkspace() {
       }
     }
 
-    // Snapshot now — see computeProductStatus above for why this must stay
+    // Snapshot now: see computeProductStatus above for why this must stay
     // fixed for the whole run rather than re-reading live state.
     const runMarketplaces = selectedMarketplaces
 
@@ -2404,7 +2846,7 @@ export default function CatalogueWorkspace() {
     const totalPairs = pending.length * runMarketplaces.length
     // completedPairs = attempts made so far, for the "attempt N of totalPairs"
     // progress indicator. succeededPairs = attempts that actually generated
-    // content — a distinct count, since the one that trips
+    // content: a distinct count, since the one that trips
     // 'insufficient_credits' increments completedPairs but produced nothing,
     // and the stopped-banner needs to report real completions, not attempts.
     let completedPairs = 0
@@ -2426,12 +2868,12 @@ export default function CatalogueWorkspace() {
         if (outcome === 'success') succeededPairs++
 
         // Insufficient credits: every remaining (product, marketplace) pair
-        // — whether the rest of this product's marketplaces or any later
-        // product entirely — would fail the identical way, since the
+        //: whether the rest of this product's marketplaces or any later
+        // product entirely: would fail the identical way, since the
         // balance doesn't change between attempts. Stop the whole batch
         // here rather than burning a failed request per remaining pair.
         // Any other per-pair error (bad image, transient network issue)
-        // keeps going — that failure is specific to one pair, not the batch.
+        // keeps going: that failure is specific to one pair, not the batch.
         if (outcome === 'insufficient_credits') {
           setCreditsStoppedInfo({ completedPairs: succeededPairs, totalPairs })
           stoppedForCredits = true
@@ -2446,7 +2888,7 @@ export default function CatalogueWorkspace() {
     // Terminal loading-experience state for the WHOLE batch, never per-pair
     // (that would flash "complete" after every individual item). Insufficient
     // credits already has its own, more specific banner (creditsStoppedInfo,
-    // rendered just below) — clearing here rather than also showing a
+    // rendered just below): clearing here rather than also showing a
     // generic "failed" avoids two banners saying overlapping things.
     setGenerationStage(
       stoppedForCredits
@@ -2460,7 +2902,7 @@ export default function CatalogueWorkspace() {
   }
 
   // Shared by the row-level "Retry" button and every drawer regenerate
-  // button — both just call generateForProductMarketplace for one
+  // button: both just call generateForProductMarketplace for one
   // (product, marketplace) pair, differing only in whether a fieldGroup is
   // passed. Centralized here so failedRegenFieldGroup (which the drawer
   // needs to know exactly what to offer to retry) stays in sync with every
@@ -2469,7 +2911,7 @@ export default function CatalogueWorkspace() {
     const product = draftProducts.find((p) => p.id === id)
     if (!product) return
 
-    // Same fresh-retry reasoning as handleGenerateAll's own eviction loop —
+    // Same fresh-retry reasoning as handleGenerateAll's own eviction loop:
     // `product` here is freshly read (not a stale batch snapshot), but
     // ensureProductIntelligence's cache is still keyed by id and would
     // otherwise permanently reuse a prior failure's cached null result.
@@ -2481,7 +2923,7 @@ export default function CatalogueWorkspace() {
     setCurrentlyGenerating({ productId: id, marketplace })
     const outcome = await generateForProductMarketplace(product, marketplace, selectedMarketplaces, fieldGroup)
     setCurrentlyGenerating(null)
-    // Terminal state for this one call — no productIndex/totalProducts
+    // Terminal state for this one call: no productIndex/totalProducts
     // (undefined progressContext above), so the banner shows the single-
     // product phrasing without "1 of 1" clutter (requirement D).
     setGenerationStage((prev) =>
@@ -2505,16 +2947,16 @@ export default function CatalogueWorkspace() {
     await runGeneration(id, marketplace)
   }
 
-  // Milestone 32 (C9) — the one real implementation that ever talks to
+  // Milestone 32 (C9): the one real implementation that ever talks to
   // /api/enrich-product. Both the manual "Analyze Product" button
   // (handleAnalyzeProduct) and the automatic pre-generation trigger
-  // (ensureProductIntelligence, below) call this — never two independently
+  // (ensureProductIntelligence, below) call this: never two independently
   // maintained copies of the same fetch/parse/persist logic. Requires
-  // serverId (a catalog_products row must already exist — true for every
+  // serverId (a catalog_products row must already exist: true for every
   // authenticated add since C8's eager creation, never true for a guest,
   // matching the fact that the enrichment API operates on a persisted row
   // and derives ownership from the session, not from anything in this
-  // request body). Never throws — a failure resolves to null and is
+  // request body). Never throws: a failure resolves to null and is
   // surfaced only via draftProducts' own productIntelligence status field
   // (rendered in the drawer), same as before.
   async function runProductIntelligenceAnalysis(id: string, serverId: string): Promise<ProductIntelligence | null> {
@@ -2540,7 +2982,7 @@ export default function CatalogueWorkspace() {
       return null
     } finally {
       // Guarded (not a bare setEnrichingProductId(null)) so this can't clear
-      // a DIFFERENT product's still-in-flight analysis out from under it —
+      // a DIFFERENT product's still-in-flight analysis out from under it:
       // matters now that this same function is reachable from two callers.
       setEnrichingProductId((prev) => (prev === id ? null : prev))
     }
@@ -2553,7 +2995,7 @@ export default function CatalogueWorkspace() {
   }
 
   // Product Intelligence as the intelligence layer INSIDE generation, not a
-  // separate manual prerequisite — called once per product from
+  // separate manual prerequisite: called once per product from
   // generateForProductMarketplace ahead of every full (non-field-scoped)
   // generation request, never per (product, marketplace) pair.
   //   - Already completed -> reused as-is. Never re-run just because
@@ -2568,12 +3010,12 @@ export default function CatalogueWorkspace() {
   // productIntelligencePromises memoizes by product.id and is deliberately
   // NEVER cleared on settle (same permanent-memoization pattern as
   // serverProductPromises above, same reason: the `product` parameter a
-  // caller holds can be a stale pre-batch snapshot — e.g. Generate Listings
+  // caller holds can be a stale pre-batch snapshot: e.g. Generate Listings
   // running 2+ selected marketplaces for the same product one after
-  // another — so its own `productIntelligence` field can't be trusted to
+  // another: so its own `productIntelligence` field can't be trusted to
   // reflect an update this exact batch already made; the id-keyed map can).
   // A batch that needs to retry a PRIOR failure evicts that one entry
-  // explicitly before it starts (see handleGenerateAll/runGeneration) — the
+  // explicitly before it starts (see handleGenerateAll/runGeneration): the
   // cache's own job is only "never run this twice for the same request,"
   // never "remember a failure forever."
   async function ensureProductIntelligence(product: DraftProduct): Promise<ProductIntelligenceData | null> {
@@ -2598,7 +3040,7 @@ export default function CatalogueWorkspace() {
     return promise
   }
 
-  // Drawer's Regenerate Title/Bullets/Description/Entire Listing buttons —
+  // Drawer's Regenerate Title/Bullets/Description/Entire Listing buttons:
   // fieldGroup undefined means "entire listing," same call as a normal
   // retry above, just exposed with a name that matches what the button says.
   async function handleRegenerateField(id: string, marketplace: Marketplace, fieldGroup?: FieldGroup) {
@@ -2608,26 +3050,26 @@ export default function CatalogueWorkspace() {
   // fieldGroup undefined/null = replace the whole marketplace content, same
   // as every existing caller today (fresh generation, full retry). When set
   // ('title' | 'bullets' | 'description'), only that group's keys (per
-  // FIELD_GROUPS above) are taken from the fresh response — every other key
+  // FIELD_GROUPS above) are taken from the fresh response: every other key
   // in the existing content object is preserved untouched via the spread
   // below, so "Regenerate Bullets" genuinely cannot alter the title or
   // description. Still one full generate-single call underneath (the model
   // has no partial-output mode), so it costs the same 1 credit as any other
-  // retry already does — no new billing path.
-  // Milestone 22 (Step C2) — resolves (creating if necessary) the
+  // retry already does: no new billing path.
+  // Milestone 22 (Step C2): resolves (creating if necessary) the
   // catalog_products row for a DraftProduct. Checks the product's own
   // `serverId` first (set once a prior creation in this session succeeded,
   // or restored from a saved localStorage session), then falls back to the
-  // in-flight/completed promise cache keyed by the stable `product.id` —
+  // in-flight/completed promise cache keyed by the stable `product.id`:
   // this second check is what actually closes the race for two
   // near-simultaneous calls, since a stale `product` snapshot's `serverId`
   // can't be trusted the way the map (keyed by an id that never changes)
   // can. See the Milestone 22 report for the one case this does NOT cover:
   // two separate browser tabs/devices both restoring the same localStorage
-  // draft and generating independently — this map is per-tab, in-memory
+  // draft and generating independently: this map is per-tab, in-memory
   // only, and catalog_products has no column to put a database-level
   // uniqueness guarantee on without a schema change (out of scope here).
-  // Milestone C14 — `source` (manual/csv/photo) is threaded through from
+  // Milestone C14: `source` (manual/csv/photo) is threaded through from
   // every call site so product_created's metadata records a real,
   // known-at-creation-time fact, never a guess made after the fact.
   async function ensureServerProduct(product: DraftProduct, source: 'manual' | 'csv' | 'photo'): Promise<string> {
@@ -2647,7 +3089,7 @@ export default function CatalogueWorkspace() {
       })
       setDraftProducts((prev) => prev.map((p) => (p.id === product.id ? { ...p, serverId: id } : p)))
       // Fire-and-forget, same convention as every other product-history
-      // call in this file — a history-recording failure must never affect
+      // call in this file: a history-recording failure must never affect
       // the already-successful product creation above.
       void recordProductHistoryEvent({ productId: id, eventType: 'product_created', metadata: { source } }).catch((err: any) => {
         console.error(`Product history: failed to record product_created for ${id}:`, err?.message ?? err)
@@ -2659,10 +3101,10 @@ export default function CatalogueWorkspace() {
     return promise
   }
 
-  // Milestone 22 (Step C2) — best-effort persistence bookkeeping, never part
+  // Milestone 22 (Step C2): best-effort persistence bookkeeping, never part
   // of the generation transaction itself. Fire-and-forget from the caller
   // (not awaited), matching the existing notifyCreditsChanged() pattern just
-  // below it — a failure here must never turn an already-successful
+  // below it: a failure here must never turn an already-successful
   // generation into an error, retry, roll back local state, or affect
   // credits in any way. The two try/catches are separate on purpose so the
   // logged message always says which operation actually failed.
@@ -2676,7 +3118,7 @@ export default function CatalogueWorkspace() {
     try {
       // By generation time a product has always already gone through one
       // of the three ensureServerProduct call sites in commitAddProduct/
-      // commitCsvUpload — this call almost always just resolves the
+      // commitCsvUpload: this call almost always just resolves the
       // already-in-flight/already-set serverId (see ensureServerProduct's
       // own early-return above). 'manual' is a defensive fallback for the
       // otherwise-unreachable case where it isn't, never a claim about how
@@ -2690,7 +3132,7 @@ export default function CatalogueWorkspace() {
       return
     }
 
-    // Milestone C14 — captured BEFORE the upsert below, so a listing that
+    // Milestone C14: captured BEFORE the upsert below, so a listing that
     // already existed for this (product, marketplace) pair is correctly
     // recorded as an edit, not a fresh generation.
     const hadExistingListing = !!product.listingServerIds?.[marketplace]
@@ -2702,7 +3144,7 @@ export default function CatalogueWorkspace() {
         generation_error: null
       })
       // Milestone 23 (Step C3) discovery: the returned row's own id was
-      // previously discarded here — nothing recorded which catalog_listings
+      // previously discarded here: nothing recorded which catalog_listings
       // row corresponds to this (product, marketplace) pair, which made
       // approval/export persistence impossible (setApproval/recordExport
       // both need the listing's own id, never catalog_products.id). Storing
@@ -2738,7 +3180,7 @@ export default function CatalogueWorkspace() {
     runMarketplaces: Marketplace[],
     fieldGroup?: FieldGroup,
     // Bulk-batch-only context (product index/total among the products this
-    // one Generate Listings run is processing) — purely for the loading
+    // one Generate Listings run is processing): purely for the loading
     // banner's "Analyzing product N of M" label. undefined for a single-row
     // retry/regenerate (runGeneration never passes it), which is exactly
     // when that label should omit the "N of M" clutter (requirement D).
@@ -2746,7 +3188,7 @@ export default function CatalogueWorkspace() {
   ): Promise<'success' | 'insufficient_credits' | 'error'> {
     try {
       // Loading-experience stage 2/4 ("Preparing Content"), set BEFORE
-      // Product Intelligence is even awaited — stage 1 ("Analyzing
+      // Product Intelligence is even awaited: stage 1 ("Analyzing
       // Product") is never stored here at all; it's derived at render time
       // from enrichingProductId, which ensureProductIntelligence's own call
       // to runProductIntelligenceAnalysis (unmodified) already sets/clears
@@ -2763,13 +3205,13 @@ export default function CatalogueWorkspace() {
         marketplaceLabel: null
       })
 
-      // Product Intelligence is the intelligence layer INSIDE generation —
+      // Product Intelligence is the intelligence layer INSIDE generation:
       // ensured (reused if already completed, awaited if already in
       // flight, freshly run otherwise) before the prompt is built, for
       // every full generation. A field-scoped regenerate (Title/Bullets/
       // Description) never triggers a fresh analysis of its own: a full
       // generation has always already run at least once by the time one of
-      // those buttons exists, so intelligence — if available at all — was
+      // those buttons exists, so intelligence (if available at all) was
       // already ensured then; a field regenerate only reuses whatever's
       // already on the product, exactly as before.
       const intelligenceData = fieldGroup
@@ -2780,7 +3222,7 @@ export default function CatalogueWorkspace() {
 
       const imageBase64 = product.imageFile ? await fileToBase64(product.imageFile) : null
 
-      // Stage 3/4 — about to send the actual marketplace generation
+      // Stage 3/4: about to send the actual marketplace generation
       // request; marketplaceLabel is what lets the banner say "Generating
       // Amazon listing..." rather than a generic "Generating...".
       setGenerationStage((prev) =>
@@ -2800,10 +3242,10 @@ export default function CatalogueWorkspace() {
           brandGuidelines: product.skipBrandVoice ? null : selectedClient?.brand_guidelines || null,
           // Lets the route build a small, field-specific prompt (its own
           // marketplace-specific constraint) instead of the generic
-          // full-listing one — undefined means "entire listing," same as
+          // full-listing one: undefined means "entire listing," same as
           // every other caller of this function.
           fieldGroup,
-          // Milestone 32 (C9) — omitted (undefined, dropped by
+          // Milestone 32 (C9): omitted (undefined, dropped by
           // JSON.stringify) whenever no completed analysis is available
           // (guest, analysis failed, or genuinely nothing to analyze), so
           // the route's existing no-intelligence behavior is unchanged in
@@ -2814,27 +3256,27 @@ export default function CatalogueWorkspace() {
       const data = await res.json()
 
       if (res.ok) {
-        // Stage 4/4 — the response has arrived; readiness/health for it
+        // Stage 4/4: the response has arrived; readiness/health for it
         // (lib/listingHealth.ts, computed from generatedContent/meta once
         // committed below) is what QueueTable's own badges already show as
-        // the real result — this stage just names the real work happening
+        // the real result: this stage just names the real work happening
         // between "response received" and "state committed": merging the
         // field-scoped/full content and validation-relevant meta below.
         setGenerationStage((prev) => (prev && prev.productId === product.id ? { ...prev, phase: 'validating' } : prev))
 
-        // Meta describes the fresh response's title specifically — only
+        // Meta describes the fresh response's title specifically: only
         // trustworthy to record when the title actually changed (no
         // fieldGroup at all, i.e. entire listing, or fieldGroup === 'title').
         // Regenerating just the bullets/description leaves the existing
         // title (and therefore its existing meta) untouched.
         const updatesTitle = !fieldGroup || fieldGroup === 'title'
 
-        // Milestone 25 — computed ONCE, here, as plain synchronous values,
+        // Milestone 25: computed ONCE, here, as plain synchronous values,
         // not inside the setDraftProducts updater below. The previous
         // version captured these via `let` variables assigned inside that
         // updater and read immediately after the setDraftProducts(...)
         // call, on the assumption that React invokes a function updater
-        // synchronously as part of that call — it doesn't; the updater only
+        // synchronously as part of that call: it doesn't; the updater only
         // runs once React actually processes the fiber's update queue
         // during render, which isn't guaranteed to have happened yet at
         // that point. Confirmed live in Milestone 24: catalog_listings.
@@ -2845,7 +3287,7 @@ export default function CatalogueWorkspace() {
         // own parameter) as the field-scoped merge base instead of the
         // updater's `prev`/`p` is safe specifically because generation is
         // sequential and globally single-flight (see currentlyGenerating
-        // above) — nothing else can have written to this exact (product,
+        // above): nothing else can have written to this exact (product,
         // marketplace) slot between when `product` was captured and this
         // response arriving, since this call IS that in-flight generation.
         // Every OTHER marketplace's data still comes from `p` inside the
@@ -2860,7 +3302,7 @@ export default function CatalogueWorkspace() {
           : data.generatedContent
 
         // keywordsField only reflects reality when keywords were actually
-        // part of this response — true for a full generation, NOT for a
+        // part of this response: true for a full generation, NOT for a
         // title-only regenerate (there's no "Regenerate Keywords" button; a
         // title-only request's prompt never asks for keywordPool at all, so
         // the server's fresh meta would otherwise carry an empty/inert
@@ -2899,7 +3341,7 @@ export default function CatalogueWorkspace() {
           })
         )
         if (hasSession) notifyCreditsChanged()
-        // Milestone 22 (Step C2) — fire-and-forget, same reasoning as
+        // Milestone 22 (Step C2): fire-and-forget, same reasoning as
         // notifyCreditsChanged() just above: bookkeeping, not part of this
         // function's own success/failure contract. Guests are excluded here
         // (not just left to fail inside lib/catalog.ts's own session check)
@@ -2928,14 +3370,14 @@ export default function CatalogueWorkspace() {
     }
   }
 
-  // Milestone 23 (Step C3) — fire-and-forget, same philosophy as C2's
+  // Milestone 23 (Step C3): fire-and-forget, same philosophy as C2's
   // persistGenerationToCatalog. Requires both an authenticated session (only
   // signed-in users have catalog rows) and a resolved catalog_listings.id
-  // for this exact (product, marketplace) pair — which only exists once
+  // for this exact (product, marketplace) pair: which only exists once
   // C2's generation dual-write has actually succeeded for it. Neither
   // condition being unmet is an error: it just means there is nothing to
   // persist yet (guest, or a listing that predates C2, or whose own C2
-  // write failed) — skipped cleanly and logged, never inventing an id or
+  // write failed): skipped cleanly and logged, never inventing an id or
   // writing to an unrelated row.
   async function persistApprovalToCatalog(draftProductId: string, marketplace: Marketplace, approved: boolean) {
     if (!hasSession) return
@@ -2943,7 +3385,7 @@ export default function CatalogueWorkspace() {
     const listingId = product?.listingServerIds?.[marketplace]
     if (!listingId) {
       console.error(
-        `Catalog persistence: skipped approval write for draft product ${draftProductId} / ${marketplace} — no persisted catalog_listings id yet.`
+        `Catalog persistence: skipped approval write for draft product ${draftProductId} / ${marketplace}: no persisted catalog_listings id yet.`
       )
       return
     }
@@ -2983,7 +3425,7 @@ export default function CatalogueWorkspace() {
   }
 
   // Approves every marketplace that actually has content, for every product
-  // that has at least one — including 'partial' products, so a product that
+  // that has at least one: including 'partial' products, so a product that
   // only half-finished (see computeProductStatus) still gets its successful
   // marketplaces approved rather than being held back by the ones that failed.
   function handleBulkApprove() {
@@ -3009,16 +3451,16 @@ export default function CatalogueWorkspace() {
         JSON.stringify({ ...parsed, version: SESSION_SCHEMA_VERSION, savedAt: Date.now(), pendingDownload: true })
       )
     } catch {
-      // worst case the auto-download just doesn't fire after login — not fatal,
+      // worst case the auto-download just doesn't fire after login: not fatal,
       // the session itself is still safe via the regular persist effect
     }
   }
 
-  // One CSV row per (product, approved marketplace) pair — a product
+  // One CSV row per (product, approved marketplace) pair: a product
   // approved for both Amazon and Flipkart produces two rows. Only the
   // marketplaces actually included in this export get cleared afterward
   // (generatedContent/approved/generationError reset to blank for just
-  // those keys) — a product is dropped from the queue only once that leaves
+  // those keys): a product is dropped from the queue only once that leaves
   // it with nothing left at all. An approved-but-not-yet-exported
   // marketplace, or a 'partial' product's still-pending retry, keeps the
   // product in the queue: generated content (and the credit it cost) is
@@ -3026,7 +3468,7 @@ export default function CatalogueWorkspace() {
   // Button-facing entry point: runs the existing sign-in/marketplace gates,
   // then opens the pre-download confirmation surface instead of downloading
   // immediately. performExport() below (called only from that modal's
-  // "Export Listings" button) does the actual download — same gates,
+  // "Export Listings" button) does the actual download: same gates,
   // same eligibility rule, just a confirmation step inserted between them.
   function handleOpenExportSummary() {
     if (!hasSession) {
@@ -3035,7 +3477,7 @@ export default function CatalogueWorkspace() {
     }
     if (!requireMarketplace()) return
     setExportError(null)
-    // Milestone C11 — null until the effect below computes it fresh for
+    // Milestone C11: null until the effect below computes it fresh for
     // this opening; the modal shows a brief "Checking marketplace
     // readiness…" state and keeps Export All Ready disabled until then
     // (§11/§21, C11-AC21/AC22).
@@ -3044,10 +3486,10 @@ export default function CatalogueWorkspace() {
     setShowExportSummary(true)
   }
 
-  // Milestone C11 — computed once per modal opening, from whichever
+  // Milestone C11: computed once per modal opening, from whichever
   // marketplaces currently have at least one approved row (the same set
   // computeExportableCounts already surfaces). Pure, synchronous,
-  // local-data-only — no network/AI call, so this always resolves on the
+  // local-data-only: no network/AI call, so this always resolves on the
   // very next render after the modal opens; modeled as an effect (rather
   // than computed inline during render) specifically so the "checking"
   // state in the modal is a real, honest render frame and not a fabricated
@@ -3062,20 +3504,20 @@ export default function CatalogueWorkspace() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showExportSummary])
 
-  // Milestone C11 — `marketplaces` is the READY subset from the readiness
-  // gate (never the full SUPPORTED_MARKETPLACES list) — a NOT_READY or
+  // Milestone C11: `marketplaces` is the READY subset from the readiness
+  // gate (never the full SUPPORTED_MARKETPLACES list): a NOT_READY or
   // MISSING_FIELDS marketplace's approved rows are simply never visited by
   // this loop, so they can't reach flattenRow/recordExport/the
   // queue-clearing logic below no matter what. This is the one and only
   // call site; there is no path that bypasses the gate.
   async function performExport(marketplaces: Marketplace[]) {
     // Every exported row is the seller's own raw input (Original Brand/
-    // Category/Description/Image — untouched by generation, see
+    // Category/Description/Image: untouched by generation, see
     // buildRawColumnsRow) merged with that marketplace's AI-generated
     // columns, each renamed to its "Generated *" label (generatedColumnLabels)
     // so the two are never ambiguous side by side in a spreadsheet. Raw
     // columns always come first (object key order = column order below).
-    // flattenRow/exportColumns themselves are untouched — this only adds a
+    // flattenRow/exportColumns themselves are untouched: this only adds a
     // layer on top, so the marketplace-specific generated shape (and every
     // existing test/adapter built on flattenRow) is unaffected.
     const flattenedRows: { id: string; marketplace: Marketplace; row: Record<string, string> }[] = []
@@ -3098,7 +3540,7 @@ export default function CatalogueWorkspace() {
 
     try {
       // One CSV per marketplace present, each built only from that
-      // marketplace's own rows and its own column shape (exportColumns) —
+      // marketplace's own rows and its own column shape (exportColumns):
       // never a single file with a unioned column set, which is what
       // produced the flattened, unlabeled mess this replaces (different
       // marketplaces don't share a row shape: Amazon's bullets vs
@@ -3114,21 +3556,21 @@ export default function CatalogueWorkspace() {
       }
 
       // Every generated listing routinely contains characters outside plain
-      // ASCII — em dashes, curly quotes, ® — and a bare .csv has no
+      // ASCII (curly quotes, ®, and so on) and a bare .csv has no
       // self-describing encoding the way JSON or .docx's XML does. Without
       // a UTF-8 BOM, Excel falls back to guessing the system codepage
       // (typically Windows-1252) and silently re-decodes valid UTF-8 bytes
-      // as the wrong characters — the em dash's 3-byte UTF-8 sequence reads
+      // as the wrong characters: the em dash's 3-byte UTF-8 sequence reads
       // back as "â€"", exactly the corruption reported. Prepending
-      // here (once, at the source) means every consumer downstream —
-      // single-file and each file inside the zip alike — gets it for free.
+      // here (once, at the source) means every consumer downstream:
+      // single-file and each file inside the zip alike: gets it for free.
       const UTF8_BOM = String.fromCharCode(0xfeff)
       const csvByMarketplace = new Map<Marketplace, string>(
         Array.from(rowsByMarketplace.entries()).map(([marketplace, rows]) => [
           marketplace,
           // Column order matches how each row was built above: raw input
           // first (RAW_COLUMNS), then this marketplace's generated columns
-          // under their "Generated *" labels — never the raw exportColumns
+          // under their "Generated *" labels: never the raw exportColumns
           // keys directly, since the row itself was already relabeled.
           UTF8_BOM +
             Papa.unparse(rows, {
@@ -3160,13 +3602,13 @@ export default function CatalogueWorkspace() {
         window.URL.revokeObjectURL(url)
       }
 
-      // Milestone 23 (Step C3) — one recordExport() per marketplace batch
+      // Milestone 23 (Step C3): one recordExport() per marketplace batch
       // actually downloaded above, fire-and-forget (never awaited into the
       // download path). Only rows with an already-resolved
       // catalog_listings.id are included; a row whose C2 write never
       // succeeded (guest-era draft, failed dual-write) is excluded rather
       // than given a fabricated id, and a marketplace batch left with zero
-      // persisted ids after that filtering is skipped entirely — never an
+      // persisted ids after that filtering is skipped entirely: never an
       // empty recordExport() call. The CSV/ZIP above has already downloaded
       // by this point regardless of any of this.
       if (hasSession) {
@@ -3179,19 +3621,19 @@ export default function CatalogueWorkspace() {
               listingIds.push(listingId)
             } else {
               console.error(
-                `Catalog persistence: export of ${marketplace} includes draft product ${r.id} with no persisted catalog_listings id — excluded from the catalog export record.`
+                `Catalog persistence: export of ${marketplace} includes draft product ${r.id} with no persisted catalog_listings id: excluded from the catalog export record.`
               )
             }
           }
 
           if (listingIds.length === 0) {
             console.error(
-              `Catalog persistence: skipped recordExport for ${marketplace} — no persisted listing ids among the ${rows.length} exported row(s).`
+              `Catalog persistence: skipped recordExport for ${marketplace}: no persisted listing ids among the ${rows.length} exported row(s).`
             )
             continue
           }
 
-          // Milestone C14 — one 'exported' event per actually-exported
+          // Milestone C14: one 'exported' event per actually-exported
           // product for this marketplace, only after recordExport's own
           // write resolves, carrying that same export row's id so the
           // timeline can point back to the real C7 export record rather
@@ -3226,7 +3668,7 @@ export default function CatalogueWorkspace() {
       }
 
       // Computed from a plain snapshot (draftProducts, read directly) rather
-      // than inside the setDraftProducts updater — an updater can run twice
+      // than inside the setDraftProducts updater: an updater can run twice
       // under React StrictMode's dev double-invoke, which would double-count
       // these if they lived in there instead.
       let fullyClearedCount = 0
@@ -3296,10 +3738,10 @@ export default function CatalogueWorkspace() {
       }
 
       const summary = `Exported ${flattenedRows.length} ${exportedLabel}`
-      setDownloadMessage(detailParts.length > 0 ? `${summary} — ${detailParts.join('; ')}` : summary)
-      // Milestone C11 — everything the readiness gate excluded from THIS
+      setDownloadMessage(detailParts.length > 0 ? `${summary}: ${detailParts.join('; ')}` : summary)
+      // Milestone C11: everything the readiness gate excluded from THIS
       // export, with its actual reason (first issue's message, matching
-      // what the gate showed before the user clicked Export All Ready) —
+      // what the gate showed before the user clicked Export All Ready):
       // not a generic "some marketplaces were skipped."
       const skipped = (exportReadiness ?? [])
         .filter((r) => r.status !== 'READY')
@@ -3313,7 +3755,7 @@ export default function CatalogueWorkspace() {
 
   const hasApproved = draftProducts.some((p) => SUPPORTED_MARKETPLACES.some((m) => p.approved[m]))
   const pendingCount = draftProducts.filter((p) => p.status === 'draft').length
-  // Display-only — Generate/Bulk Approve/Export above still read the full,
+  // Display-only: Generate/Bulk Approve/Export above still read the full,
   // unfiltered draftProducts (via pendingCount/hasApproved and their own
   // handlers), so a "Ready" filter never narrows what an action operates
   // on, only what the table currently shows.
@@ -3334,7 +3776,7 @@ export default function CatalogueWorkspace() {
     localStorage.setItem(ADD_PRODUCTS_COLLAPSE_STORAGE_KEY, String(next))
   }
 
-  // What TopHeader shows in its usage slot — guests never accrue credits
+  // What TopHeader shows in its usage slot: guests never accrue credits
   // (they're on the separate free-preview counter), signed-in users get the
   // real balance. Computed here rather than inside TopHeader so it stays a
   // plain shared shell with no guest-vs-signed-in branching of its own.
@@ -3353,7 +3795,7 @@ export default function CatalogueWorkspace() {
       {/* pt-16 clears the fixed header; h-screen + flex-col lets the real
           remaining height (100vh minus that padding, AND minus whatever
           AppSidebar's in-flow mobile nav bar actually renders at) flow down
-          to the content div's flex-1 below — a hardcoded h-[calc(100vh-64px)]
+          to the content div's flex-1 below: a hardcoded h-[calc(100vh-64px)]
           there only ever accounted for the header and silently overflowed
           the page on mobile, where the nav bar adds its own height on top. */}
       <div className="pt-16 h-screen flex flex-col">
@@ -3361,11 +3803,11 @@ export default function CatalogueWorkspace() {
           {/* Sidebar → Add Products → Listings: a normal three-column flex
               row at lg: and above, not sidebar-plus-overlay. Add Products is
               a fixed-width, always-mounted sibling of the Listings column,
-              each with its own independent overflow-y-auto (lg: only — see
+              each with its own independent overflow-y-auto (lg: only: see
               AddProductsPanel) so a tall form and a long queue can each
               scroll on their own without a page-level horizontal scrollbar.
               Below lg, flex-col stacks Add Products above Listings instead
-              of squeezing both into a shrinking row — this is what keeps
+              of squeezing both into a shrinking row: this is what keeps
               the three-tab strip from ever fighting for width against the
               Listings column at tablet sizes. */}
           <div className="flex-1 flex flex-col lg:flex-row min-h-0">
@@ -3395,7 +3837,7 @@ export default function CatalogueWorkspace() {
               selectedClient={selectedClient}
               pendingImageUrls={pendingImageUrls}
               // Only reachable from Manual Entry's brand-mismatch resolution
-              // (LeftPanel — Photos Only has no mismatch gate, CSV has its
+              // (LeftPanel: Photos Only has no mismatch gate, CSV has its
               // own separate commitCsvUpload/onCsvAddOnlyMatching path), so
               // 'manual' is always the correct source here.
               onCommitAddProduct={(skipBrandVoice, uploadedImageUrls) => commitAddProduct(skipBrandVoice, uploadedImageUrls, undefined, 'manual')}
@@ -3405,6 +3847,23 @@ export default function CatalogueWorkspace() {
               onClearForm={handleClearForm}
               uploadingImage={uploadingImage}
               editingId={editingId}
+              hasSession={hasSession}
+              onChooseSingleProductMode={handleChooseSingleProductMode}
+              onChooseMultipleProductsMode={handleChooseMultipleProductsMode}
+              onStageImageFiles={handleStageImageFiles}
+              onRemoveStagedImage={handleRemoveStagedImage}
+              onCreateSingleProductFromStaged={handleCreateSingleProductFromStaged}
+              onStartGroupingFromStaged={handleStartGroupingFromStaged}
+              imageGroupImport={imageGroupImport}
+              onRetryImageGrouping={handleRetryImageGrouping}
+              onOrganizeManually={handleOrganizeManually}
+              onCancelImageGrouping={handleCancelImageGrouping}
+              onRemoveGroupImage={handleRemoveGroupImage}
+              onMoveGroupImage={handleMoveGroupImage}
+              onMergeImageGroup={handleMergeImageGroup}
+              onSplitImageGroup={handleSplitImageGroup}
+              onResolveGroupReview={handleResolveGroupReview}
+              onConfirmImageGroups={commitConfirmedImageGroups}
               csvFile={csvFile}
               onCsvFileChange={handleCsvFileChange}
               csvFileInputRef={csvFileInputRef}
@@ -3421,12 +3880,12 @@ export default function CatalogueWorkspace() {
               onCsvCancelMismatch={handleCsvCancelMismatch}
             />
           {/* min-h-0/overflow-y-auto gated to lg: same reasoning as the row
-              above — below lg this column takes its natural stacked
+              above: below lg this column takes its natural stacked
               height instead of competing with Add Products for a shared
               row height it no longer has, and the page's own scroll
               (this whole block's ancestor) takes over. */}
           <div className="flex-1 flex flex-col lg:min-h-0 p-6 lg:overflow-y-auto">
-          {/* Compact — a heading and one line, not a page-header-sized
+          {/* Compact: a heading and one line, not a page-header-sized
               banner. Establishes "what am I working on" without taking
               space from the catalog table below it. */}
           <div className="mb-4">
@@ -3470,13 +3929,13 @@ export default function CatalogueWorkspace() {
             </div>
           )}
 
-          {/* Generate Listings loading experience — lives here (the
+          {/* Generate Listings loading experience: lives here (the
               Listings column itself), not inside GeneratedListingDrawer, so
               it's visible with the drawer closed the entire time (the
               normal case for a bulk run: nothing opens the drawer
               automatically). generationStage only ever holds real,
-              already-reached states (see its own declaration above) — never
-              a timer-driven guess — so this banner always describes
+              already-reached states (see its own declaration above): never
+              a timer-driven guess: so this banner always describes
               whatever generateForProductMarketplace/ensureProductIntelligence
               are actually doing right now. */}
           {generationStage && (
@@ -3505,7 +3964,7 @@ export default function CatalogueWorkspace() {
                   {describeGenerationStage(generationStage, enrichingProductId)}
                 </p>
               </div>
-              {/* Only the two terminal states get a dismiss control — the
+              {/* Only the two terminal states get a dismiss control: the
                   in-flight ones are already transient by construction (the
                   next real transition overwrites them) and clearing them
                   early would just leave the banner blank mid-generation. */}
@@ -3517,7 +3976,7 @@ export default function CatalogueWorkspace() {
             </div>
           )}
 
-          {/* Top-level and impossible to miss, deliberately — distinct from
+          {/* Top-level and impossible to miss, deliberately: distinct from
               the per-row "One or more marketplaces failed" text in
               QueueTable, which is a different, per-item concern (a bad
               image, a transient error). Running out of credits mid-batch is
@@ -3551,7 +4010,7 @@ export default function CatalogueWorkspace() {
 
           {/* Grouped with the other transient status banners above (not
               left trailing under whatever renders below it, which could be
-              the empty state right after a full export clears the queue) —
+              the empty state right after a full export clears the queue):
               same bordered-banner shape as those, success-tinted with the
               existing theme variables. */}
           {downloadMessage && (
@@ -3560,7 +4019,7 @@ export default function CatalogueWorkspace() {
             </div>
           )}
 
-          {/* Milestone C11 — which marketplaces the readiness gate excluded
+          {/* Milestone C11: which marketplaces the readiness gate excluded
               from the export the banner above just reported, and the real
               reason for each (never a generic "skipped some marketplaces"). */}
           {exportSkipped && exportSkipped.length > 0 && (
@@ -3569,14 +4028,14 @@ export default function CatalogueWorkspace() {
               <ul className="list-disc list-inside">
                 {exportSkipped.map(({ marketplace, reason }) => (
                   <li key={marketplace} className={warningTextClass}>
-                    {MARKETPLACE_LABELS[marketplace]} — {reason}
+                    {MARKETPLACE_LABELS[marketplace]}: {reason}
                   </li>
                 ))}
               </ul>
             </div>
           )}
 
-          {/* Listings — the primary content of this column. Add Products is
+          {/* Listings: the primary content of this column. Add Products is
               the persistent sibling column to the left, not an action
               triggered from here anymore. */}
           <div className="flex-1 min-h-0 flex flex-col">
@@ -3587,7 +4046,7 @@ export default function CatalogueWorkspace() {
                 {draftProducts.length > 0 && (
                   <div className="mb-3 flex flex-wrap items-center gap-4">
                     {/* Real counts of attempted (product, marketplace) pairs
-                        from computeListingSummary — the same per-row health
+                        from computeListingSummary: the same per-row health
                         computation QueueTable itself uses, just tallied.
                         Never shown as a percentage or score. */}
                     <p className={bodyTextClass}>
@@ -3688,7 +4147,7 @@ export default function CatalogueWorkspace() {
           brand={selectedClient}
           onClose={() => setShowBrandProfile(false)}
           onSaved={(updated) => {
-            // Milestone C12 — keeps this session's selectedClient (used
+            // Milestone C12: keeps this session's selectedClient (used
             // directly as brandGuidelines in generation, see
             // generateForProductMarketplace) in sync with the just-saved
             // profile, without requiring a reload.
