@@ -1,8 +1,8 @@
 import { getCreditPackage, type CreditPackage } from '@/lib/creditPackages'
 
-// Milestone C13 — extracted from app/api/billing/create-checkout/route.ts
+// Milestone C13: extracted from app/api/billing/create-checkout/route.ts
 // so the actual trust boundary (packageId -> Stripe Checkout Session
-// params) is unit-testable without a real Stripe network call — creating a
+// params) is unit-testable without a real Stripe network call: creating a
 // Checkout Session is a live API call and can't be exercised without real
 // credentials, but resolving WHAT would be sent is pure, local, and is
 // exactly the logic that proves "the browser cannot choose arbitrary

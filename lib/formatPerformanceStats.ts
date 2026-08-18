@@ -1,14 +1,14 @@
 import type { PerformanceStatsInput } from '@/lib/performanceStatsInput'
 
-// Milestone C15 — Performance Intelligence "Generate AI Insights" step.
-// The exact, pre-formatted text the Groq prompt is built from — same
+// Milestone C15: Performance Intelligence "Generate AI Insights" step.
+// The exact, pre-formatted text the Groq prompt is built from: same
 // discipline as lib/formatAccountStats.ts's buildVerifiedStatsSummary:
 // every number the model is allowed to mention already exists here,
 // pre-rounded and pre-formatted, so "copy it verbatim" is an enforceable
 // rule rather than a request.
 //
 // Numbers are grouped Western-style (toLocaleString('en-US'), e.g.
-// "123,456") rather than this app's usual Indian grouping ("1,23,456") —
+// "123,456") rather than this app's usual Indian grouping ("1,23,456"):
 // deliberately, because lib/formatAccountStats.ts's extractStatTokens
 // (reused as-is below for verification) only recognizes comma groups of
 // exactly 3 digits. A catalog-wide impression/click total can run well

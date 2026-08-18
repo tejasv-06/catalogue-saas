@@ -11,7 +11,7 @@ function LoginForm() {
   const searchParams = useSearchParams()
   const linkError = searchParams.get('error') === 'auth'
 
-  // Only accept a same-origin relative path — reject absolute/protocol-relative
+  // Only accept a same-origin relative path: reject absolute/protocol-relative
   // URLs (e.g. "//evil.com") so this can't be used as an open redirect.
   const rawNext = searchParams.get('next')
   const next = rawNext && rawNext.startsWith('/') && !rawNext.startsWith('//') ? rawNext : '/workspace'
@@ -28,7 +28,7 @@ function LoginForm() {
     setSending(true)
     setError(null)
 
-    // No emailRedirectTo — that option is what pushes Supabase toward a
+    // No emailRedirectTo: that option is what pushes Supabase toward a
     // magic-link email. Omitting it keeps this a 6-digit OTP code sign-in,
     // verified below via verifyOtp rather than a link-click redirect.
     const supabase = createClient()
@@ -49,7 +49,7 @@ function LoginForm() {
     setVerifying(true)
     setError(null)
 
-    // Strip anything that isn't a digit — a pasted code commonly picks up
+    // Strip anything that isn't a digit: a pasted code commonly picks up
     // stray whitespace/newlines from the email, which would otherwise make
     // an exact-match token comparison fail silently-looking.
     const cleanedCode = code.replace(/\D/g, '')

@@ -10,7 +10,7 @@ create table if not exists user_credits (
 
 alter table user_credits enable row level security;
 
--- Reads only, and only of your own row — every write goes through server
+-- Reads only, and only of your own row: every write goes through server
 -- routes using the service_role key (bypasses RLS), never directly from the
 -- browser with the anon key, same discipline as guest_usage.
 drop policy if exists "select_own_credits" on user_credits;
@@ -20,7 +20,7 @@ create policy "select_own_credits" on user_credits
 -- Atomic decrement: `credits_remaining = credits_remaining - p_amount` is a
 -- single row-level UPDATE, so concurrent deductions for the same user can't
 -- lose an update the way a read-then-write in application code could.
--- Deliberately has no "enough credits?" guard here — that check already
+-- Deliberately has no "enough credits?" guard here: that check already
 -- happened in the app before generation started; this just needs to apply
 -- the deduction correctly under concurrency, not re-enforce the limit.
 create or replace function deduct_credits(p_user_id uuid, p_amount integer)

@@ -44,12 +44,12 @@ export type AccountReportStats = {
   sessionsMedian: number
   highTrafficZeroSales: HighTrafficZeroSalesAsin[]
   // Full per-ASIN rows, for consumers (e.g. dashboard charts) that need more
-  // than the pre-aggregated fields above — revenueConcentration.asins only
+  // than the pre-aggregated fields above: revenueConcentration.asins only
   // lists the ASINs making up the top 80%, not their values.
   asinRows: ParsedAsinRow[]
 }
 
-// Amazon report exports format numbers as "$1,234.56", "45.67%", "1,234" —
+// Amazon report exports format numbers as "$1,234.56", "45.67%", "1,234":
 // strip the currency/percent/thousands punctuation and parse what's left.
 export function parseAmazonNumber(value: string | null): number | null {
   if (value === null) return null
@@ -73,7 +73,7 @@ export function parseAccountReportRow(row: AccountReportRow): ParsedAsinRow | nu
       pick(row, 'Featured Offer (Buy Box) Percentage', 'Buy Box Percentage')
     ),
     // Missing Units Ordered/Ordered Product Sales means Amazon reported no
-    // activity for that ASIN in the period, not "unknown" — treat as 0 so
+    // activity for that ASIN in the period, not "unknown": treat as 0 so
     // revenue/units totals and the zero-sales split stay accurate.
     unitsOrdered: parseAmazonNumber(pick(row, 'Units Ordered')) ?? 0,
     unitSessionPercentage: parseAmazonNumber(pick(row, 'Unit Session Percentage')),
@@ -172,7 +172,7 @@ export function computeAccountReportStats(rows: AccountReportRow[]): AccountRepo
 }
 
 // Shared shape check for any endpoint that must only ever accept the
-// verified output of computeAccountReportStats — never raw CSV rows (which
+// verified output of computeAccountReportStats: never raw CSV rows (which
 // arrive as an array and fail immediately) or another shape.
 export function isAccountReportStats(body: unknown): body is AccountReportStats {
   if (!body || typeof body !== 'object' || Array.isArray(body)) return false

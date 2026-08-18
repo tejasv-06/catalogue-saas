@@ -4,7 +4,7 @@ import { requireUserId } from '@/lib/catalog'
 import { SUPPORTED_MARKETPLACES, MARKETPLACE_LABELS } from '@/lib/platformShapers'
 import type { Marketplace } from '@/lib/types'
 
-// Milestone C14 (Milestone 34) — Product History & Timeline.
+// Milestone C14 (Milestone 34): Product History & Timeline.
 //
 // Same session-aware-wrapper pattern as lib/catalog.ts (this module
 // literally reuses that file's own requireUserId): every exported function
@@ -12,16 +12,16 @@ import type { Marketplace } from '@/lib/types'
 // browser client, so the exact same code path works whether it's called
 // from a client component (CatalogueWorkspace.tsx, right after an existing
 // lib/catalog.ts write succeeds) or from a server route's own
-// session-bound client (lib/supabase/server.ts — see
+// session-bound client (lib/supabase/server.ts: see
 // app/api/enrich-product/route.ts for the established convention this
 // follows). No service-role client is used anywhere in this file.
 //
 // Ownership is enforced by supabase/migrations/20260810_10_product_history.sql's
 // RLS policies (owner_user_id = auth.uid(), plus a product-ownership
-// subquery on insert) — never by application code re-checking anything,
+// subquery on insert): never by application code re-checking anything,
 // same division of responsibility as every other C1-C13 write in
 // lib/catalog.ts. This module's own job is: validate shape (event type,
-// marketplace, JSON-safe metadata) and derive the session's own user id —
+// marketplace, JSON-safe metadata) and derive the session's own user id:
 // never accept one from a caller.
 
 export const PRODUCT_HISTORY_EVENT_TYPES = [
@@ -35,10 +35,10 @@ export const PRODUCT_HISTORY_EVENT_TYPES = [
   'listing_approved',
   'listing_rejected',
   'exported',
-  // Milestone C15 — added by supabase/migrations/20260810_12_product_history_performance_event.sql,
+  // Milestone C15: added by supabase/migrations/20260810_12_product_history_performance_event.sql,
   // which extends the DB's own CHECK constraint to match. A performance
   // report import is a real, product-scoped event this timeline already
-  // has a natural place for — see components/reports/PerformanceImportPanel.tsx.
+  // has a natural place for: see components/reports/PerformanceImportPanel.tsx.
   'performance_imported'
 ] as const
 
@@ -52,7 +52,7 @@ function isValidMarketplace(value: unknown): value is Marketplace {
   return typeof value === 'string' && (SUPPORTED_MARKETPLACES as readonly string[]).includes(value)
 }
 
-// "JSON-safe and bounded to useful context" (spec §5/§6) — a flat object of
+// "JSON-safe and bounded to useful context" (spec §5/§6): a flat object of
 // primitives only, never a nested object/array, never a function, never a
 // full listing payload or prompt. This is intentionally stricter than
 // "anything JSON.stringify can handle": the point is to make it structurally
@@ -88,14 +88,14 @@ export type RecordProductHistoryEventParams = {
 }
 
 // The one write function this module has. Validates productId/event_type/
-// marketplace/metadata BEFORE ever reaching the database — the table's own
+// marketplace/metadata BEFORE ever reaching the database: the table's own
 // CHECK constraints are the real, final enforcement (this is defense in
 // depth, not a replacement for them), but failing fast here with a clear
 // message is more useful to a caller than a raw Postgres constraint-
 // violation error.
 //
 // owner_user_id is always derived from the authenticated session
-// (requireUserId), exactly like every write in lib/catalog.ts — there is no
+// (requireUserId), exactly like every write in lib/catalog.ts: there is no
 // parameter a caller could use to set it to anyone else's id, and the
 // table's own RLS WITH CHECK would reject a mismatched one anyway even if
 // there were.
@@ -135,10 +135,10 @@ export async function recordProductHistoryEvent(
   return data as ProductHistoryEventRow
 }
 
-// Milestone C14 — the one read function this module has, same shape as
+// Milestone C14: the one read function this module has, same shape as
 // lib/catalog.ts's getCatalog/getExportHistory: no explicit owner filter
 // (RLS already scopes every row to auth.uid() = owner_user_id), scoped to
-// exactly one product (never the whole account's history — see the
+// exactly one product (never the whole account's history: see the
 // performance note in the milestone spec), newest first for the timeline
 // UI, with `seq` as a deterministic tiebreaker for events whose created_at
 // happens to collide (same millisecond).
@@ -163,10 +163,10 @@ export async function getProductHistory(
   return (data ?? []) as ProductHistoryEventRow[]
 }
 
-// --- §12 — centralized, human-readable display mapping -------------------
+// --- §12: centralized, human-readable display mapping -------------------
 //
 // The ONLY place event_type strings get turned into seller-facing labels.
-// components/ProductHistory.tsx (and nowhere else) reads from this — no
+// components/ProductHistory.tsx (and nowhere else) reads from this: no
 // other component is allowed to hardcode its own copy of these strings.
 
 export const EVENT_TYPE_LABELS: Record<ProductHistoryEventType, string> = {
@@ -185,7 +185,7 @@ export const EVENT_TYPE_LABELS: Record<ProductHistoryEventType, string> = {
 
 // "source" metadata values actually written by this milestone's own
 // integrations (see CatalogueWorkspace.tsx's three ensureServerProduct call
-// sites) — mapped to the same plain-language labels the create-panel tabs
+// sites): mapped to the same plain-language labels the create-panel tabs
 // already use, never the raw source string.
 const SOURCE_LABELS: Record<string, string> = {
   manual: 'Manual Entry',
@@ -194,7 +194,7 @@ const SOURCE_LABELS: Record<string, string> = {
 }
 
 export type ProductHistoryEventDisplay = {
-  // The one-line event name — "Exported to Amazon" for a marketplace-
+  // The one-line event name: "Exported to Amazon" for a marketplace-
   // carrying export event (per spec §12's own example), otherwise the
   // plain EVENT_TYPE_LABELS entry with marketplace/source shown as
   // separate context lines instead.
@@ -203,7 +203,7 @@ export type ProductHistoryEventDisplay = {
   sourceLabel: string | null
 }
 
-// Pure formatting only — reformats already-known facts (event_type,
+// Pure formatting only: reformats already-known facts (event_type,
 // marketplace, metadata.source), never infers or guesses anything new.
 export function describeProductHistoryEvent(event: ProductHistoryEventRow): ProductHistoryEventDisplay {
   const marketplaceLabel = event.marketplace ? MARKETPLACE_LABELS[event.marketplace] : null

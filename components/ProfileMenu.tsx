@@ -31,7 +31,7 @@ function ChevronDownIcon() {
   )
 }
 
-// Avatar + dropdown in the top header — the only place a logout control
+// Avatar + dropdown in the top header: the only place a logout control
 // renders now (see LogoutButton's menuItem variant). Plain click-toggle,
 // no hover involved, matching MobileMenu's interaction pattern.
 export default function ProfileMenu() {

@@ -1,14 +1,14 @@
--- Milestone C15 — Seller Performance Intelligence (Amazon + Myntra only).
+-- Milestone C15: Seller Performance Intelligence (Amazon + Myntra only).
 -- Two new, purely additive tables. No existing table's columns, indexes,
 -- policies, or data are touched. C1-C14 architecture (catalog_products,
 -- catalog_listings, catalog_exports, product_history_events, credits) is
 -- completely unaffected.
 --
--- catalog_product_external_ids — the product-matching mechanism (§7):
+-- catalog_product_external_ids: the product-matching mechanism (§7):
 -- Canonical Product -> Marketplace -> External Product ID (Amazon ASIN,
 -- Myntra Style ID). This is a plain lookup/mapping table, not a historical
 -- record, so unlike marketplace_performance below it CAN be corrected
--- (update/delete) if a seller mis-mapped a report row — remapping a
+-- (update/delete) if a seller mis-mapped a report row: remapping a
 -- product's external id is not the same thing as mutating a historical
 -- performance observation, which stays strictly immutable.
 create table if not exists catalog_product_external_ids (
@@ -19,7 +19,7 @@ create table if not exists catalog_product_external_ids (
   external_id text not null,
   created_at timestamptz not null default now(),
   -- One external id maps to exactly one product per seller per marketplace
-  -- — the same Style ID/ASIN can never be silently attributed to two
+  --: the same Style ID/ASIN can never be silently attributed to two
   -- different products in one account.
   unique (owner_user_id, marketplace, external_id)
 );
@@ -61,14 +61,14 @@ drop policy if exists "catalog_product_external_ids_owner_delete" on catalog_pro
 create policy "catalog_product_external_ids_owner_delete" on catalog_product_external_ids
   for delete using (auth.uid() = owner_user_id);
 
--- marketplace_performance — the canonical, marketplace-independent
+-- marketplace_performance: the canonical, marketplace-independent
 -- performance model (§5), one row per (product, marketplace, period).
 -- Nullable metric columns are deliberate: a marketplace/report that
 -- doesn't supply a given metric leaves it null, never a fabricated 0 (see
 -- lib/performanceAdapters.ts's own header comment for the full rationale).
 -- APPEND-ONLY (§17), same structural enforcement as product_history_events
 -- in 20260810_10_product_history.sql: SELECT + INSERT policies only, no
--- UPDATE/DELETE policy for any client role at all — a report imported
+-- UPDATE/DELETE policy for any client role at all: a report imported
 -- incorrectly is corrected via a new, superseding import (a new row, new
 -- import_batch_id), never by editing history in place.
 create table if not exists marketplace_performance (
@@ -92,15 +92,15 @@ create table if not exists marketplace_performance (
   conversion_rate numeric check (conversion_rate is null or (conversion_rate >= 0 and conversion_rate <= 100)),
   ctr numeric check (ctr is null or (ctr >= 0 and ctr <= 100)),
   -- Which report/source produced this row (e.g. 'myntra_impress_report',
-  -- 'amazon_business_report') — not a marketplace duplicate, since one
+  -- 'amazon_business_report'): not a marketplace duplicate, since one
   -- marketplace could eventually have more than one report type.
   source text not null,
-  -- Groups every row committed from the same uploaded report together —
+  -- Groups every row committed from the same uploaded report together:
   -- the historical-snapshot identity (§6/§13): "this whole snapshot was
   -- imported on this date, from this file."
   import_batch_id uuid not null,
   -- Bounded, JSON-safe context only (mirrors product_history_events'
-  -- metadata convention) — e.g. raw source-reported fields with no
+  -- metadata convention): e.g. raw source-reported fields with no
   -- canonical column (Style ID's Article Type/Gender/Seller MRP/Inventory
   -- Age/RPLC), never a full-row dump of sensitive data.
   metadata jsonb,
@@ -130,4 +130,4 @@ create policy "marketplace_performance_owner_insert" on marketplace_performance
         and catalog_products.owner_user_id = auth.uid()
     )
   );
--- Deliberately no update/delete policy — see the header comment above.
+-- Deliberately no update/delete policy: see the header comment above.

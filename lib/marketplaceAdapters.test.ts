@@ -1,10 +1,10 @@
 // Unit tests for lib/marketplaceAdapters.ts (Milestone C10), using Node's
-// built-in test runner (no new dependency — tsx is already a project
+// built-in test runner (no new dependency: tsx is already a project
 // devDependency). Run with: npx tsx --test lib/marketplaceAdapters.test.ts
 //
 // This module wraps shapeForPlatform/computeListingHealth/flattenRow rather
 // than reimplementing them, so most tests here assert EQUIVALENCE to those
-// existing, already-tested-via-live-verification functions — the goal is
+// existing, already-tested-via-live-verification functions: the goal is
 // proving the adapter is a faithful, non-duplicating wrapper, not
 // re-deriving marketplace rules from scratch.
 
@@ -40,7 +40,7 @@ test('getMarketplaceAdapter returns the correct adapter for each supported marke
   }
 })
 
-test('getMarketplaceAdapter returns undefined for shopify — not fabricated, genuinely unsupported', () => {
+test('getMarketplaceAdapter returns undefined for shopify: not fabricated, genuinely unsupported', () => {
   // C10 audit finding: SUPPORTED_MARKETPLACES, MARKETPLACE_RULES, and
   // exportColumns all agree Shopify has no real support in this repo.
   // getMarketplaceAdapter must reflect that honestly, not invent a
@@ -100,7 +100,7 @@ test('validate() reports a character-limit issue when a verified limit is exceed
   const overLongTitle = 'X'.repeat(200) // amazon title limit is 75, verified
   const content = shapeForPlatform('amazon', { ...sampleAi, title: overLongTitle }, { brand_name: 'Acme' })
   // shapeForPlatform's own enforceCharLimit already shapes the stored title
-  // down to fit — to exercise the "still over" branch, use meta reporting
+  // down to fit: to exercise the "still over" branch, use meta reporting
   // the RAW pre-shape length as over limit (mirrors what a real generation
   // response's meta looks like when the model still exceeded the limit).
   const meta = {

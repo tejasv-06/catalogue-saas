@@ -1,4 +1,4 @@
-// Unit tests for lib/performanceNarrative.ts. Milestone C15 — Seller
+// Unit tests for lib/performanceNarrative.ts. Milestone C15: Seller
 // Performance Intelligence & Action Engine, the storytelling/action-plan
 // layer built on top of lib/performanceIntelligence.ts.
 
@@ -55,13 +55,13 @@ function period(records: PerformanceHistoryRecord[], periodStart = '2026-08-08',
 }
 
 // A single-record "catalog" can never trigger a relative diagnosis (its
-// own value IS the catalog median, so nothing can be "below" it) — every
+// own value IS the catalog median, so nothing can be "below" it): every
 // test below that needs a diagnosis to actually fire builds a real,
 // multi-product catalog: one target plus a baseline of otherwise-healthy
 // comparison products, matched to the target everywhere EXCEPT the one
 // dimension the test is exercising.
 function baselineCatalog(count = 8, overrides: Partial<PerformanceHistoryRecord> = {}): PerformanceHistoryRecord[] {
-  // "baseline-N", never a string containing "healthy" — these IDs can
+  // "baseline-N", never a string containing "healthy": these IDs can
   // surface verbatim in report text (e.g. Positive Performers), and the
   // word "healthy" is exactly what several tests below assert never leaks
   // into the narrative.
@@ -70,9 +70,9 @@ function baselineCatalog(count = 8, overrides: Partial<PerformanceHistoryRecord>
   )
 }
 
-// --- Severity is presentation-neutral — no emoji anywhere -----------------
+// --- Severity is presentation-neutral: no emoji anywhere -----------------
 
-test('this file never contains an emoji character — severity is returned as a typed enum, presentation decides the icon', () => {
+test('this file never contains an emoji character: severity is returned as a typed enum, presentation decides the icon', () => {
   const source = readFileSync(join(__dirname, 'performanceNarrative.ts'), 'utf8')
   assert.ok(!/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}\u{20E3}]/u.test(source))
 })
@@ -88,7 +88,7 @@ test('describeSituation returns a severity enum (critical/warning/positive/info)
 // --- B. describeSituation (Executive Status) --------------------------
 
 test('describeSituation: a purchase-conversion problem produces the correct headline and primary opportunity, grounded in real numbers', () => {
-  // CTR (4%) and ATC rate (25%) match the baseline exactly — only
+  // CTR (4%) and ATC rate (25%) match the baseline exactly: only
   // conversion (0% vs the baseline's 10%) is weak, isolating the branch.
   const target = historyRecord({ externalProductId: 'target', impressions: 2000, clicks: 80, addToCarts: 20, purchases: 0 })
   const records = [target, ...baselineCatalog()]
@@ -113,7 +113,7 @@ test('describeSituation: a click-through problem produces the "being shown" head
 
 test('describeSituation: no weak diagnosis and real purchases produces a positive, non-fabricated headline', () => {
   // A single-record "catalog" can never diagnose itself as below its own
-  // median — the cleanest way to guarantee zero diagnoses while still
+  // median: the cleanest way to guarantee zero diagnoses while still
   // reflecting real, reported purchase activity.
   const records = [historyRecord({ impressions: 3000, clicks: 300, addToCarts: 100, purchases: 60 })]
   const current = aggregatePeriod(period(records))
@@ -130,7 +130,7 @@ test('describeSituation: insufficient data never fabricates a problem or a win',
   assert.equal(situation.severity, 'info')
 })
 
-test('describeSituation never uses the word "healthy" — business language only, per the spec', () => {
+test('describeSituation never uses the word "healthy": business language only, per the spec', () => {
   const target = historyRecord({ externalProductId: 'target', impressions: 2000, clicks: 80, addToCarts: 20, purchases: 0 })
   const records = [target, ...baselineCatalog()]
   const current = aggregatePeriod(period(records))
@@ -160,7 +160,7 @@ test('describeFunnelStages returns exactly 4 stages (Visibility/Engagement/Purch
 
 // --- describeWhatChanged: never a bare arrow, includes a changeLabel ------
 
-test('describeWhatChanged always pairs a value with a human explanation and a change label — never a bare percentage/arrow alone', () => {
+test('describeWhatChanged always pairs a value with a human explanation and a change label: never a bare percentage/arrow alone', () => {
   const current = aggregatePeriod(period([historyRecord({ impressions: 8556, clicks: 87, addToCarts: 8, purchases: 0 })], '2026-08-08', '2026-08-14'))
   const previous = aggregatePeriod(period([historyRecord({ impressions: 12541, clicks: 83, addToCarts: 6, purchases: 1 })], '2026-08-01', '2026-08-07'))
   const trend = {
@@ -187,7 +187,7 @@ test('describeWhatChanged always pairs a value with a human explanation and a ch
 
 // --- describeMultiPeriodStory ---------------------------------------------
 
-test('describeMultiPeriodStory returns null with fewer than 3 periods — never fabricates historical confidence', () => {
+test('describeMultiPeriodStory returns null with fewer than 3 periods: never fabricates historical confidence', () => {
   assert.equal(describeMultiPeriodStory([period([historyRecord()])]), null)
 })
 
@@ -265,7 +265,7 @@ test('buildTopActions returns the full structure §H requires: priority, affecte
   assert.ok(a.why.length > 0)
   assert.ok(a.investigate.length > 0)
   assert.ok(a.measureNext.length > 0)
-  assert.ok(!('evidence' in a), 'TopAction must not carry a duplicated raw-evidence field — full evidence lives once, in Products to Work On First')
+  assert.ok(!('evidence' in a), 'TopAction must not carry a duplicated raw-evidence field: full evidence lives once, in Products to Work On First')
 })
 
 test('buildTopActions never returns more than 3 actions, even with problems in every named area plus a scale group', () => {
@@ -291,7 +291,7 @@ test('describeWhyPrioritized for a purchase-conversion product cites real ATC/cl
   assert.match(why, /80 clicks/)
 })
 
-test('describeWhyPrioritized never falls back to the raw diagnosis message for ANY problem area — the word "healthy" must never leak through (regression, found via live verification)', () => {
+test('describeWhyPrioritized never falls back to the raw diagnosis message for ANY problem area: the word "healthy" must never leak through (regression, found via live verification)', () => {
   const scenarios: Partial<PerformanceHistoryRecord>[] = [
     { impressions: 2000, clicks: 80, addToCarts: 20, purchases: 0 }, // conversion
     { impressions: 5000, clicks: 25, addToCarts: 20, purchases: 8 }, // click-through
@@ -320,7 +320,7 @@ test('describeSegmentInsights only surfaces a segment when the CTR deviation fro
   assert.equal(narratives.length, 0)
 })
 
-test('describeSegmentInsights never claims causality — only a descriptive comparison against the catalog average', () => {
+test('describeSegmentInsights never claims causality: only a descriptive comparison against the catalog average', () => {
   const highCtrRecords = Array.from({ length: 12 }, (_, i) => historyRecord({ externalProductId: `hi${i}`, impressions: 1000, clicks: 50, metadata: { articleType: 'Category A' } }))
   const lowCtrRecords = Array.from({ length: 12 }, (_, i) => historyRecord({ externalProductId: `lo${i}`, impressions: 1000, clicks: 2, metadata: { articleType: 'Category B' } }))
   const allRecords = [...highCtrRecords, ...lowCtrRecords]
@@ -354,7 +354,7 @@ test('generateActionPlan\'s 30-day plan has 4 weeks matching the spec\'s own str
   assert.match(plan.thirtyDay[3].label, /Week 4.*[Mm]easure and reprioritize/i)
 })
 
-test('generateActionPlan never outputs generic filler — every real item names a specific product', () => {
+test('generateActionPlan never outputs generic filler: every real item names a specific product', () => {
   const target = historyRecord({ externalProductId: 'style-99', impressions: 2000, clicks: 80, addToCarts: 20, purchases: 0 })
   const insights = buildProductInsights([target, ...baselineCatalog()])
   const plan = generateActionPlan(insights)
@@ -435,7 +435,7 @@ test('buildActionReportText\'s Data Limitations section names what the report do
   assert.match(limitations, /not confirmed causes/i)
 })
 
-test('buildActionReportText caps "Products to Work On First" at 5 — never a dump of every product (§I)', () => {
+test('buildActionReportText caps "Products to Work On First" at 5: never a dump of every product (§I)', () => {
   const targets = Array.from({ length: 20 }, (_, i) =>
     historyRecord({ externalProductId: `style-${i}`, impressions: 5000 - i, clicks: 25, addToCarts: 20, purchases: 0 })
   )
@@ -453,7 +453,7 @@ test('buildActionReportText never uses the word "healthy" anywhere in the docume
   assert.ok(!/healthy/i.test(text))
 })
 
-test('buildActionReportText is honest about a single-report account — no fabricated trend', () => {
+test('buildActionReportText is honest about a single-report account: no fabricated trend', () => {
   const text = buildTestReport([], [historyRecord()])
   assert.match(text, /first performance snapshot/i)
   assert.match(text, /Not enough history yet/i)
@@ -479,12 +479,12 @@ test('buildActionReportText\'s "See:" reference in Top 3 Priorities never repeat
 
 // --- §19/§20/§23 discipline carried into this file --------------------------
 
-test('this file never claims a proven cause — no "will improve"/"guaranteed"/"caused by" language anywhere', () => {
+test('this file never claims a proven cause: no "will improve"/"guaranteed"/"caused by" language anywhere', () => {
   const source = readFileSync(join(__dirname, 'performanceNarrative.ts'), 'utf8')
   assert.ok(!/will improve|guaranteed|proven to cause|caused by/i.test(source))
 })
 
-test('this file contains no generative-AI/chatbot dependency — deterministic only (§20)', () => {
+test('this file contains no generative-AI/chatbot dependency: deterministic only (§20)', () => {
   const source = readFileSync(join(__dirname, 'performanceNarrative.ts'), 'utf8')
   assert.ok(!/openai|anthropic|groq|generateText|chat\.completions/i.test(source))
 })

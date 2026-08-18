@@ -5,10 +5,10 @@ import AccountAuditPanel from '@/components/reports/AccountAuditPanel'
 import PerformanceIntelligencePanel from '@/components/reports/PerformanceIntelligencePanel'
 import { buttonPrimarySmallClass, buttonSecondarySmallClass } from '@/lib/uiClasses'
 
-// Milestone C15 — a tab strip inside the EXISTING /audit page (Account
+// Milestone C15: a tab strip inside the EXISTING /audit page (Account
 // Audit's own established home for report-upload tools), not a new
 // top-level navigation entry (§12/§24). AccountAuditPanel itself is
-// completely untouched — this only adds a sibling tab.
+// completely untouched: this only adds a sibling tab.
 type Tab = 'account-audit' | 'performance'
 
 export default function AuditTabs() {

@@ -1,5 +1,5 @@
 // Unit tests for lib/catalogReconciliation.ts, using Node's built-in test
-// runner (no new dependency — tsx is already a project devDependency).
+// runner (no new dependency: tsx is already a project devDependency).
 // Run with: npx tsx --test lib/catalogReconciliation.test.ts
 
 import { test } from 'node:test'
@@ -9,7 +9,7 @@ import { emptyGeneratedContent, emptyApproved, emptyGenerationError, emptyGenera
 import type { CatalogProductRow, CatalogListingRow, CatalogListingApprovalRow, CatalogSnapshot } from './catalog'
 
 // Mirrors CatalogueWorkspace.tsx's own computeProductStatus exactly (see
-// that file) — reimplemented here only because it's a component-internal
+// that file): reimplemented here only because it's a component-internal
 // closure, not exported; the logic itself is 3 lines and not part of what
 // this milestone changed.
 const computeStatus: ComputeStatus = (generatedContent, attempted) => {
@@ -95,7 +95,7 @@ test('CRITICAL NULL-CONTENT RULE: buildDraftFromServer leaves generatedContent n
   const result = buildDraftFromServer(server, [listing], new Map(), computeStatus)
 
   assert.equal(result.generatedContent.amazon, null)
-  // The listing id is still captured even though content is null — a
+  // The listing id is still captured even though content is null: a
   // future regenerate/approval/export still needs a real id to act on.
   assert.equal(result.listingServerIds?.amazon, 'listing-1')
 })
@@ -114,7 +114,7 @@ test('CRITICAL NULL-CONTENT RULE: mergeDraftWithServer never overwrites valid lo
   assert.deepEqual(result.generatedContent.amazon, { title: 'Good Local Content' })
   assert.deepEqual(result.generationMeta.amazon, { bulletCount: 3 })
   // listingServerIds is still updated from the server row even though its
-  // content was rejected — the id itself is real and needed for future
+  // content was rejected: the id itself is real and needed for future
   // approval/export/regenerate actions.
   assert.equal(result.listingServerIds?.amazon, 'listing-1')
 })
@@ -177,7 +177,7 @@ test('reconcileCatalog: local product with no serverId is preserved unchanged', 
   const result = reconcileCatalog([local], snapshot, computeStatus)
 
   assert.equal(result.length, 1)
-  assert.equal(result[0], local) // same object reference — untouched
+  assert.equal(result[0], local) // same object reference: untouched
 })
 
 test('reconcileCatalog: local product whose serverId has no matching server row is preserved, not dropped', () => {
@@ -192,7 +192,7 @@ test('reconcileCatalog: local product whose serverId has no matching server row 
 
 test('reconcileCatalog: matches by serverId ONLY, never by brand name/description/etc', () => {
   // Same brandName/description as the server product, but no serverId at
-  // all — must NOT be fuzzy-matched into a merge; must appear twice
+  // all: must NOT be fuzzy-matched into a merge; must appear twice
   // (the local one preserved, plus a separate server-constructed one).
   const local = makeLocalProduct({ id: 'local-1', brandName: 'Acme', description: 'desc', serverId: undefined })
   const server = makeServerProduct({ id: 'server-1', brand_name: 'Acme', description: 'desc' })
@@ -217,7 +217,7 @@ test('reconcileCatalog: a server product with a real local match merges into ONE
   assert.equal(result[0].serverId, 'server-1')
 })
 
-test('reconcileCatalog: mixed scenario — one merge, one server-only, one local-only, all present exactly once', () => {
+test('reconcileCatalog: mixed scenario: one merge, one server-only, one local-only, all present exactly once', () => {
   const mergedLocal = makeLocalProduct({ id: 'a', serverId: 'sa' })
   const localOnly = makeLocalProduct({ id: 'b', serverId: undefined })
   const serverA = makeServerProduct({ id: 'sa' })

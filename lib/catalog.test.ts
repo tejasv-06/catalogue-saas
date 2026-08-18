@@ -1,9 +1,9 @@
 // Unit tests for lib/catalog.ts, using Node's built-in test runner (no new
-// dependency — tsx is already a project devDependency).
+// dependency: tsx is already a project devDependency).
 // Run with: npx tsx --test lib/catalog.test.ts
 //
 // The repository has no existing test framework/config (verified before
-// writing this — no jest/vitest, no *.test.* files anywhere else), so this
+// writing this: no jest/vitest, no *.test.* files anywhere else), so this
 // intentionally introduces nothing beyond what's already installed.
 
 import { test } from 'node:test'
@@ -70,7 +70,7 @@ test('createProduct maps fields correctly and derives owner_user_id from the ses
     description: 'desc',
     category: 'cat',
     image_url: 'https://x/y.jpg',
-    // Milestone C17.1 — defaults to [] when the caller omits image_urls.
+    // Milestone C17.1: defaults to [] when the caller omits image_urls.
     image_urls: [],
     client_id: 'client-1'
   })
@@ -214,7 +214,7 @@ test('getCatalog returns empty arrays, not null/undefined, when a table has no r
   assert.deepEqual(result, { products: [], listings: [], approvals: [] })
 })
 
-// Milestone 29 (C7) — getExportHistory's own mock: select().order() awaited
+// Milestone 29 (C7): getExportHistory's own mock: select().order() awaited
 // directly (no .single()/.upsert()), so it doesn't fit makeMockClient's
 // chain above either, same reasoning as makeGetCatalogMockClient.
 function makeExportHistoryMockClient(opts: { userId: string | null; result?: { data: any; error: any } }) {
@@ -248,7 +248,7 @@ test('getExportHistory derives ownership from the authenticated session, not a c
   const rows = [{ id: 'export-1', owner_user_id: 'user-a', marketplace: 'amazon', item_count: 2 }]
   const client = makeExportHistoryMockClient({ userId: 'user-a', result: { data: rows, error: null } })
 
-  // getExportHistory takes no user/owner parameter at all — the only way it
+  // getExportHistory takes no user/owner parameter at all: the only way it
   // can know "whose" history to read is the session on the client passed in.
   const result = await getExportHistory(client)
 
@@ -292,7 +292,7 @@ test('getExportHistory surfaces a Supabase error rather than swallowing it', asy
   await assert.rejects(() => getExportHistory(client), (err: any) => err === dbError)
 })
 
-// Milestone 32 (C9) — getProductById's mock: select().eq().maybeSingle().
+// Milestone 32 (C9): getProductById's mock: select().eq().maybeSingle().
 function makeProductByIdMockClient(opts: { userId: string | null; result?: { data: any; error: any } }) {
   return {
     from(_table: string) {
@@ -327,7 +327,7 @@ test('getProductById returns the row when it exists and is owned (RLS-scoped)', 
   assert.deepEqual(result, row)
 })
 
-test('getProductById returns null for a product that does not exist or is not owned — RLS makes these indistinguishable, which is the point', async () => {
+test('getProductById returns null for a product that does not exist or is not owned: RLS makes these indistinguishable, which is the point', async () => {
   const client = makeProductByIdMockClient({ userId: 'user-a', result: { data: null, error: null } })
   const result = await getProductById('someone-elses-product', client)
   assert.equal(result, null)
@@ -338,7 +338,7 @@ test('getProductById rejects when there is no authenticated session', async () =
   await assert.rejects(() => getProductById('product-1', client))
 })
 
-// Milestone 32 (C9) — setProductIntelligence's mock: update().eq().select().single().
+// Milestone 32 (C9): setProductIntelligence's mock: update().eq().select().single().
 function makeSetIntelligenceMockClient(opts: { userId: string | null; result?: { data: any; error: any } }) {
   const calls: { op: string; payload?: any }[] = []
   return {
@@ -408,7 +408,7 @@ test('setProductIntelligence surfaces a Supabase error (e.g. RLS rejecting an un
   )
 })
 
-// Milestone C17 — regression coverage for the confirmed delete-doesn't-persist
+// Milestone C17: regression coverage for the confirmed delete-doesn't-persist
 // bug: deleteProduct's mock: delete().eq().select() awaited directly (no
 // .single()), matching the real .select('id') call that turns "RLS matched
 // zero rows" into a real thrown error instead of a silent no-op.
@@ -456,7 +456,7 @@ test('deleteProduct issues a real DELETE against catalog_products, filtered by t
   assert.deepEqual(eqCall.payload, { column: 'id', value: 'product-1' })
 })
 
-test('deleteProduct throws when the delete affects zero rows (product not found, or not owned by this session) — never a silent no-op', async () => {
+test('deleteProduct throws when the delete affects zero rows (product not found, or not owned by this session): never a silent no-op', async () => {
   const client = makeDeleteProductMockClient({ userId: 'user-a', result: { data: [], error: null } })
   await assert.rejects(() => deleteProduct('someone-elses-product', client))
 })
@@ -467,7 +467,7 @@ test('deleteProduct surfaces a genuine Supabase error rather than swallowing it'
   await assert.rejects(() => deleteProduct('product-1', client), (err: any) => err === dbError)
 })
 
-test('deleteProduct rejects when there is no authenticated session (guest) — never attempts an unauthenticated delete', async () => {
+test('deleteProduct rejects when there is no authenticated session (guest): never attempts an unauthenticated delete', async () => {
   const client = makeDeleteProductMockClient({ userId: null })
   await assert.rejects(() => deleteProduct('product-1', client))
 })

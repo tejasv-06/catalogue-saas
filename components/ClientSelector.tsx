@@ -5,10 +5,10 @@ import { createClient } from '@/lib/supabase/client'
 import { buttonSecondaryClass, cardClass, inputClass, selectClass } from '@/lib/uiClasses'
 import type { MarketplacePreferences } from '@/lib/brands'
 
-// Milestone C12 — widened to the brand profile fields added to `clients`
+// Milestone C12: widened to the brand profile fields added to `clients`
 // (supabase/migrations/20260810_07_brand_profile.sql). Purely a type
 // change: fetchClients() below already does select('*'), so these fields
-// were already arriving over the wire — only their type was previously
+// were already arriving over the wire: only their type was previously
 // narrower than the real row shape. All new fields are optional so a row
 // fetched before this migration was applied (impossible in practice once
 // applied, but matches this codebase's existing defensive convention for
@@ -44,7 +44,7 @@ export default function ClientSelector({
   useEffect(() => {
     async function fetchClients() {
       // Milestone 18: must be the same @supabase/ssr browser client the login
-      // flow uses (see app/login/page.tsx) — a plain @supabase/supabase-js
+      // flow uses (see app/login/page.tsx): a plain @supabase/supabase-js
       // client (the old lib/supabaseClient.ts import this replaced) never
       // carries the signed-in session, so every request landed here as
       // effectively anonymous and clients' owner-scoped RLS returned nothing.
@@ -84,7 +84,7 @@ export default function ClientSelector({
 
     setSaving(true)
     const supabase = createClient()
-    // Milestone 18: clients' INSERT policy requires auth.uid() = user_id — the
+    // Milestone 18: clients' INSERT policy requires auth.uid() = user_id: the
     // id must come from the session itself (supabase.auth.getUser(), server-
     // verified), never from anything already sitting in component state, so
     // there's no way for this to be spoofed via client-side input.

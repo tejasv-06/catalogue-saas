@@ -8,9 +8,9 @@ import { createClient as createAuthClient } from '@/lib/supabase/server'
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY })
 
-// Milestone C15 — "Generate AI Insights," a separate, explicit step from
+// Milestone C15: "Generate AI Insights," a separate, explicit step from
 // the deterministic dashboard (which renders from computed statistics
-// alone, no AI call — see PerformanceIntelligencePanel.tsx). Same
+// alone, no AI call: see PerformanceIntelligencePanel.tsx). Same
 // verbatim-number-only discipline as app/api/generate-account-insights,
 // reusing its generic verification helpers as-is (extractStatTokens/
 // normalizeStatToken/extractVerifiedPercentages/isDerivedFromComplement
@@ -27,7 +27,7 @@ TONE RULE - executive and constructive, never alarming:
 Frame problems as "Key Risk Factors" and opportunities as "Optimization Opportunities." NEVER use aggressive, alarming, or dramatic language or metaphors. If you catch yourself reaching for a dramatic metaphor, cut it and state the fact plainly instead.
 
 STYLE RULE - no em dashes:
-Never use an em dash (—) anywhere in your output, in any field. Use a period, colon, comma, or a standard hyphen (-) instead.
+Never use the em dash character anywhere in your output, in any field. Use a period, colon, comma, or a standard hyphen (-) instead.
 
 CAUSATION RULE - never claim a confirmed cause:
 This data shows catalog-relative statistics and correlations, not root causes. Every finding must be phrased as something to investigate ("consider reviewing," "this may indicate," "worth investigating"), never as a confirmed diagnosis ("this is caused by," "this proves," "this is why"). Never state a specific reason a product underperforms as settled fact - only as a hypothesis grounded in the verified evidence given to you.

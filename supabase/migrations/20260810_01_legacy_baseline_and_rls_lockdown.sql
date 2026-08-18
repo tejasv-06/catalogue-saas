@@ -1,15 +1,15 @@
--- Milestone 11 — Legacy schema baseline + RLS lockdown.
+-- Milestone 11: Legacy schema baseline + RLS lockdown.
 -- Run this in the Supabase SQL editor (Dashboard > SQL Editor) once, same
--- manual-apply discipline as user_credits.sql — this project has no linked
+-- manual-apply discipline as user_credits.sql: this project has no linked
 -- Supabase CLI / migrations pipeline.
 --
 -- SECTION 1 documents the schema of three tables that predate any checked-in
--- migration (products, clients, guest_usage) — every column below was
+-- migration (products, clients, guest_usage): every column below was
 -- verified directly against the live database via the PostgREST OpenAPI
 -- introspection endpoint (GET /rest/v1/ with the service-role key), NOT
 -- inferred from application code. The CREATE TABLE IF NOT EXISTS statements
 -- are therefore a documentation-only no-op against the live database (the
--- tables already exist with this exact shape) — this file's purpose is to
+-- tables already exist with this exact shape): this file's purpose is to
 -- give the project a truthful, reviewable baseline for tables that never had
 -- one, not to change them.
 --
@@ -18,7 +18,7 @@
 -- live table's real primary key column is `anonymous_id` (confirmed via
 -- introspection below). That mismatch means every guest-limit check/increment
 -- in that route currently errors, and the route's own error handling fails
--- OPEN on a guest_usage error (see its inline comment) — guest generation is
+-- OPEN on a guest_usage error (see its inline comment): guest generation is
 -- therefore effectively unlimited in production today, not capped at 10.
 -- This is a bug in a protected, in-scope system (the current generation
 -- engine / "Existing guest limits") that Milestone 11 is explicitly
@@ -37,10 +37,10 @@ create table if not exists clients (
   brand_guidelines text,
   created_at timestamptz default now(),
   -- Present in the live schema today, WITH an existing FK to auth.users(id)
-  -- (confirmed against a live schema dump in Milestone 13 — nullable, not
+  -- (confirmed against a live schema dump in Milestone 13: nullable, not
   -- enforced by any policy) but not read/written by any application query
   -- (ClientSelector.tsx does a plain `select('*')`/`insert({client_name,
-  -- brand_guidelines})` with no user_id involved) — so ownership is
+  -- brand_guidelines})` with no user_id involved): so ownership is
   -- structurally possible already but currently unenforced/unused.
   -- Per-user brand ownership (actually populating and enforcing this column
   -- via RLS) is Phase G, explicitly out of scope here. Left untouched.
@@ -54,7 +54,7 @@ create table if not exists products (
   description text,
   image_url text,
   -- Nullable in the live schema (confirmed against a live schema dump in
-  -- Milestone 13) even though it always carries a default — corrected here
+  -- Milestone 13) even though it always carries a default: corrected here
   -- from an earlier, slightly-too-strict `not null` guess.
   status text default 'pending',
   target_marketplace text,
@@ -63,28 +63,28 @@ create table if not exists products (
   category text
 );
 
--- SECTION 2 — the actual security fix (Phase B, data layer).
+-- SECTION 2: the actual security fix (Phase B, data layer).
 --
 -- Verified empirically this session, read-only, via the public anon key
--- (the exact key shipped in the browser bundle — same trust boundary as any
+-- (the exact key shipped in the browser bundle: same trust boundary as any
 -- unauthenticated visitor) against the live database:
 --   user_credits -> 0 of 1 real row visible to anon   (RLS already correct)
 --   guest_usage  -> 0 of 0 real rows (table empty; RLS status inconclusive
 --                   from this test alone, but the table is never queried by
---                   anon/authenticated roles in application code anyway —
+--                   anon/authenticated roles in application code anyway:
 --                   only the service-role admin client touches it, so RLS
 --                   here is pure defense-in-depth with zero behavior change)
 --   clients      -> 0 of 2 real rows visible to anon  (blocks anonymous
 --                   reads; whether one signed-in user can see ANOTHER
 --                   signed-in user's clients rows could not be tested
---                   without a real user session/JWT — NOT VERIFIED either
+--                   without a real user session/JWT: NOT VERIFIED either
 --                   way, and not fixed here regardless, since any fix would
 --                   be a Phase G change)
 --   products     -> 10 of 10 real rows FULLY VISIBLE to anon (no RLS, or a
---                   fully permissive policy) — every row of this table is
+--                   fully permissive policy): every row of this table is
 --                   readable today by anyone with the public anon key, with
 --                   no authentication of any kind. This is the concrete,
---                   currently-live instance of the "HIGH — /api/export has
+--                   currently-live instance of the "HIGH: /api/export has
 --                   no authentication" finding from the Milestone 10 audit:
 --                   the exposure exists at the table level, independent of
 --                   whether any particular API route is locked down, since
@@ -92,11 +92,11 @@ create table if not exists products (
 --
 -- products has no user_id/owner column of any kind (verified above), so a
 -- per-row ownership policy is not possible without altering the table's
--- columns — which this milestone explicitly preserves untouched. The only
+-- columns: which this milestone explicitly preserves untouched. The only
 -- safe fix available without redesigning the table is a full deny: enable
 -- RLS with no policy for anon/authenticated at all. Service-role access
 -- (used internally by nothing today, since no current route needs
--- privileged access to this legacy table) is unaffected — RLS never applies
+-- privileged access to this legacy table) is unaffected: RLS never applies
 -- to the service_role key.
 --
 -- Known, accepted side effect: app/api/upload/route.ts (not in this
@@ -104,7 +104,7 @@ create table if not exists products (
 -- anon-key lib/supabaseClient.ts singleton against this same table, and
 -- confirmed to have zero current callers in client code, same as
 -- generate/generate-all/export) will also stop being able to insert once
--- this is applied. Not modified separately — this is a direct, transparent
+-- this is applied. Not modified separately: this is a direct, transparent
 -- consequence of closing the table-level exposure, not a silent change.
 
 alter table products enable row level security;
@@ -112,4 +112,4 @@ alter table guest_usage enable row level security;
 
 -- Deliberately no policies are added for either table: RLS enabled + zero
 -- policies = deny-all for anon and authenticated roles, service_role
--- unaffected. This is intentional, not an oversight — see comments above.
+-- unaffected. This is intentional, not an oversight: see comments above.

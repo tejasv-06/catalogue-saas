@@ -1,11 +1,11 @@
 import { FileSpreadsheet, Sparkles, CheckCircle2, ChevronRight, ChevronDown } from 'lucide-react'
 
-// The hero's product-transformation visual (spec section 8) — replaces the
+// The hero's product-transformation visual (spec section 8): replaces the
 // old three-mini-listing-card mockup with the actual input -> process ->
 // output story: YOUR PRODUCT / TESOLUTE / MARKETPLACE LISTING. Static
-// example data, not live product state — this is a demo visual, not a real
+// example data, not live product state: this is a demo visual, not a real
 // generation run. Framed as what Tesolute does (the workflow), not a list of
-// AI capabilities — matches the Add/Generate/Validate/Review/Export story
+// AI capabilities: matches the Add/Generate/Validate/Review/Export story
 // told elsewhere on the page rather than a separate "AI features" narrative.
 const processingSteps = [
   'Product attributes extracted',
@@ -33,7 +33,7 @@ function Arrow() {
 export default function HeroTransformDemo() {
   return (
     <div className="flex flex-col lg:flex-row items-stretch gap-3">
-      {/* LEFT — your raw product data */}
+      {/* LEFT: your raw product data */}
       <div className={glassCardClass}>
         <ColumnLabel>Your Product</ColumnLabel>
         <div className="flex items-center gap-2 mb-3">
@@ -55,7 +55,7 @@ export default function HeroTransformDemo() {
 
       <Arrow />
 
-      {/* CENTER — the processing checklist, staggered fade-in */}
+      {/* CENTER: the processing checklist, staggered fade-in */}
       <div className={glassCardClass}>
         <div className="flex items-center gap-1.5 mb-3">
           <Sparkles size={13} className="text-[var(--accent-sky-text)]" />
@@ -77,7 +77,7 @@ export default function HeroTransformDemo() {
 
       <Arrow />
 
-      {/* RIGHT — the generated, marketplace-ready output */}
+      {/* RIGHT: the generated, marketplace-ready output */}
       <div className={glassCardClass}>
         <div className="flex items-center justify-between mb-3">
           <ColumnLabel>Marketplace Listing</ColumnLabel>
@@ -85,7 +85,7 @@ export default function HeroTransformDemo() {
         <p className="text-xs font-semibold text-[var(--heading-text)] leading-snug mb-2">
           750ml Matte Black Insulated Stainless Steel Water Bottle with Leak-Resistant Lid
         </p>
-        {/* text-left overrides the ancestor hero section's text-center —
+        {/* text-left overrides the ancestor hero section's text-center:
             list-disc/list-inside otherwise inherits it, which barely showed
             with the original two similarly-short bullets but staggers
             visibly now that bullet lengths vary more. */}

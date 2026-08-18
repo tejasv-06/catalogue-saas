@@ -39,14 +39,14 @@ function formatDirectImageUrl(url: string): string {
   return url
 }
 
-// Milestone 32 (C9) — Generation Integration. Turns an already-persisted,
+// Milestone 32 (C9): Generation Integration. Turns an already-persisted,
 // completed Product Intelligence object (see lib/productIntelligence.ts)
 // into a short factual block appended to the prompt this route already
-// builds. Only fields with a real, non-null value are included — an
+// builds. Only fields with a real, non-null value are included: an
 // "unknown"/null field contributes nothing here, same as it contributes
 // nothing to a human writer. Returns '' (no-op) for anything not shaped
 // like the real intelligence data object, so a missing/malformed/absent
-// value never changes this route's existing behavior (C9-AC14) — this
+// value never changes this route's existing behavior (C9-AC14): this
 // function is intentionally forgiving on input shape precisely because it
 // must never be the thing that breaks generation.
 function buildIntelligenceSummary(intelligence: unknown): string {
@@ -63,7 +63,7 @@ function buildIntelligenceSummary(intelligence: unknown): string {
 
   if (lines.length === 0) return ''
 
-  return `\n\nCanonical product intelligence has already been determined for this product by a separate analysis step — treat the following as established fact and do not re-guess or contradict it (you may still phrase it however fits the listing):\n${lines.join('\n')}`
+  return `\n\nCanonical product intelligence has already been determined for this product by a separate analysis step: treat the following as established fact and do not re-guess or contradict it (you may still phrase it however fits the listing):\n${lines.join('\n')}`
 }
 
 class EmptyContentError extends Error {
@@ -108,7 +108,7 @@ async function withRetry<T>(fn: () => Promise<T>, maxAttempts = 3): Promise<T> {
 }
 
 // Enforces a real, verified character limit (lib/marketplaceRules.ts) by
-// asking the model to rewrite the text to fit — never by slicing it as the
+// asking the model to rewrite the text to fit: never by slicing it as the
 // primary mechanism. Called only when the value actually exceeds its limit,
 // so the common case (model already complied thanks to the constraint in
 // the main prompt) costs nothing extra. Bounded to a couple of rewrite
@@ -117,7 +117,7 @@ async function withRetry<T>(fn: () => Promise<T>, maxAttempts = 3): Promise<T> {
 // The return value is UNCONDITIONALLY guaranteed to be <= maxLength: if the
 // model still hasn't complied after the allowed attempts, enforceCharLimit
 // (sentence/word-boundary-aware, see lib/marketplaceRules.ts) is applied as
-// the actual final enforcement step, not shapeForPlatform's blind slice —
+// the actual final enforcement step, not shapeForPlatform's blind slice:
 // callers never need to re-check the result or fall back to truncating it
 // themselves.
 async function rewriteToFitLimit(params: { value: string; maxLength: number; fieldLabel: string; marketplaceLabel: string }): Promise<string> {
@@ -135,7 +135,7 @@ async function rewriteToFitLimit(params: { value: string; maxLength: number; fie
           messages: [
             {
               role: 'user',
-              content: `Rewrite the following ${params.marketplaceLabel} ${params.fieldLabel.toLowerCase()} to a maximum of ${params.maxLength} characters, including spaces, while preserving the primary product keyword and essential product information. Respond with ONLY the rewritten text — no quotes, no markdown, no commentary.\n\nCurrent text (${current.length} characters): ${current}`
+              content: `Rewrite the following ${params.marketplaceLabel} ${params.fieldLabel.toLowerCase()} to a maximum of ${params.maxLength} characters, including spaces, while preserving the primary product keyword and essential product information. Respond with ONLY the rewritten text: no quotes, no markdown, no commentary.\n\nCurrent text (${current.length} characters): ${current}`
             }
           ]
         })
@@ -153,7 +153,7 @@ async function rewriteToFitLimit(params: { value: string; maxLength: number; fie
 }
 
 // Field-level regenerate must use the SAME marketplace-specific rules as
-// full generation, never a generic prompt — this builds a small, focused
+// full generation, never a generic prompt: this builds a small, focused
 // schema/constraint pair for exactly the one requested field group, sourced
 // from the same lib/marketplaceRules.ts config full generation reads.
 function buildFieldScopedPrompt(fieldGroup: FieldGroup, marketplace: string): { schemaDescription: string; constraintText: string } {
@@ -161,7 +161,7 @@ function buildFieldScopedPrompt(fieldGroup: FieldGroup, marketplace: string): { 
     const titleRules = getTitleRoleFields(marketplace)
     const constraintText = titleRules.length
       ? titleRules.map((r) => `- ${r.label}: maximum ${r.maxLength} characters, including spaces.`).join('\n')
-      : '- Title: no strict limit verified — keep it concise and compelling.'
+      : '- Title: no strict limit verified: keep it concise and compelling.'
     const schemaDescription = `{ "title": "string"${
       titleRules.length > 1 ? ', "listViewName": "string, a more compact version of the title, see constraints above"' : ''
     } }`
@@ -172,14 +172,14 @@ function buildFieldScopedPrompt(fieldGroup: FieldGroup, marketplace: string): { 
     const rule = getFieldRules(marketplace).find((r) => r.kind === 'bullets')
     const constraintText = rule
       ? `- Bullets: at most ${rule.maxCount} items${rule.maxItemLength ? `, each at most ${rule.maxItemLength} characters` : ''}.`
-      : '- Bullets: no strict limit verified — keep each item concise.'
+      : '- Bullets: no strict limit verified: keep each item concise.'
     return { schemaDescription: '{ "bullets": ["string", "string", ...] }', constraintText }
   }
 
   const descRule = getDescriptionRule(marketplace)
   const constraintText = descRule
     ? `- Description: maximum ${descRule.maxLength} characters.`
-    : '- Description: no strict character limit verified — keep it natural, 2-4 sentences.'
+    : '- Description: no strict character limit verified: keep it natural, 2-4 sentences.'
   return { schemaDescription: '{ "description": "string" }', constraintText }
 }
 
@@ -192,7 +192,7 @@ function buildUserContent(promptText: string, resolvedImageUrl: string | null) {
     : promptText
 }
 
-// service_role key is read ONLY here, inside this server-only route file —
+// service_role key is read ONLY here, inside this server-only route file:
 // never exported from a shared lib module, never reachable from client code.
 function getSupabaseAdminClient() {
   return createSupabaseAdminClient(
@@ -203,7 +203,7 @@ function getSupabaseAdminClient() {
 
 async function isUnderGuestLimit(anonId: string): Promise<boolean> {
   const admin = getSupabaseAdminClient()
-  // Milestone 12: the real column is `anonymous_id`, not `anon_id` — the old
+  // Milestone 12: the real column is `anonymous_id`, not `anon_id`: the old
   // name errored on every call (confirmed live), and since only `data` was
   // destructured here, that error was silently discarded and treated as "no
   // row" -> allowed. Now surfaced so the caller can fail closed on it.
@@ -241,7 +241,7 @@ export async function POST(request: Request) {
     fieldGroup === 'title' || fieldGroup === 'bullets' || fieldGroup === 'description' ? fieldGroup : undefined
 
   // hasDescription gates both the validation below and the prompt branch
-  // further down (image-only mode kicks in when this is false) — computed
+  // further down (image-only mode kicks in when this is false): computed
   // once here so both stay in sync.
   const hasDescription = !!(description && String(description).trim())
 
@@ -271,7 +271,7 @@ export async function POST(request: Request) {
       }
     } catch (err: any) {
       // Milestone 12: previously failed open here (logged and let generation
-      // proceed) — that's exactly how the anon_id/anonymous_id column-name
+      // proceed): that's exactly how the anon_id/anonymous_id column-name
       // bug made the guest limit unenforceable in practice despite looking
       // implemented. Guest generation carries a real, uncredited LLM cost,
       // so an inability to verify the limit must block the request, matching
@@ -281,7 +281,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Could not verify guest usage limit. Please try again.' }, { status: 500 })
     }
   } else if (userId) {
-    // Unlike the guest check above, this fails CLOSED on infra errors — this
+    // Unlike the guest check above, this fails CLOSED on infra errors: this
     // is the actual credit-metered path now, so an infra hiccup letting
     // every signed-in generation through for free would defeat the point of
     // having credits at all.
@@ -302,7 +302,7 @@ export async function POST(request: Request) {
   try {
     // Identical to before whenever a description is present. When it's not
     // (image-only mode), the raw-description line is swapped for a plain
-    // statement of that fact — there's no "Raw description: undefined" or
+    // statement of that fact: there's no "Raw description: undefined" or
     // similar leaking into the prompt.
     const promptText =
       (hasDescription
@@ -317,22 +317,22 @@ export async function POST(request: Request) {
         : null
 
     // Empty string when hasDescription is true, so the template literal
-    // below interpolates nothing there — systemPrompt is byte-for-byte the
+    // below interpolates nothing there: systemPrompt is byte-for-byte the
     // same string existing callers have always gotten. This paragraph only
     // ever reaches the model on the new image-only path.
     const imageOnlyInstruction = hasDescription
       ? ''
-      : `\n\nNo product description was provided for this listing — the attached image is the ONLY source of information you have. Construct the entire listing (title, description, bullets, keywordPool) purely from analyzing the image. Be as specific and concrete as possible about visible attributes: exact color, material or fabric, style, cut or shape, pattern, and any text or branding visible on the product itself. Only state what is visibly evident — do not invent specifications, materials, or use-cases you cannot actually see.`
+      : `\n\nNo product description was provided for this listing: the attached image is the ONLY source of information you have. Construct the entire listing (title, description, bullets, keywordPool) purely from analyzing the image. Be as specific and concrete as possible about visible attributes: exact color, material or fabric, style, cut or shape, pattern, and any text or branding visible on the product itself. Only state what is visibly evident. Do not invent specifications, materials, or use-cases you cannot actually see.`
 
     const marketplaceLabel = MARKETPLACE_LABELS[targetMarketplace as keyof typeof MARKETPLACE_LABELS] ?? targetMarketplace
 
     // Field-level regenerate ("Regenerate Title" etc.) gets a small, focused
     // prompt scoped to exactly that field and its own marketplace-specific
-    // constraint — never the generic full-listing prompt below. Full
+    // constraint: never the generic full-listing prompt below. Full
     // generation (initial or "Regenerate Entire Listing") gets every
     // field's constraint injected up front, sourced from the same
     // lib/marketplaceRules.ts config the post-generation retry step and
-    // validation both read — so the model is told the real limit instead of
+    // validation both read: so the model is told the real limit instead of
     // just being corrected after the fact.
     const systemPrompt = scopedFieldGroup
       ? (() => {
@@ -340,17 +340,17 @@ export async function POST(request: Request) {
           return `You are an expert e-commerce SEO copywriter. Given a brand, category, and product description${resolvedImageUrl ? ', and a product image,' : ''} write ONLY the ${scopedFieldGroup} field for a ${marketplaceLabel} listing.${
             brandGuidelines ? `\nFollow these brand-specific guidelines when writing: ${brandGuidelines}` : ''
           }${imageOnlyInstruction}
-Constraint — write within this from the start, do not rely on truncation:
+Constraint (write within this from the start, do not rely on truncation):
 ${constraintText}
 Respond ONLY with valid JSON in exactly this shape:
 ${schemaDescription}
 CRITICAL: Output ONLY valid, raw JSON. Do NOT wrap output in markdown fences (no \`\`\`json or \`\`\`), and do NOT include any introductory or trailing commentary.`
         })()
       : `You are an expert e-commerce SEO copywriter. Given a brand, category, raw product description, and (when provided) a product image, generate high-ranking marketplace content.
-When an image is provided, analyze its visual details — exact color shade, pattern, fabric texture, neckline, sleeve type, embellishments — and weave those specifics directly into the title, bullets, and keywordPool.${
+When an image is provided, analyze its visual details (exact color shade, pattern, fabric texture, neckline, sleeve type, embellishments) and weave those specifics directly into the title, bullets, and keywordPool.${
           brandGuidelines ? `\nFollow these brand-specific guidelines when writing: ${brandGuidelines}` : ''
         }${imageOnlyInstruction}
-This listing is for ${marketplaceLabel}. Field-specific constraints — write within these from the start, do not rely on truncation:
+This listing is for ${marketplaceLabel}. Field-specific constraints (write within these from the start, do not rely on truncation):
 ${describeUniversalConstraints(targetMarketplace)}
 Respond ONLY with valid JSON in exactly this shape:
 {
@@ -364,7 +364,7 @@ Respond ONLY with valid JSON in exactly this shape:
         }
   "visualAttributes": { "colour": "string or null", "material": "string or null", "pattern": "string or null", "style": "string or null" }
 }
-Only populate "visualAttributes" when a product image was actually provided — set each key to what you can confidently see, or null if that attribute isn't clearly visible in the image. Never guess. When no image is provided, return "visualAttributes" as an empty object {}.
+Only populate "visualAttributes" when a product image was actually provided: set each key to what you can confidently see, or null if that attribute isn't clearly visible in the image. Never guess. When no image is provided, return "visualAttributes" as an empty object {}.
 CRITICAL: Output ONLY valid, raw JSON. Do NOT wrap output in markdown fences (no \`\`\`json or \`\`\`), and do NOT include any introductory or trailing commentary.`
 
     async function runCompletion(includeImage: boolean): Promise<string> {
@@ -400,11 +400,11 @@ CRITICAL: Output ONLY valid, raw JSON. Do NOT wrap output in markdown fences (no
       if (resolvedImageUrl && isInvalidImageError(err)) {
         if (hasDescription) {
           // the image itself was rejected (unreachable / not real image bytes / unsupported
-          // format) — fall back to a text-only generation rather than failing the whole
+          // format): fall back to a text-only generation rather than failing the whole
           // listing over one bad image URL
           rawContent = await runCompletion(false)
         } else {
-          // Image-only mode has no description to fall back to — retrying
+          // Image-only mode has no description to fall back to: retrying
           // without the image would send the model an empty prompt and an
           // instruction to analyze an image that isn't there.
           throw new Error('The uploaded image could not be processed. Please try a different image.')
@@ -418,7 +418,7 @@ CRITICAL: Output ONLY valid, raw JSON. Do NOT wrap output in markdown fences (no
 
     // Placeholder defaults for whichever fields this request didn't ask for
     // (always all of them for a full generation; just the requested group
-    // for a field-level regenerate) — shapeForPlatform reads ai.title/
+    // for a field-level regenerate): shapeForPlatform reads ai.title/
     // ai.description/ai.bullets unconditionally for every marketplace, and
     // the client only ever reads the specific keys it asked for back out of
     // generatedContent, so a placeholder here is never actually shown.
@@ -433,7 +433,7 @@ CRITICAL: Output ONLY valid, raw JSON. Do NOT wrap output in markdown fences (no
     } = { title: '', description: '', bullets: [], keywordPool: [], ...JSON.parse(rawContent) }
 
     // Enforce real per-field character limits by asking the model to
-    // rewrite, never by slicing — only the field(s) actually in scope for
+    // rewrite, never by slicing: only the field(s) actually in scope for
     // this request are checked. Skipped entirely (cheap, no extra Groq
     // call) whenever the first attempt already fit.
     if (!scopedFieldGroup || scopedFieldGroup === 'title') {
@@ -467,7 +467,7 @@ CRITICAL: Output ONLY valid, raw JSON. Do NOT wrap output in markdown fences (no
       }
     }
 
-    // Keywords have no "Regenerate Keywords" button — they're only ever
+    // Keywords have no "Regenerate Keywords" button: they're only ever
     // part of a full-listing generation, never a field-scoped request, so
     // this only needs to run when !scopedFieldGroup. Mirrors shapeForPlatform's
     // own amazon derivation (pool.slice(0, maxCount).join(' ')) so the value
@@ -491,10 +491,10 @@ CRITICAL: Output ONLY valid, raw JSON. Do NOT wrap output in markdown fences (no
       }
     }
 
-    // Milestone C10 — shaping now goes through the marketplace adapter
+    // Milestone C10: shaping now goes through the marketplace adapter
     // (lib/marketplaceAdapters.ts) instead of calling shapeForPlatform
     // directly. The adapter's shape() is shapeForPlatform itself under the
-    // hood (same call, same arguments, same return value) — this is a
+    // hood (same call, same arguments, same return value): this is a
     // routing change, not a behavior change. getMarketplaceAdapter is
     // guaranteed to resolve here: targetMarketplace was already validated
     // upstream of this route by the client's own marketplace-selection UI
@@ -506,13 +506,13 @@ CRITICAL: Output ONLY valid, raw JSON. Do NOT wrap output in markdown fences (no
       ? adapter.shape(aiResult, { brandName, description, category, imageUrl: resolvedImageUrl, intelligence: productIntelligence ?? null })
       : shapeForPlatform(targetMarketplace, aiResult, { brand_name: brandName })
     // Additive fields, computed alongside the existing shaping call rather
-    // than changing shapeForPlatform's own return shape — see the comment
+    // than changing shapeForPlatform's own return shape: see the comment
     // on computeGenerationMeta in lib/platformShapers.ts for why.
     const meta = computeGenerationMeta(targetMarketplace, aiResult)
-    // Milestone C10 — adapter-level readiness (§7/§8), additive to the
+    // Milestone C10: adapter-level readiness (§7/§8), additive to the
     // response, never required by any existing client caller (the client
     // already computes an equivalent, richer result itself via
-    // computeListingHealth once it has generatedContent/meta — see
+    // computeListingHealth once it has generatedContent/meta: see
     // lib/listingHealth.ts and GeneratedListingDrawer in
     // CatalogueWorkspace.tsx). Only computed for a full generation, never a
     // field-scoped regenerate: a field-scoped response's generatedContent
@@ -521,7 +521,7 @@ CRITICAL: Output ONLY valid, raw JSON. Do NOT wrap output in markdown fences (no
     // in isolation here would misreport every field the client hasn't
     // merged in yet as missing.
     const readiness = adapter && !scopedFieldGroup ? adapter.validate(generatedContent, null, meta) : null
-    // Only ever non-empty when an image was actually analyzed — the model is
+    // Only ever non-empty when an image was actually analyzed: the model is
     // instructed to return {} otherwise, so a text-only generation doesn't
     // carry stale/invented visual attributes.
     const visualAttributes =
@@ -542,7 +542,7 @@ CRITICAL: Output ONLY valid, raw JSON. Do NOT wrap output in markdown fences (no
         await deductCredits(userId, CREDIT_COSTS.listingGeneration, 'generation')
       } catch (err: any) {
         // Same reasoning as the guest-usage increment above: the generation
-        // already succeeded and shipped to the client — a bookkeeping write
+        // already succeeded and shipped to the client: a bookkeeping write
         // failing afterward shouldn't turn that into an error response.
         console.error('Failed to deduct credits:', err.message)
       }

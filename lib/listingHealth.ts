@@ -3,15 +3,15 @@ import { MARKETPLACE_LABELS } from './platformShapers'
 import { getTitleRoleFields, getDescriptionRule, getKeywordsLengthRule, type GenerationMeta, type FieldLengthFact } from './marketplaceRules'
 
 // Real per-field length limits now live in lib/marketplaceRules.ts (the
-// single source of truth) — re-exported here so nothing that already
+// single source of truth): re-exported here so nothing that already
 // imports GenerationMeta from this file needs to change its import path.
 export type { GenerationMeta }
 
 // Per-marketplace field roles, matching the exact shapes shapeForPlatform
 // (lib/platformShapers.ts) produces and getFieldSections (CatalogueWorkspace.tsx)
-// already displays — this file adds no new field names, just checks the ones
+// already displays: this file adds no new field names, just checks the ones
 // that already exist. `titleLimit` is only used as a fallback when `meta` is
-// unavailable (an older saved session) — the real, authoritative limits for
+// unavailable (an older saved session): the real, authoritative limits for
 // every title-role field come from lib/marketplaceRules.ts via
 // getTitleRoleFields, not a single hardcoded number here.
 export type FieldSpec = {
@@ -25,7 +25,7 @@ export type FieldSpec = {
 
 // Exported so the review drawer can group displayed fields (Title/Bullets/
 // Description/Keywords/other) using the exact same key mapping this file
-// checks against — one source of truth, no risk of the two drifting apart.
+// checks against: one source of truth, no risk of the two drifting apart.
 export const FIELD_SPECS: Record<Marketplace, FieldSpec> = {
   amazon: {
     titleKey: 'title',
@@ -44,7 +44,7 @@ export const FIELD_SPECS: Record<Marketplace, FieldSpec> = {
     requiredKeys: ['title', 'description', 'keyFeatures', 'searchKeywords']
   },
   myntra: {
-    // No bullets-equivalent field, hence bulletsKey: null — that check is
+    // No bullets-equivalent field, hence bulletsKey: null: that check is
     // reported as not-applicable for Myntra rather than a false failure.
     titleKey: 'vendorArticleName',
     titleLimit: 50,
@@ -64,7 +64,7 @@ export const FIELD_SPECS: Record<Marketplace, FieldSpec> = {
 }
 
 // `subDetail` is the second line the drawer shows under the raw count
-// ("Title exceeds Amazon's limit" / "Within Amazon title limit") — kept
+// ("Title exceeds Amazon's limit" / "Within Amazon title limit"): kept
 // separate from `detail` (the count itself) so the two can be rendered as
 // two distinct lines without string-splitting.
 export type HealthCheck = { label: string; passed: boolean; detail?: string; subDetail?: string; applicable: boolean }
@@ -82,12 +82,12 @@ function isNonEmpty(value: unknown): boolean {
 }
 
 // Builds the Character Limit check's passed/detail/subDetail from real
-// per-field facts (1 title field for amazon/flipkart/etsy, 2 for myntra —
+// per-field facts (1 title field for amazon/flipkart/etsy, 2 for myntra:
 // never a single universal limit). `fields` is either the real
 // post-generation facts (meta.titleFields, raw pre-truncation lengths) or a
 // same-shaped fallback computed from the already-shaped content when meta
 // is unavailable (an older saved session).
-// One field's "exceeds X's N-character limit by M characters" sentence —
+// One field's "exceeds X's N-character limit by M characters" sentence:
 // names the marketplace, the actual limit, and the overage, not just a bare
 // count, so the seller understands what's wrong and why without needing to
 // do the subtraction themselves.
@@ -121,7 +121,7 @@ function summarizeLengthFields(marketplaceLabel: string, fields: FieldLengthFact
 }
 
 // Exactly 7 checks, all derived from data the app already has (generation
-// success, presence, real character limits, non-empty required fields) — no
+// success, presence, real character limits, non-empty required fields): no
 // SEO/brand-voice/accuracy/conversion scoring, per explicit direction.
 export function computeListingHealth(
   marketplace: Marketplace,
@@ -152,12 +152,12 @@ export function computeListingHealth(
 
   // meta may be missing, OR present but shaped like the OLDER GenerationMeta
   // (titleTruncated/rawTitleLength/titleLimit/bulletCount, from a session
-  // saved before per-field titleFields/descriptionField existed) — either
+  // saved before per-field titleFields/descriptionField existed): either
   // way, `meta.titleFields` won't be a real array, so checking `meta` alone
   // isn't enough. Both cases fall back to computing straight off the
   // already-shaped content instead of a raw pre-slice length, which isn't
   // recoverable at that point. Still per-field, not a single universal
-  // limit — getTitleRoleFields still returns 2 entries for Myntra even in
+  // limit: getTitleRoleFields still returns 2 entries for Myntra even in
   // the fallback path.
   const hasCurrentMetaShape = !!meta && Array.isArray(meta.titleFields)
   const titleFields: FieldLengthFact[] = hasCurrentMetaShape
@@ -203,7 +203,7 @@ export function computeListingHealth(
   const keywordsApplicable = spec.keywordsKey !== null
   const keywordsExist = spec.keywordsKey ? isNonEmpty(content[spec.keywordsKey]) : true
   // Only ever non-null for a marketplace with a verified scalar keywords
-  // length rule (Amazon's genericKeywords today) — Flipkart/Etsy/Myntra's
+  // length rule (Amazon's genericKeywords today): Flipkart/Etsy/Myntra's
   // keyword fields have no comparable raw-length-vs-limit fact, so this
   // check stays existence-only for them, same as before.
   const keywordsLengthRule = getKeywordsLengthRule(marketplace)

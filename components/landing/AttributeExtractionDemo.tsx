@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { Image as ImageIcon, ArrowRight } from 'lucide-react'
 
-// Computer-vision section demo — a static example, not a live extraction.
+// Computer-vision section demo: a static example, not a live extraction.
 // Same product as the hero's HeroTransformDemo (insulated stainless-steel
 // water bottle), so the two demos read as one consistent story rather than
 // two unrelated products. "Add to Listing" is a real link to /workspace

@@ -14,7 +14,7 @@ function LogoutIcon() {
   )
 }
 
-// 'menuItem' is the only variant actually in use right now — ProfileMenu's
+// 'menuItem' is the only variant actually in use right now: ProfileMenu's
 // dropdown, the single logout control on the page (see TopHeader). 'button'
 // is kept as the plain default for any future standalone placement, but
 // nothing currently renders it.

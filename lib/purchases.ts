@@ -1,15 +1,15 @@
 import { createClient as createSupabaseAdminClient, type SupabaseClient } from '@supabase/supabase-js'
 import type { CreditPackageId } from '@/lib/creditPackages'
 
-// Milestone C13 — server-only purchase persistence. Same discipline as
+// Milestone C13: server-only purchase persistence. Same discipline as
 // lib/credits.ts's getSupabaseAdminClient: service_role is read ONLY here,
 // never exported, never reachable from client code. This module is the
-// only place that writes to credit_purchases — matches the migration's own
+// only place that writes to credit_purchases: matches the migration's own
 // design (no INSERT/UPDATE policy exists for the authenticated role at
 // all, so there is no browser-facing path that could do this instead).
 //
 // Every exported function takes an optional trailing `client`, defaulting
-// to the real admin client — same seam lib/catalog.ts's functions use,
+// to the real admin client: same seam lib/catalog.ts's functions use,
 // here so lib/purchases.test.ts can inject a mock and test the actual
 // call shape (RPC parameters, payload contents, idempotency-result
 // handling) without a real database.
@@ -38,7 +38,7 @@ function getSupabaseAdminClient(): SupabaseClient {
 }
 
 // Called only from app/api/billing/create-checkout/route.ts, immediately
-// after a real Stripe Checkout Session has been created — credits/amount
+// after a real Stripe Checkout Session has been created: credits/amount
 // come from the same lib/creditPackages.ts config the Checkout Session
 // itself was built from, never from the request body.
 export async function createPendingPurchase(
@@ -85,12 +85,12 @@ export async function getPurchaseById(id: string, client: SupabaseClient = getSu
   return data as CreditPurchaseRow | null
 }
 
-// C13 follow-up — markPurchasePaid() (a separate, unconditional "set
+// C13 follow-up: markPurchasePaid() (a separate, unconditional "set
 // status = 'paid'" UPDATE issued right before the atomic award call) used
 // to exist here and was REMOVED after live testing proved it dangerous: it
 // had no guard, so calling it on a replayed webhook silently reset an
 // already-'fulfilled' purchase back to 'paid', erasing the exact state
-// award_purchase_credits()'s idempotency guard depends on — a real,
+// award_purchase_credits()'s idempotency guard depends on: a real,
 // live-verified double-credit bug. Recording Stripe's payment identifiers
 // is now folded into award_purchase_credits() itself (see
 // supabase/migrations/20260810_09_fix_award_purchase_credits_atomicity.sql)
@@ -109,22 +109,22 @@ export async function markPurchaseCancelled(id: string, client: SupabaseClient =
   if (error) throw error
 }
 
-// The one atomic, idempotent credit-award call — see
+// The one atomic, idempotent credit-award call: see
 // supabase/migrations/20260810_09_fix_award_purchase_credits_atomicity.sql
 // for the actual guarantee, and its own comment for the real bug this
 // fixed: an earlier version of this pipeline called a separate
 // markPurchasePaid() UPDATE immediately before this RPC on every webhook
-// invocation, which unconditionally reset status back to 'paid' — erasing
+// invocation, which unconditionally reset status back to 'paid': erasing
 // this RPC's own `status <> 'fulfilled'` idempotency guard and letting a
 // replayed webhook award credits twice. Recording Stripe's payment
 // identifiers is now part of THIS SAME atomic statement (the
 // p_stripe_* params below) instead of a prior, separate, unguarded write
-// — there is no longer an intermediate state between "payment verified"
+//: there is no longer an intermediate state between "payment verified"
 // and "credits awarded, ledger recorded, purchase fulfilled" for a
 // concurrent/replayed call to land in.
 //
 // `alreadyFulfilled: true` means this purchase was already processed by an
-// earlier call (a retried webhook) — the caller must treat that as
+// earlier call (a retried webhook): the caller must treat that as
 // success, not an error, and must not have awarded credits a second time.
 export async function awardPurchaseCredits(
   params: {

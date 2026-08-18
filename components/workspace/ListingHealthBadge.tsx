@@ -1,7 +1,7 @@
 import { CheckCircle2, AlertTriangle, AlertCircle, XCircle, Clock, type LucideIcon } from 'lucide-react'
 
 // Distinct from StatusBadge (draft/generating/partial/generated/approved,
-// which tracks generation *progress* and is unchanged elsewhere) — this is
+// which tracks generation *progress* and is unchanged elsewhere): this is
 // the "is this pair ready to upload" axis: whether the row has been
 // generated yet, and if so, whether it's actually complete per
 // lib/listingHealth.ts. 'not-generated' covers a product/marketplace pair
@@ -17,7 +17,7 @@ const CONFIG: Record<RowHealthStatus, { label: string; icon: LucideIcon; classNa
   generating: {
     label: 'Generating…',
     icon: Clock,
-    // animate-pulse, not a spinner — matches the existing 'generating'
+    // animate-pulse, not a spinner: matches the existing 'generating'
     // treatment in StatusBadge.tsx rather than introducing a new animation
     // style for the same purpose.
     className: 'bg-[var(--secondary-btn-bg)] text-[var(--secondary-btn-text)] border-[var(--secondary-btn-border)] animate-pulse'

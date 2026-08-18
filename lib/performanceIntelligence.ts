@@ -4,23 +4,23 @@ import { computeTrend, computeChange, PERFORMANCE_THRESHOLDS, type TrendResult }
 import type { PerformanceHistoryRecord } from '@/lib/performance'
 import { getAreaRecommendation } from '@/lib/performanceRecommendations'
 
-// Milestone C15 — Seller Performance Intelligence & Action Engine. Pure,
+// Milestone C15: Seller Performance Intelligence & Action Engine. Pure,
 // deterministic functions only (§20: "the underlying diagnosis must be
-// deterministic and data-grounded" — no generative AI here, and no fixed
-// absolute threshold either — "good CTR" varies by category/business
+// deterministic and data-grounded": no generative AI here, and no fixed
+// absolute threshold either: "good CTR" varies by category/business
 // size, so every weak/strong judgment below is computed relative to THAT
 // SPECIFIC UPLOAD's own catalog median, never a hardcoded percentage).
 //
 // This file intentionally does NOT reuse lib/performanceDiagnosis.ts's
 // diagnosePerformance/PERFORMANCE_THRESHOLDS for CTR/ATC/conversion/
-// return-rate weak-vs-strong judgments — those are fixed, absolute
+// return-rate weak-vs-strong judgments: those are fixed, absolute
 // percentages by original design, correct for the separate per-product
 // panel (components/ProductPerformance.tsx, untouched by this file) but
 // wrong for a seller-facing intelligence report that must generalize
 // across any brand, category, or catalog size with zero tuning. The
 // relative engine below (computeCatalogMedians/diagnoseRelative) is this
 // file's own, computed fresh from each upload's own data. computeTrend
-// (period-over-period significance, a different question — "is this
+// (period-over-period significance, a different question: "is this
 // change big enough to matter," not "is this value good") is still
 // reused as-is; that one was never category-dependent.
 //
@@ -38,7 +38,7 @@ export type PeriodGroup = {
 
 // Groups every row (every product, linked or not) into the distinct
 // uploaded periods they belong to, newest period first. Multiple rows can
-// share one period — one weekly report typically covers many products.
+// share one period: one weekly report typically covers many products.
 export function groupByPeriod(records: PerformanceHistoryRecord[]): PeriodGroup[] {
   const map = new Map<string, PeriodGroup>()
   for (const r of records) {
@@ -90,11 +90,11 @@ function averageOrNull(values: (number | null)[]): number | null {
 // account-wide snapshot. Counts (impressions/clicks/ATC/purchases) sum
 // directly. CTR/ATC-rate/conversion-rate are recomputed from those SUMMED
 // counts (via the existing computeCtr/computeAtcRate/computeConversionRate
-// — never re-derived) rather than averaging each product's own
+//: never re-derived) rather than averaging each product's own
 // percentage, which would silently over-weight low-traffic products.
 // returnRate/rating have no raw counts to sum in this report (Myntra
 // reports them as pre-computed percentages/scores per product, never a
-// raw returns count) — a straight average across products with a
+// raw returns count): a straight average across products with a
 // reported value is the only non-fabricated way to represent them here,
 // and is disclosed as such rather than hidden behind false precision.
 export function aggregatePeriod(group: PeriodGroup): AggregateSnapshot {
@@ -135,7 +135,7 @@ export function aggregatePeriod(group: PeriodGroup): AggregateSnapshot {
 }
 
 // Turns an AggregateSnapshot into the same CanonicalPerformanceRecord
-// shape diagnosePerformance/computeTrend already understand — no second
+// shape diagnosePerformance/computeTrend already understand: no second
 // diagnosis engine. externalProductId/source are placeholders (an
 // aggregate isn't one product), never read by either function.
 function aggregateToRecord(snapshot: AggregateSnapshot, marketplace: PerformanceMarketplace): CanonicalPerformanceRecord {
@@ -176,7 +176,7 @@ export type MetricTrendDirection = 'improving' | 'declining' | 'stable' | 'insuf
 
 // Compares the NEWEST value in the series against the OLDEST available
 // one, using the same TREND_SIGNIFICANT_CHANGE_PERCENT threshold every
-// other trend judgment in this codebase already uses (§10) — a smaller
+// other trend judgment in this codebase already uses (§10): a smaller
 // move is noise, not a real signal, regardless of how many periods it
 // spans. `series` is newest-first (same order groupByPeriod produces).
 export function classifyMetricTrend(series: (number | null)[], higherIsBetter = true): MetricTrendDirection {
@@ -198,10 +198,10 @@ export function classifyMetricTrend(series: (number | null)[], higherIsBetter = 
 export type ProblemPersistence = 'persistent' | 'new' | 'recovered' | 'isolated' | 'none'
 
 // areaDiagnosesByPeriod is newest-first, one RelativeDiagnosis[] per
-// period — the already-rolled-up account-wide summary for that period
+// period: the already-rolled-up account-wide summary for that period
 // (see summarizeAreaDiagnoses below), never raw per-product diagnoses.
 // Classifies whether `area` is a persistent, new, recovered, or isolated
-// problem across however many periods are actually available — never
+// problem across however many periods are actually available: never
 // assumes a fixed history length (§2/§5).
 export function classifyProblemPersistence(area: Exclude<ProblemArea, null>, areaDiagnosesByPeriod: RelativeDiagnosis[][]): ProblemPersistence {
   if (areaDiagnosesByPeriod.length === 0) return 'none'
@@ -218,7 +218,7 @@ export function classifyProblemPersistence(area: Exclude<ProblemArea, null>, are
   if (priorPeriods.length === 0) return 'isolated' // only one period exists at all
   if (priorPeriods.every(Boolean)) return 'persistent'
   if (priorPeriods.every((p) => !p)) return 'new'
-  return 'persistent' // present now and at least once before — still an ongoing, unresolved issue
+  return 'persistent' // present now and at least once before: still an ongoing, unresolved issue
 }
 
 // --- Catalog-relative statistics ------------------------------------------
@@ -228,7 +228,7 @@ export function classifyProblemPersistence(area: Exclude<ProblemArea, null>, are
 // and a 50,000-product one. meaningfulXFloor is the larger of (a) this
 // catalog's own median for that metric and (b) the existing absolute
 // reliability floor diagnosePerformance already requires
-// (PERFORMANCE_THRESHOLDS) — so a huge catalog's floor rises with its own
+// (PERFORMANCE_THRESHOLDS): so a huge catalog's floor rises with its own
 // median, while a tiny/sparse catalog never drops below the same noise
 // floor the rest of the diagnosis engine already trusts (avoids
 // misleading conclusions for tiny datasets, per spec).
@@ -247,7 +247,7 @@ export type CatalogStats = {
   // floor. Deliberately membership-based (>= p75), not "N times the
   // median": a multiplier-of-median bar is mathematically uncrossable in
   // a 1-2 product catalog (median IS the value, so 2x it always exceeds
-  // it) — percentile membership degrades gracefully instead, since a
+  // it): percentile membership degrades gracefully instead, since a
   // catalog's own top product(s) always sit at or above its own p75.
   highOpportunityImpressions: number
   highOpportunityClicks: number
@@ -260,7 +260,7 @@ function percentile(sortedAsc: number[], p: number): number {
 }
 
 // `currentRecords` should be ONE record per product (each product's most
-// recent period) — the same population buildProductInsights derives
+// recent period): the same population buildProductInsights derives
 // internally and passes here.
 export function computeCatalogStats(currentRecords: PerformanceHistoryRecord[]): CatalogStats {
   const impressions = currentRecords.map((r) => r.impressions ?? 0).sort((a, b) => a - b)
@@ -288,7 +288,7 @@ export function computeCatalogStats(currentRecords: PerformanceHistoryRecord[]):
 // catalog, computed fresh from this specific upload, never a fixed
 // percentage. Medians are computed only from products with enough volume
 // to trust their own rate (the same reliability floor computeCatalogStats
-// already establishes) — a median polluted by near-zero-traffic noise
+// already establishes): a median polluted by near-zero-traffic noise
 // would defeat the entire point of being "relative."
 
 export type CatalogMedians = {
@@ -335,7 +335,7 @@ export function computeCatalogMedians(currentRecords: PerformanceHistoryRecord[]
 
 // --- Problem area classification (now includes stock-recovery) -----------
 // The business-language "area" a seller would actually investigate. No
-// DiagnosisCode indirection anymore — RelativeDiagnosis carries its area
+// DiagnosisCode indirection anymore: RelativeDiagnosis carries its area
 // directly (see below).
 export type ProblemArea = 'purchase-conversion' | 'product-page-engagement' | 'click-through' | 'returns' | 'rating' | 'stock-recovery' | null
 
@@ -343,7 +343,7 @@ export type ProblemArea = 'purchase-conversion' | 'product-page-engagement' | 'c
 // Every judgment below is computed against catalogMedians (THIS upload's
 // own catalog), never a fixed percentage. Fix-order sequencing is encoded
 // directly in `priority`: visibility (click-through) outranks
-// product-page-engagement, which outranks purchase-conversion — a
+// product-page-engagement, which outranks purchase-conversion: a
 // conversion fix is wasted on a product nobody's clicking, and an
 // engagement fix is wasted on a product nobody's reaching. Returns/rating/
 // stock-recovery are quality-risk flags, not funnel-sequenced against the
@@ -356,16 +356,16 @@ export type RelativeDiagnosis = {
 }
 
 // "Near-zero relative to median": bottom quarter of this catalog's own
-// median CTR — a disclosed fraction, not an absolute percentage-point gap
+// median CTR: a disclosed fraction, not an absolute percentage-point gap
 // (a 0.3% CTR is a crisis in a catalog whose median is 3%, and completely
 // unremarkable in one whose median is 0.4%).
 const CTR_NEAR_ZERO_FRACTION = 0.25
 // "Elevated relative to catalog average": 50%+ above this catalog's own
-// average return rate — a disclosed multiple, not a fixed 10%/15%/etc.
+// average return rate: a disclosed multiple, not a fixed 10%/15%/etc.
 const RETURN_RATE_ELEVATED_MULTIPLE = 1.5
 // A recently-relisted item (bottom quarter of this catalog's own median
 // inventory age) still showing low visibility may not have recovered its
-// search ranking yet — a possibility to investigate, never a proven cause.
+// search ranking yet: a possibility to investigate, never a proven cause.
 const RECENT_LISTING_FRACTION = 0.25
 
 const AREA_FIX_ORDER_PRIORITY: Record<Exclude<ProblemArea, null>, number> = {
@@ -379,13 +379,13 @@ const AREA_FIX_ORDER_PRIORITY: Record<Exclude<ProblemArea, null>, number> = {
 
 export function diagnoseRelative(record: PerformanceHistoryRecord, catalogStats: CatalogStats, medians: CatalogMedians): RelativeDiagnosis[] {
   const diagnoses: RelativeDiagnosis[] = []
-  // Reliability gate for judging THIS record's own rate — the absolute
+  // Reliability gate for judging THIS record's own rate: the absolute
   // floor only (never catalogStats.meaningfulXFloor, which is inflated by
   // the catalog's own median and exists for a different purpose: which
   // products are trustworthy enough to feed INTO that median, and the
   // "big fish" opportunity-sizing bar below). Gating an individual
   // record's diagnosis on the median-inflated floor would make roughly
-  // half of any catalog — everything below its own median — permanently
+  // half of any catalog (everything below its own median) permanently
   // undiagnosable regardless of how much real traffic it has.
   const hasEnoughImpressions = (record.impressions ?? 0) >= PERFORMANCE_THRESHOLDS.MIN_IMPRESSIONS_FOR_CTR_JUDGMENT
   const hasEnoughClicks = (record.clicks ?? 0) >= PERFORMANCE_THRESHOLDS.MIN_CLICKS_FOR_RATE_JUDGMENT
@@ -413,7 +413,7 @@ export function diagnoseRelative(record: PerformanceHistoryRecord, catalogStats:
   }
 
   // "If CTR is healthy but conversion is weak, lead with description/
-  // secondary images/pricing" — the lead suspect changes based on whether
+  // secondary images/pricing": the lead suspect changes based on whether
   // CTR is ALSO a problem; the conversion diagnosis itself fires either way.
   const conversionRate = computeConversionRate(record.purchases, record.clicks)
   if (hasEnoughClicks && conversionRate !== null && medians.medianConversionRate !== null && conversionRate < medians.medianConversionRate) {
@@ -455,7 +455,7 @@ export function diagnoseRelative(record: PerformanceHistoryRecord, catalogStats:
       area: 'stock-recovery',
       priority: AREA_FIX_ORDER_PRIORITY['stock-recovery'],
       message: `Inventory age (${inventoryAge} days) is well below this catalog's own median (${medians.medianInventoryAge.toFixed(0)} days), and visibility is currently low.`,
-      leadSuspects: ['Recent stock-out — ranking may not have recovered yet']
+      leadSuspects: ['Recent stock-out: ranking may not have recovered yet']
     })
   }
 
@@ -475,7 +475,7 @@ export function classifyIntelligenceBucket(record: PerformanceHistoryRecord, cat
   const zeroPurchases = (record.purchases ?? 0) === 0
   if (hasActivity && zeroPurchases) return 'P1'
 
-  // Absolute floor, same reasoning as diagnoseRelative above — not
+  // Absolute floor, same reasoning as diagnoseRelative above: not
   // catalogStats.meaningfulImpressionsFloor, which would exclude anything
   // below the catalog's own median impressions from ever qualifying.
   const hasEnoughImpressions = (record.impressions ?? 0) >= PERFORMANCE_THRESHOLDS.MIN_IMPRESSIONS_FOR_CTR_JUDGMENT
@@ -518,11 +518,11 @@ function formatEvidence(r: PerformanceHistoryRecord): string {
   return parts.length > 0 ? parts.join(', ') + ' this period.' : 'No metrics reported this period.'
 }
 
-// Groups a marketplace's full history by external id (Style ID/ASIN —
+// Groups a marketplace's full history by external id (Style ID/ASIN:
 // the one durable identity a product's rows share across periods,
 // present whether or not product_id is linked), builds one insight per
 // product, and assigns a priority. Never groups/matches by
-// brand/title/MRP (§7/§22) — externalProductId is the only key.
+// brand/title/MRP (§7/§22): externalProductId is the only key.
 export function buildProductInsights(history: PerformanceHistoryRecord[]): ProductInsight[] {
   const byExternalId = new Map<string, PerformanceHistoryRecord[]>()
   for (const r of history) {
@@ -534,7 +534,7 @@ export function buildProductInsights(history: PerformanceHistoryRecord[]): Produ
   // Two passes: first resolve every product's own current/previous
   // record (needed regardless of catalog size), then compute this
   // catalog's own statistics from that "current" population before
-  // assigning any priority — opportunity sizing below is relative to
+  // assigning any priority: opportunity sizing below is relative to
   // THIS catalog, not a universal constant (§6/§12).
   const perProduct = Array.from(byExternalId.entries()).map(([externalId, records]) => {
     const sorted = [...records].sort((a, b) => (a.periodStart < b.periodStart ? 1 : a.periodStart > b.periodStart ? -1 : 0))
@@ -552,7 +552,7 @@ export function buildProductInsights(history: PerformanceHistoryRecord[]): Produ
     const bucket = classifyIntelligenceBucket(current, catalogStats, catalogMedians)
 
     const hasWeak = diagnoses.length > 0
-    // Deliberately narrower than "no diagnosed problem" — a real winner
+    // Deliberately narrower than "no diagnosed problem": a real winner
     // needs actual purchase evidence and enough clicks to trust the
     // conversion/engagement rates weren't diagnosed simply for lack of
     // data (§10: "gets clicks, generates ATCs, converts").
@@ -565,9 +565,9 @@ export function buildProductInsights(history: PerformanceHistoryRecord[]): Produ
     // "Fix now" vs "optimize" both have a real, catalog-relative problem
     // (diagnoseRelative already required enough impressions/clicks before
     // flagging anything). The split is opportunity size, relative to THIS
-    // catalog's own distribution (catalogStats.meaningfulXFloor — see
+    // catalog's own distribution (catalogStats.meaningfulXFloor: see
     // computeCatalogStats above), not a flat multiple of one universal
-    // constant — top-quartile membership within THIS catalog
+    // constant: top-quartile membership within THIS catalog
     // (catalogStats.highOpportunityX, see computeCatalogStats above).
     const highOpportunity =
       (current.impressions ?? 0) >= catalogStats.highOpportunityImpressions ||
@@ -606,7 +606,7 @@ export function buildProductInsights(history: PerformanceHistoryRecord[]): Produ
 // path: an account-wide "what's the biggest problem right now" signal, and
 // the per-period input classifyProblemPersistence needs, now has to come
 // from the SAME relative, per-product diagnoses everything else in this
-// file already computes — never a separate blended-aggregate judgment
+// file already computes: never a separate blended-aggregate judgment
 // (blending metrics away is exactly what defeats a catalog-relative median
 // in the first place).
 export type AreaDiagnosisSummary = RelativeDiagnosis & { affectedProductCount: number }
@@ -627,7 +627,7 @@ export function summarizeAreaDiagnoses(perProductDiagnoses: RelativeDiagnosis[][
 
 // One period's worth of records -> its own account-wide diagnosis rollup.
 // Computes catalog stats/medians from THAT period alone (never mixed with
-// another period's distribution) — the per-period input
+// another period's distribution): the per-period input
 // classifyProblemPersistence compares across periods.
 export function diagnosePeriodRelative(periodRecords: PerformanceHistoryRecord[]): AreaDiagnosisSummary[] {
   const catalogStats = computeCatalogStats(periodRecords)
@@ -636,10 +636,10 @@ export function diagnosePeriodRelative(periodRecords: PerformanceHistoryRecord[]
   return summarizeAreaDiagnoses(perProductDiagnoses)
 }
 
-// Ranks a priority bucket by opportunity size (impressions — the same
+// Ranks a priority bucket by opportunity size (impressions: the same
 // volume proxy already used above) and caps it. The seller-facing action
 // report explicitly must NOT list every product (§7: "top 3-5", §8: "Limit
-// to top 5" / "top 5-10") — this is the one shared place that ranking
+// to top 5" / "top 5-10"): this is the one shared place that ranking
 // happens, so the UI and the downloadable report can never disagree about
 // which products are "the top ones."
 export function topOpportunityProducts(insights: ProductInsight[], priority: ProductPriority, limit: number): ProductInsight[] {
@@ -649,7 +649,7 @@ export function topOpportunityProducts(insights: ProductInsight[], priority: Pro
     .slice(0, limit)
 }
 
-// All insights, ranked by opportunity across every bucket — backs the
+// All insights, ranked by opportunity across every bucket: backs the
 // "View all affected products" detail table (paginated client-side, never
 // truly rendering thousands of DOM rows at once; §12's large-catalog
 // requirement is about the render surface, not withholding the data).
@@ -660,7 +660,7 @@ export function allProductsRanked(insights: ProductInsight[]): ProductInsight[] 
 
 // --- Catalog Opportunity Map (large-catalog summary, §G) -------------------
 // For a 10,000-product catalog, the main report must never list every
-// product (§12) — this cohorts every product into exactly the 5 groups
+// product (§12): this cohorts every product into exactly the 5 groups
 // the spec names, so the report can show one small summary table instead.
 
 export type CohortName = 'purchase-opportunity' | 'engagement-opportunity' | 'visibility-opportunity' | 'positive-signals' | 'insufficient-activity'
@@ -671,11 +671,11 @@ export function classifyCohort(insight: ProductInsight): CohortName {
   const area = insight.topProblem?.area ?? null
   if (area === 'product-page-engagement') return 'engagement-opportunity'
   // A stock-recovery flag is fundamentally a visibility problem (low
-  // impressions/clicks post-restock) — folds into the same cohort as
+  // impressions/clicks post-restock): folds into the same cohort as
   // click-through rather than inventing a 6th bucket the spec doesn't name.
   if (area === 'click-through' || area === 'stock-recovery') return 'visibility-opportunity'
   // 'purchase-conversion', 'returns', and 'rating' problems are all,
-  // fundamentally, reasons a sale isn't happening or being trusted — the
+  // fundamentally, reasons a sale isn't happening or being trusted: the
   // spec names exactly 5 cohorts, so returns/rating-only problems fold
   // into "Purchase Opportunity" rather than inventing a 6th bucket.
   return 'purchase-opportunity'
@@ -703,9 +703,9 @@ export function buildCatalogOpportunityMap(insights: ProductInsight[]): CohortSu
 
 // --- Category / segment intelligence (§7) -----------------------------------
 // Article Type / Brand / Gender come through as metadata on every Myntra
-// record (lib/performanceAdapters.ts's parseMyntraRows) — real, reported
+// record (lib/performanceAdapters.ts's parseMyntraRows): real, reported
 // values, never inferred. Only surfaced when a segment has enough
-// products to mean something (MIN_SEGMENT_SAMPLE_SIZE) — "avoid
+// products to mean something (MIN_SEGMENT_SAMPLE_SIZE): "avoid
 // meaningless analysis for tiny groups," per spec.
 
 export type SegmentDimension = 'articleType' | 'brand' | 'gender'

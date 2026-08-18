@@ -5,7 +5,7 @@ import { getOrCreateAnonId } from '@/lib/guestId'
 
 const BUCKET = 'product-images'
 
-// service_role key is read ONLY here, inside this server-only route file —
+// service_role key is read ONLY here, inside this server-only route file:
 // same discipline as app/api/generate-single/route.ts.
 function getSupabaseAdminClient() {
   return createSupabaseAdminClient(
@@ -28,7 +28,7 @@ export async function POST(request: Request) {
     const userId = authData?.claims?.sub as string | undefined
 
     // Every upload is namespaced under the uploader's own id (real user id if
-    // signed in, anon_id cookie if a guest) with a random filename — this is what
+    // signed in, anon_id cookie if a guest) with a random filename: this is what
     // actually prevents one guest session from reading/overwriting another's
     // files, since all writes go through this server route using the service_role
     // key (bypassing RLS), never directly from the browser with the anon key.
@@ -53,7 +53,7 @@ export async function POST(request: Request) {
   } catch (err: any) {
     // Catches anything that throws synchronously before a response is built
     // (e.g. getSupabaseAdminClient() failing when SUPABASE_SERVICE_ROLE_KEY is
-    // missing) — without this, the route crashes with an empty body and the
+    // missing): without this, the route crashes with an empty body and the
     // client's res.json() fails with a confusing "Unexpected end of JSON input"
     // that hides the real error.
     return NextResponse.json({ error: err.message || 'Image upload failed' }, { status: 500 })

@@ -1,7 +1,7 @@
 // Regression guard for Milestone C11's addition to
 // components/CatalogueWorkspace.tsx, using Node's built-in test runner (no
-// new dependency — tsx is already a project devDependency). Same
-// source-inspection approach as the C8/C9 CatalogueWorkspace test files —
+// new dependency: tsx is already a project devDependency). Same
+// source-inspection approach as the C8/C9 CatalogueWorkspace test files:
 // this file's actual React/async behavior is covered separately by live
 // browser verification against the real database, not by these tests.
 
@@ -47,7 +47,7 @@ test('ExportSummaryModal disables the export action while checking readiness or 
   assert.match(body, /disabled=\{isCheckingReadiness \|\| ready\.length === 0\}/)
 })
 
-test('ExportSummaryModal never labels a non-READY marketplace with a generic "some fields missing" message — it renders each issue\'s real field name', () => {
+test('ExportSummaryModal never labels a non-READY marketplace with a generic "some fields missing" message: it renders each issue\'s real field name', () => {
   const body = bodyOf('function ExportSummaryModal({', 6000)
   assert.match(body, /issue\.field/)
   assert.ok(!/some fields (are )?missing/i.test(body))

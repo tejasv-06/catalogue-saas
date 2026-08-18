@@ -1,9 +1,9 @@
 import { pick, normalizeKey } from '@/lib/csvMapping'
 import { parseAccountReportRow, parseAmazonNumber, type AccountReportRow } from '@/lib/accountReportStats'
 
-// Milestone C15 — Seller Performance Intelligence. Marketplace-adapter
+// Milestone C15: Seller Performance Intelligence. Marketplace-adapter
 // architecture, same shape as lib/marketplaceAdapters.ts's C10 pattern
-// (buildAdapter -> Record<Marketplace, Adapter> -> getXAdapter lookup) —
+// (buildAdapter -> Record<Marketplace, Adapter> -> getXAdapter lookup):
 // deliberately not reused directly, since C10's adapters cover listing
 // GENERATION for all 4 SUPPORTED_MARKETPLACES, while this covers
 // performance ANALYSIS for only Amazon + Myntra. Conflating the two would
@@ -14,7 +14,7 @@ import { parseAccountReportRow, parseAmazonNumber, type AccountReportRow } from 
 // AUDIT FINDING (documented here so this isn't a silent assumption): there
 // is no live Amazon API/SP-API client anywhere in this codebase. The only
 // existing Amazon data pathway is components/reports/AccountAuditPanel.tsx
-// + lib/accountReportStats.ts — a client-side parser for an uploaded
+// + lib/accountReportStats.ts: a client-side parser for an uploaded
 // Amazon "Detail Page Sales and Traffic by Child Item" Business Report
 // CSV, entirely ephemeral (parsed in-browser, never persisted, no
 // product linkage). That IS the "existing Amazon infrastructure" this
@@ -38,10 +38,10 @@ export function isPerformanceMarketplace(value: unknown): value is PerformanceMa
 export type PerformancePeriodType = 'weekly' | 'monthly'
 
 // The one marketplace-independent shape every adapter produces (§5).
-// Nullable wherever a marketplace/report may not supply that metric —
+// Nullable wherever a marketplace/report may not supply that metric:
 // null means "not available from this source," 0 means "the source
 // explicitly reported zero." Never conflate the two (§5's own explicit
-// rule) — see computeCtr/computeAtcRate/computeConversionRate in
+// rule): see computeCtr/computeAtcRate/computeConversionRate in
 // lib/performanceMetrics.ts for the same discipline applied to derived
 // metrics.
 export type CanonicalPerformanceRecord = {
@@ -65,7 +65,7 @@ export type CanonicalPerformanceRecord = {
   metadata: Record<string, string | number | boolean | null> | null
 }
 
-// Milestone C15 UI fix — describes ONE column of the marketplace's OWN
+// Milestone C15 UI fix: describes ONE column of the marketplace's OWN
 // report, in the report's own order/label, for the import preview table.
 // Deliberately separate from CanonicalPerformanceRecord: the canonical
 // model renames/reshapes fields (Return % -> returnRate, Style ID ->
@@ -83,7 +83,7 @@ export type PreviewColumn = {
 }
 
 // The exact, unmodified string each row reported for every previewColumns
-// entry (keyed by PreviewColumn.key) — '—' for a column the report simply
+// entry (keyed by PreviewColumn.key): 'N/A' for a column the report simply
 // didn't have a value for in this row. Display-only: never used for
 // persistence, matching, or calculation, which all still go through
 // CanonicalPerformanceRecord exactly as before this UI fix.
@@ -97,17 +97,17 @@ export type PerformanceAdapter = {
   marketplace: PerformanceMarketplace
   label: string
   source: string
-  // The report's own column structure, in the report's own order — used
+  // The report's own column structure, in the report's own order: used
   // to render the import preview table header (and each row's
   // previewValues, which follow this same key set).
   previewColumns: PreviewColumn[]
   // Parses raw report rows (already CSV-header-parsed into string/string
-  // records, e.g. via Papa.parse) into canonical records — one result per
+  // records, e.g. via Papa.parse) into canonical records: one result per
   // input row, valid or invalid, 1:1, so a caller can always reconcile
   // "how many rows did I upload" against "how many results came back."
   // period/periodType are supplied by the caller (the report file itself
   // doesn't self-describe its date range for either marketplace's report
-  // shape) — never guessed from row content.
+  // shape): never guessed from row content.
   parseRows: (
     rows: Record<string, string>[],
     period: { periodStart: string; periodEnd: string; periodType: PerformancePeriodType }
@@ -124,29 +124,29 @@ function isValidPercent(n: number | null): boolean {
   return n === null || (Number.isFinite(n) && n >= 0 && n <= 100)
 }
 
-// Milestone C15 UI fix — builds one row's previewValues from its raw
+// Milestone C15 UI fix: builds one row's previewValues from its raw
 // report row, using the exact same pick() candidate-header list the
 // adapter's own parseRows uses for that column, so the preview can never
-// drift from what was actually parsed. '—' (not '') when the report truly
+// drift from what was actually parsed. 'N/A' (not '') when the report truly
 // had no value there, matching every other "not available" display
 // convention already used elsewhere (ProductHistory.tsx, ProductPerformance.tsx).
 function buildPreviewValues(raw: Record<string, string>, columns: { key: string; candidates: string[] }[]): PreviewValues {
   const values: PreviewValues = {}
   for (const { key, candidates } of columns) {
-    values[key] = pick(raw, ...candidates) ?? '—'
+    values[key] = pick(raw, ...candidates) ?? 'N/A'
   }
   return values
 }
 
 // --- Amazon --------------------------------------------------------------
 
-// Reuses parseAccountReportRow (lib/accountReportStats.ts) byte-for-byte —
+// Reuses parseAccountReportRow (lib/accountReportStats.ts) byte-for-byte:
 // the exact same Amazon Business Report parsing the existing Account Audit
 // tool already runs, not a second implementation.
 //
 // Field mapping, and why each does/doesn't map:
 //   - clicks = sessions: a "Session" only exists because a shopper reached
-//     the product's detail page — the closest honest analog to a
+//     the product's detail page: the closest honest analog to a
 //     click-through this report provides. Amazon's own "impressions" (ad/
 //     search placement views) live in a DIFFERENT report (Search Query
 //     Performance / Brand Analytics) this codebase has no access to, so
@@ -154,15 +154,15 @@ function buildPreviewValues(raw: Record<string, string>, columns: { key: string;
 //   - purchases = unitsOrdered, revenue = orderedProductSales: direct,
 //     already-named equivalents.
 //   - conversionRate = unitSessionPercentage: Amazon's OWN pre-calculated
-//     conversion definition (units ordered / sessions) — preserved as the
+//     conversion definition (units ordered / sessions): preserved as the
 //     SOURCE value per §8, never overwritten by a locally recomputed one.
 //   - addToCarts, returns, returnRate, rating, considerationRate: not
 //     present in this report at all -> null, never fabricated.
-//   - ctr: not computed here — a real CTR needs real impressions, which
+//   - ctr: not computed here: a real CTR needs real impressions, which
 //     this report doesn't have; computing clicks/sessions would just be
 //     restating sessions as 100%, which is misleading, not a metric.
 // The real Amazon "Detail Page Sales and Traffic by Child Item" Business
-// Report column set, in the report's own order — same header aliases
+// Report column set, in the report's own order: same header aliases
 // parseAccountReportRow (lib/accountReportStats.ts) already matches
 // against, so the preview can never show a value the parser itself
 // wouldn't have found.
@@ -239,7 +239,7 @@ const AmazonPerformanceAdapter: PerformanceAdapter = {
 
 // New parser (Myntra has no existing report-parsing code in this
 // codebase to reuse) for the Impress report structure documented in the
-// milestone spec — column names matched via lib/csvMapping.ts's existing
+// milestone spec: column names matched via lib/csvMapping.ts's existing
 // pick()/normalizeKey() (already header-punctuation/case/spacing
 // tolerant, the same helper Amazon's own parser and the C8 CSV product
 // importer both already use), not a second ad hoc header-matching scheme.
@@ -247,22 +247,22 @@ const AmazonPerformanceAdapter: PerformanceAdapter = {
 // Field mapping:
 //   - impressions/clicks/addToCarts/purchases/rating: direct.
 //   - returnRate/considerationRate/conversionRate: Myntra's OWN
-//     pre-calculated percentages, preserved as source values (§8) —
+//     pre-calculated percentages, preserved as source values (§8):
 //     Return %, Consideration %, Conversion % columns respectively.
 //   - revenue: NOT present in the Impress report -> null, never
 //     fabricated from Seller MRP × Purchases (MRP is list price, not
-//     actual sale price/revenue — that would be a fabricated metric).
+//     actual sale price/revenue: that would be a fabricated metric).
 //   - ctr: not present as its own column here either; Impress reports
 //     Conversion % (purchases/clicks) but not a clicks/impressions ratio
-//     — left for lib/performanceMetrics.ts to calculate from the raw
+//    : left for lib/performanceMetrics.ts to calculate from the raw
 //     impressions/clicks this row DOES provide (a real, disclosed
 //     calculation, not a source value pretending to be one).
 //   - Style ID/Seller ID/Article Type/Brand/Gender/Seller MRP/Inventory
-//     Age/RPLC: not canonical fields — Style ID becomes
+//     Age/RPLC: not canonical fields: Style ID becomes
 //     externalProductId (the matching key, §7), the rest go into
 //     metadata as real, bounded, disclosed context.
 // The exact Myntra Impress report column set, in the exact report order
-// (spec §1) — the import preview table renders these verbatim, never
+// (spec §1): the import preview table renders these verbatim, never
 // renamed to the canonical field names below.
 const MYNTRA_PREVIEW_COLUMNS: (PreviewColumn & { candidates: string[] })[] = [
   { key: 'styleId', label: 'Style ID', align: 'left', width: 110, candidates: ['Style ID', 'StyleID'] },
@@ -382,7 +382,7 @@ const PERFORMANCE_ADAPTERS: Record<PerformanceMarketplace, PerformanceAdapter> =
 }
 
 // The one adapter-selection entry point (mirrors C10's
-// getMarketplaceAdapter exactly) — undefined for anything not genuinely
+// getMarketplaceAdapter exactly): undefined for anything not genuinely
 // supported (etsy, flipkart, shopify, ...), never a fabricated fallback.
 export function getPerformanceAdapter(marketplace: string): PerformanceAdapter | undefined {
   return PERFORMANCE_ADAPTERS[marketplace as PerformanceMarketplace]
@@ -393,23 +393,23 @@ export function getPerformanceAdapter(marketplace: string): PerformanceAdapter |
 export { normalizeKey }
 
 // --- Brand scoping, derived from the report's own data --------------------
-// Milestone C15 — brand scoping is read directly from each uploaded
+// Milestone C15: brand scoping is read directly from each uploaded
 // report's own Brand column, never typed by hand. Myntra's Impress report
 // carries a real per-row Brand value (parsed into metadata.brand above);
 // a report format with no Brand column at all (Amazon's Business Report
-// has none) produces one group with brand: null — the same "unspecified"
+// has none) produces one group with brand: null: the same "unspecified"
 // scope lib/performance.ts already treats as real and distinct, never an
 // error or a fabricated guess.
 
 export type BrandGroup = { brand: string | null; records: CanonicalPerformanceRecord[] }
 
 // Groups already-VALID records by their own reported Brand value. A file
-// with more than one distinct brand splits into that many groups here —
+// with more than one distinct brand splits into that many groups here:
 // the caller (PerformanceImportPanel) imports each as its own scoped
 // dataset rather than silently blending different brands' numbers
 // together, and surfaces that split to the seller before import
 // completes. Sorted with the "unspecified" (null) group first, then
-// named brands alphabetically — a stable, deterministic order regardless
+// named brands alphabetically: a stable, deterministic order regardless
 // of row order in the source file.
 export function groupRecordsByReportBrand(records: CanonicalPerformanceRecord[]): BrandGroup[] {
   const map = new Map<string | null, CanonicalPerformanceRecord[]>()

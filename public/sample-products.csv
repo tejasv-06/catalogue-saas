@@ -1,2 +1,2 @@
-Brand,Category,Description,Image URL
-Example Brand,Shirt,"Detailed description of the product including material, use case, and key features",https://example.com/image.jpg
+Brand,Category,Description,Image URL 1 (optional),Image URL 2 (optional),Image URL 3 (optional),Image URL 4 (optional),Image URL 5 (optional)
+Example Brand,Shirt,"Detailed description of the product including material, use case, and key features",https://example.com/image1.jpg,https://example.com/image2.jpg,,,

@@ -1,11 +1,11 @@
-// Regression guard for the Generate Listings loading/progress experience —
+// Regression guard for the Generate Listings loading/progress experience:
 // same source-inspection approach as CatalogueWorkspace.enrichment.test.ts
 // and every other CatalogueWorkspace.*.test.ts file (no DOM/React-testing-
 // library harness exists in this repo). These tests prove the progress
 // banner's five stages (Analyzing/Preparing/Generating/Validating/Complete-
 // or-Failed) are driven by real, already-reached state transitions inside
 // generateForProductMarketplace/handleGenerateAll/runGeneration, never a
-// timer — and that ensureProductIntelligence/runProductIntelligenceAnalysis/
+// timer: and that ensureProductIntelligence/runProductIntelligenceAnalysis/
 // the credit-accounting call sites are untouched by this change.
 
 import { test } from 'node:test'
@@ -32,14 +32,14 @@ test('no setTimeout/setInterval is used to drive the progress banner', () => {
   }
 })
 
-// --- Stage 1: Analyzing Product — derived from the real enrichingProductId
+// --- Stage 1: Analyzing Product: derived from the real enrichingProductId
 // signal, never stored as an explicit settable phase (see
 // describeGenerationStage's own comment for why). ---
 
 test('describeGenerationStage shows "Analyzing" only when enrichingProductId genuinely matches the stage\'s own product, never as a stored phase value', () => {
   const type = bodyOf('export type GenerationStageInfo = {', 300)
   // 'analyzing' must NOT be one of the literal phase values that can be
-  // stored — proving it can only ever come from the real signal.
+  // stored: proving it can only ever come from the real signal.
   assert.match(type, /phase:\s*'preparing' \| 'generating' \| 'validating' \| 'complete' \| 'failed'/)
 
   const fn = bodyOf('function describeGenerationStage(', 1500)
@@ -66,7 +66,7 @@ test('the "generating" stage (with the real marketplace label) is set only after
   assert.ok(ensureIdx < generatingIdx && generatingIdx < fetchIdx)
 })
 
-test('the "validating" stage is only ever entered inside the res.ok success branch — never on an error response', () => {
+test('the "validating" stage is only ever entered inside the res.ok success branch: never on an error response', () => {
   const body = bodyOf('async function generateForProductMarketplace(', 10000)
   const okIdx = body.indexOf('if (res.ok) {')
   const validatingIdx = body.indexOf("phase: 'validating'")
@@ -78,16 +78,16 @@ test('the "validating" stage is only ever entered inside the res.ok success bran
 
 // --- Terminal states: complete/failed are set by the CALLERS
 // (handleGenerateAll/runGeneration), never inside
-// generateForProductMarketplace itself — so a multi-marketplace bulk batch
+// generateForProductMarketplace itself: so a multi-marketplace bulk batch
 // never flashes "complete" after each individual pair. ---
 
-test('generateForProductMarketplace itself never sets phase complete or failed — only its callers do, after the whole request is actually done', () => {
+test('generateForProductMarketplace itself never sets phase complete or failed: only its callers do, after the whole request is actually done', () => {
   const body = bodyOf('async function generateForProductMarketplace(', 10000)
   assert.ok(!/phase:\s*'complete'/.test(body))
   assert.ok(!/phase:\s*'failed'/.test(body))
 })
 
-test('handleGenerateAll only sets a terminal phase once, after its whole batch loop finishes — complete only when at least one pair actually succeeded, failed only when every attempted pair failed', () => {
+test('handleGenerateAll only sets a terminal phase once, after its whole batch loop finishes: complete only when at least one pair actually succeeded, failed only when every attempted pair failed', () => {
   const body = bodyOf('async function handleGenerateAll(', 5000)
   assert.match(body, /succeededPairs > 0\s*\n?\s*\?\s*\{ phase: 'complete'/)
   assert.match(body, /completedPairs > 0\s*\n?\s*\?\s*\{ phase: 'failed'/)
@@ -126,7 +126,7 @@ test('describeGenerationStage omits the "product N of M" clutter unless there is
 // (per the existing, unmodified logic asserted in
 // CatalogueWorkspace.enrichment.test.ts) never triggers a fresh analysis. ---
 
-test('the preparing stage is set unconditionally (both full generation and field-scoped regenerate reach it) — only the intelligence branch beneath it is gated on fieldGroup', () => {
+test('the preparing stage is set unconditionally (both full generation and field-scoped regenerate reach it): only the intelligence branch beneath it is gated on fieldGroup', () => {
   const body = bodyOf('async function generateForProductMarketplace(', 5000)
   const preparingIdx = body.indexOf("phase: 'preparing'")
   const fieldGroupCheckIdx = body.indexOf('const intelligenceData = fieldGroup')
@@ -140,7 +140,7 @@ test('this change introduces no new deductCredits/assertSufficientCredits call s
   assert.ok(!/deductCredits|assertSufficientCredits/.test(source))
 })
 
-test('ensureProductIntelligence and runProductIntelligenceAnalysis are structurally unmodified call/definition sites — still exactly one call to ensureProductIntelligence in the whole file', () => {
+test('ensureProductIntelligence and runProductIntelligenceAnalysis are structurally unmodified call/definition sites: still exactly one call to ensureProductIntelligence in the whole file', () => {
   const occurrences = [...source.matchAll(/ensureProductIntelligence\(/g)]
   assert.equal(occurrences.length, 2) // definition + the one call inside generateForProductMarketplace
 })

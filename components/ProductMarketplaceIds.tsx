@@ -5,12 +5,12 @@ import { getProductExternalIds, setProductExternalId } from '@/lib/performance'
 import { PERFORMANCE_MARKETPLACES, PERFORMANCE_MARKETPLACE_LABELS, type PerformanceMarketplace } from '@/lib/performanceAdapters'
 import { labelClass, inputClass, buttonSecondarySmallClass } from '@/lib/uiClasses'
 
-// Milestone C15 follow-up — lets a seller type a marketplace's own
+// Milestone C15 follow-up: lets a seller type a marketplace's own
 // product identifier (Myntra Style ID, Amazon ASIN) directly onto a
 // product BEFORE any performance report is ever uploaded. Saving here
 // calls setProductExternalId, which writes into the exact same
 // catalog_product_external_ids table the import flow's Confirm Import
-// writes into (lib/performance.ts) — so a report uploaded afterward
+// writes into (lib/performance.ts): so a report uploaded afterward
 // matches this product immediately, no dropdown needed. Ground truth
 // typed by a human; this file never reads brand/category/price.
 

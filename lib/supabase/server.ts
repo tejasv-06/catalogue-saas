@@ -16,7 +16,7 @@ export async function createClient() {
           try {
             cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options))
           } catch {
-            // called from a Server Component render — safe to ignore since
+            // called from a Server Component render: safe to ignore since
             // the proxy already refreshes the session on every /workspace request
           }
         }

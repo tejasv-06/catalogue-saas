@@ -7,7 +7,7 @@ import ThemeToggle from '@/components/ThemeToggle'
 import ProfileMenu from '@/components/ProfileMenu'
 
 // Full-width bar spanning the entire top of the screen on /workspace and
-// /audit — replaces the old scattered arrangement (logo/credits/theme/logout
+// /audit: replaces the old scattered arrangement (logo/credits/theme/logout
 // used to live split across AppHeader and AppSidebar). AppSidebar now only
 // holds the four destinations; the slim marketplace/client-selector bar
 // (still called AppHeader) is unrelated and unaffected, it's a contextual

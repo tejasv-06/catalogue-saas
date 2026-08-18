@@ -2,11 +2,11 @@ import { NextResponse } from 'next/server'
 import { createClient as createAuthClient } from '@/lib/supabase/server'
 import { getPurchaseByCheckoutSessionId } from '@/lib/purchases'
 
-// Milestone C13 — GET /api/billing/purchase-status?session_id=...
+// Milestone C13: GET /api/billing/purchase-status?session_id=...
 //
 // Read-only, authenticated. Lets the success-page UI show the REAL
 // fulfillment state (pending/paid/fulfilled/failed/cancelled) instead of
-// guessing from a query-string redirect or a blind timeout — the browser
+// guessing from a query-string redirect or a blind timeout: the browser
 // never gets to assert "I have credits now," it can only ask "what does
 // the server say happened," and even that requires being the purchase's
 // own owner.
@@ -28,7 +28,7 @@ export async function GET(request: Request) {
     const purchase = await getPurchaseByCheckoutSessionId(sessionId)
 
     // Same "not found and not yours" collapse used everywhere else in this
-    // app's ownership checks (e.g. lib/catalog.ts's getProductById) — never
+    // app's ownership checks (e.g. lib/catalog.ts's getProductById): never
     // reveal whether a session id belongs to someone else.
     if (!purchase || purchase.user_id !== userId) {
       return NextResponse.json({ error: 'Purchase not found' }, { status: 404 })

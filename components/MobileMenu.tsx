@@ -7,7 +7,7 @@ import { TOOLS } from '@/components/ToolsDropdown'
 const menuLinkClass =
   'block px-3 py-2.5 rounded-lg text-sm font-medium text-[var(--heading-text)] hover:bg-[var(--secondary-btn-bg-hover)] transition-colors'
 
-// Mirrors the desktop nav's navLinks in Navbar.tsx — same five anchors/
+// Mirrors the desktop nav's navLinks in Navbar.tsx: same five anchors/
 // routes, same order.
 const navLinks = [
   { href: '/#product', label: 'Product' },
@@ -90,7 +90,7 @@ export default function MobileMenu({ isLoggedIn }: { isLoggedIn: boolean }) {
 
           <div className="my-1 border-t border-[var(--card-border)]" />
 
-          {/* Mirrors the desktop nav's session-aware CTA in Navbar.tsx — see
+          {/* Mirrors the desktop nav's session-aware CTA in Navbar.tsx: see
               that file for why guests get "Try Tesolute Free" pointed at
               /workspace instead of "Go to Workspace" or a /login wall. */}
           {!isLoggedIn && (

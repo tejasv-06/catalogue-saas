@@ -5,7 +5,7 @@ import BuyCreditsModal from '@/components/BuyCreditsModal'
 
 // Fired by any client component after an action that spends credits
 // succeeds (see CatalogueWorkspace's generateForProduct and
-// AccountReportDashboard's handleGenerate) — window-level rather than a
+// AccountReportDashboard's handleGenerate): window-level rather than a
 // prop, because AuditHeader and AccountReportDashboard are siblings under a
 // server component (app/audit/page.tsx), not parent/child, so there's no
 // prop path to thread a refresh signal through.
@@ -15,10 +15,10 @@ export function notifyCreditsChanged() {
   window.dispatchEvent(new Event(CREDITS_CHANGED_EVENT))
 }
 
-// Milestone C13 — polls the real purchase-status endpoint after a Stripe
+// Milestone C13: polls the real purchase-status endpoint after a Stripe
 // Checkout redirect, never trusting the redirect itself. `?checkout=
 // success&session_id=...` only means "the browser came back from Stripe,"
-// not "credits were awarded" — award_purchase_credits() (the webhook's own
+// not "credits were awarded": award_purchase_credits() (the webhook's own
 // atomic RPC) is the only actual authority, and this polls exactly that
 // fact via GET /api/billing/purchase-status, which reads the same
 // server-side purchase row the webhook writes to. Stops polling once the
@@ -35,7 +35,7 @@ function useCheckoutStatusBanner(onFulfilled: () => void): { message: string | n
     const sessionId = params.get('session_id')
 
     if (checkout === 'cancel') {
-      setBanner({ message: 'Checkout cancelled — no charge was made.', tone: 'error' })
+      setBanner({ message: 'Checkout cancelled: no charge was made.', tone: 'error' })
       window.history.replaceState(null, '', window.location.pathname)
       return
     }
@@ -44,9 +44,9 @@ function useCheckoutStatusBanner(onFulfilled: () => void): { message: string | n
 
     let cancelled = false
     let attempts = 0
-    const maxAttempts = 10 // ~20s at 2s intervals — webhook fulfillment is normally within a couple seconds
+    const maxAttempts = 10 // ~20s at 2s intervals: webhook fulfillment is normally within a couple seconds
 
-    setBanner({ message: 'Payment received — processing your credits…', tone: 'processing' })
+    setBanner({ message: 'Payment received: processing your credits…', tone: 'processing' })
     window.history.replaceState(null, '', window.location.pathname)
 
     async function poll() {
@@ -62,17 +62,17 @@ function useCheckoutStatusBanner(onFulfilled: () => void): { message: string | n
           return
         }
         if (res.ok && (data?.status === 'failed' || data?.status === 'cancelled')) {
-          setBanner({ message: 'Payment was not completed — no credits were added.', tone: 'error' })
+          setBanner({ message: 'Payment was not completed: no credits were added.', tone: 'error' })
           return
         }
       } catch {
-        // Transient fetch failure — just retry on the next tick below.
+        // Transient fetch failure: just retry on the next tick below.
       }
 
       if (!cancelled && attempts < maxAttempts) {
         setTimeout(poll, 2000)
       } else if (!cancelled) {
-        setBanner({ message: 'Still processing — your balance will update shortly.', tone: 'processing' })
+        setBanner({ message: 'Still processing: your balance will update shortly.', tone: 'processing' })
       }
     }
 
@@ -86,7 +86,7 @@ function useCheckoutStatusBanner(onFulfilled: () => void): { message: string | n
   return banner
 }
 
-// Rendered in TopHeader's usage slot on both /workspace and /audit — same
+// Rendered in TopHeader's usage slot on both /workspace and /audit: same
 // shared balance either way. Badge styling matches the small status-pill
 // pattern used elsewhere in the app (e.g. StatusBadge), not plain text, since
 // it now sits in a prominent always-visible header position.
@@ -106,7 +106,7 @@ export default function CreditsBalance() {
           }
         })
         .catch(() => {
-          // Balance display is non-critical — a failed fetch just leaves the
+          // Balance display is non-critical: a failed fetch just leaves the
           // pill blank rather than surfacing an error in the header.
         })
     }

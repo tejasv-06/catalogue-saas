@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient as createAuthClient } from '@/lib/supabase/server'
 import { getOrCreateCreditBalance } from '@/lib/credits'
 
-// Used by the header/dashboard credits-balance display — signed-in users
+// Used by the header/dashboard credits-balance display: signed-in users
 // only, mirroring the guard on generate-account-insights and the credit
 // check in generate-single.
 export async function GET() {

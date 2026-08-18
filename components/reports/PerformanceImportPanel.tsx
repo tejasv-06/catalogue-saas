@@ -28,25 +28,25 @@ import {
   dangerTextClass
 } from '@/lib/uiClasses'
 
-// Milestone C15 — §14 Report Import UX. New tab inside the existing
+// Milestone C15: §14 Report Import UX. New tab inside the existing
 // /audit page (Account Audit's own established home for report-upload
-// tools) — no new top-level navigation. Client-side parse/preview
+// tools): no new top-level navigation. Client-side parse/preview
 // (Papa.parse, same convention as components/reports/AccountAuditPanel.tsx
 // and CatalogueWorkspace.tsx's own CSV product-intake tab), nothing
 // persisted until the seller explicitly confirms.
 //
-// FINAL ARCHITECTURE CORRECTION — this is a marketplace performance
+// FINAL ARCHITECTURE CORRECTION: this is a marketplace performance
 // REPORT IMPORT, not a catalog-product-matching tool. The uploaded report
 // already IS the source of truth for every field in it (Style ID, Brand,
-// Article Type, every metric — see lib/performanceAdapters.ts's
+// Article Type, every metric: see lib/performanceAdapters.ts's
 // previewColumns/parseRows). Importing a valid row never requires the
 // seller to identify, confirm, or select anything Tesolute could already
 // read straight off the file. There is no "Product Match" column, no
-// dropdown, no matched/unmatched gate on Confirm Import — every valid row
+// dropdown, no matched/unmatched gate on Confirm Import: every valid row
 // imports. Catalog linkage (Style ID/ASIN -> a Tesolute product) is a
 // separate, OPTIONAL enrichment the seller can set up on a product's own
 // page (components/ProductMarketplaceIds.tsx, lib/performance.ts's
-// setProductExternalId) before or after any report import — never a
+// setProductExternalId) before or after any report import: never a
 // precondition for it. commitPerformanceImport looks up any existing
 // mapping opportunistically and leaves product_id null otherwise
 // (migration 20260810_13 made that column optional for exactly this).
@@ -55,15 +55,15 @@ type PreviewRowState =
   | { kind: 'valid'; record: CanonicalPerformanceRecord; previewValues: PreviewValues }
   | { kind: 'invalid'; reason: string; previewValues: PreviewValues }
 
-// Large report performance — a report can have hundreds or thousands of
+// Large report performance: a report can have hundreds or thousands of
 // rows. The DOM only ever renders this many; the full parsed dataset
 // stays in previewRows state and is what Confirm Import actually sends to
-// commitPerformanceImport — this constant only slices what gets RENDERED,
+// commitPerformanceImport: this constant only slices what gets RENDERED,
 // never what gets processed.
 const PREVIEW_LIMIT = 15
 
 // Every filter starts genuinely blank on every fresh mount (page load,
-// refresh, or switching back to this tab — AuditTabs unmounts this
+// refresh, or switching back to this tab: AuditTabs unmounts this
 // component when its tab isn't active, so a remount already means a
 // brand-new instance of this state). There is no localStorage/
 // sessionStorage/URL persistence anywhere in this file to remove.
@@ -78,7 +78,7 @@ export default function PerformanceImportPanel({
   const [fileName, setFileName] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [previewRows, setPreviewRows] = useState<PreviewRowState[]>([])
-  // Derived from the report's own Brand column (never typed by hand) —
+  // Derived from the report's own Brand column (never typed by hand):
   // computed once at parse time so the "this file has N brands" notice is
   // visible during preview, before Confirm Import ever runs.
   const [brandGroups, setBrandGroups] = useState<BrandGroup[]>([])
@@ -113,7 +113,7 @@ export default function PerformanceImportPanel({
       return
     }
 
-    // Parsing/validation only — no matching lookup, no catalog fetch. A
+    // Parsing/validation only: no matching lookup, no catalog fetch. A
     // row's validity depends only on the report's own data (does it have
     // a Style ID, are its counts/percentages in bounds), never on whether
     // any Tesolute product has been linked to it yet.
@@ -132,7 +132,7 @@ export default function PerformanceImportPanel({
     setStep('preview')
   }
 
-  // The ONLY place row count is limited — rendering. previewRows itself
+  // The ONLY place row count is limited: rendering. previewRows itself
   // (and Confirm Import below) always sees the complete dataset.
   const visibleRows = previewRows.slice(0, PREVIEW_LIMIT)
   const validCount = previewRows.filter((r) => r.kind === 'valid').length
@@ -140,7 +140,7 @@ export default function PerformanceImportPanel({
 
   async function handleConfirmImport() {
     // Reachable only from the 'preview' step, which handleFileChange only
-    // enters after confirming marketplace/period are set — this guard
+    // enters after confirming marketplace/period are set: this guard
     // just lets TypeScript narrow PerformanceMarketplace | '' down to
     // PerformanceMarketplace for the call below, not a real runtime case.
     if (!marketplace) return
@@ -152,7 +152,7 @@ export default function PerformanceImportPanel({
       return
     }
 
-    // Never blend different brands' reports into one dataset — one commit
+    // Never blend different brands' reports into one dataset: one commit
     // per detected brand group, so two brands sharing one uploaded file
     // become two separately-scoped historical snapshots, not one blended
     // catalog. groupRecordsByReportBrand is recomputed here (not just
@@ -173,7 +173,7 @@ export default function PerformanceImportPanel({
         }
       }
 
-      // Milestone C14 relationship (§18) — one performance_imported event
+      // Milestone C14 relationship (§18): one performance_imported event
       // per product this import actually linked (product_id came back
       // non-null), only after every group has fully committed. Rows with
       // no linked product yet have nothing to attach history to, so
@@ -228,7 +228,7 @@ export default function PerformanceImportPanel({
           <p className={bodyTextClass}>
             Import a marketplace performance report (Amazon Business Report or Myntra Impress report) to see product-level
             impressions, clicks, conversion, and diagnosis inside each product. Brand scoping is read automatically from the
-            report's own Brand column — no need to select it here.
+            report's own Brand column: no need to select it here.
           </p>
 
           <div className="flex flex-wrap gap-4">
@@ -272,7 +272,7 @@ export default function PerformanceImportPanel({
             </div>
           </div>
 
-          {/* The file picker itself is never disabled — parsing needs
+          {/* The file picker itself is never disabled: parsing needs
               marketplace/period, but choosing a file shouldn't be blocked
               on that. If the seller picks a file before those are set,
               handleFileChange's own guard below surfaces a clear error
@@ -289,7 +289,7 @@ export default function PerformanceImportPanel({
         </div>
       )}
 
-      {/* Shared across every step — handleFileChange can set an error
+      {/* Shared across every step: handleFileChange can set an error
           while still on 'setup' (e.g. picked a file before marketplace/
           period were set), and that must never be silently invisible. */}
       {error && (
@@ -300,7 +300,7 @@ export default function PerformanceImportPanel({
 
       {step === 'preview' && adapter && (
         <div className={`p-6 flex flex-col gap-4 ${cardClass}`}>
-          {/* Informational only — never a gate on Confirm Import. Every
+          {/* Informational only: never a gate on Confirm Import. Every
               valid row imports regardless of these counts. */}
           <div className="flex flex-wrap items-center gap-4 text-sm">
             <span className="text-[var(--body-text)]">{previewRows.length} rows detected</span>
@@ -310,11 +310,11 @@ export default function PerformanceImportPanel({
 
           <p className="text-xs text-[var(--muted-text)]">
             {previewRows.length > PREVIEW_LIMIT
-              ? `Preview — first ${PREVIEW_LIMIT} of ${previewRows.length} rows`
+              ? `Preview: first ${PREVIEW_LIMIT} of ${previewRows.length} rows`
               : `Showing ${previewRows.length} of ${previewRows.length} rows`}
           </p>
 
-          {/* Brand scoping is read from the report's own Brand column —
+          {/* Brand scoping is read from the report's own Brand column:
               never merged silently. A single brand (or no Brand column at
               all, e.g. Amazon's report) gets a quiet confirmation line; two
               or more distinct brands in one file get an explicit notice
@@ -323,7 +323,7 @@ export default function PerformanceImportPanel({
           {brandGroups.length > 1 ? (
             <p className="text-xs text-[var(--warn-text)]">
               This file contains {brandGroups.length} brands:{' '}
-              {brandGroups.map((g) => g.brand ?? 'Unspecified').join(', ')} — importing as {brandGroups.length} separate datasets, one
+              {brandGroups.map((g) => g.brand ?? 'Unspecified').join(', ')}: importing as {brandGroups.length} separate datasets, one
               per brand.
             </p>
           ) : (
@@ -332,10 +332,10 @@ export default function PerformanceImportPanel({
             </p>
           )}
 
-          {/* The report itself — a real, sticky-header, horizontally AND
+          {/* The report itself: a real, sticky-header, horizontally AND
               vertically scrollable spreadsheet, not cards, and not a
               matching interface. Every column here comes straight from
-              the uploaded file's own columns (adapter.previewColumns) —
+              the uploaded file's own columns (adapter.previewColumns):
               no extra Tesolute-owned column is appended. Internal scroll
               container (max-h + overflow-auto) so this never breaks the
               page's own layout regardless of row count. */}

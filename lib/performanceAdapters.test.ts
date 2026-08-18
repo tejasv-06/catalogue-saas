@@ -22,7 +22,7 @@ function invalid(results: PerformanceImportRowResult[]) {
 
 // --- Marketplace scope (§2/§20) ---------------------------------------------
 
-test('only amazon and myntra are performance marketplaces — etsy/flipkart/shopify get no adapter', () => {
+test('only amazon and myntra are performance marketplaces: etsy/flipkart/shopify get no adapter', () => {
   assert.deepEqual([...PERFORMANCE_MARKETPLACES], ['amazon', 'myntra'])
   assert.equal(getPerformanceAdapter('etsy'), undefined)
   assert.equal(getPerformanceAdapter('flipkart'), undefined)
@@ -71,7 +71,7 @@ test('1. Amazon adapter normalizes a real-shaped Business Report row into the ca
 
 // --- 2. Myntra normalization -------------------------------------------------
 
-test("2. Myntra adapter normalizes a real-shaped Impress report row into the canonical model (structure only — no hardcoded example values in application logic)", () => {
+test("2. Myntra adapter normalizes a real-shaped Impress report row into the canonical model (structure only: no hardcoded example values in application logic)", () => {
   const adapter = getPerformanceAdapter('myntra')!
   const results = adapter.parseRows(
     [
@@ -146,7 +146,7 @@ test('4. Myntra: an explicit "0" in the report is preserved as the number 0, not
   assert.equal(row.record.returnRate, 0)
   assert.strictEqual(row.record.returnRate, 0)
   assert.notEqual(row.record.returnRate, null)
-  // Rating '0' is a genuine reported zero — still distinct from "no
+  // Rating '0' is a genuine reported zero: still distinct from "no
   // rating data at all" (an absent Rating column, tested separately).
   assert.equal(row.record.rating, 0)
 })
@@ -191,7 +191,7 @@ test('a row missing its identifier (Style ID / ASIN) is invalid, never silently 
   assert.equal(invalid(amazon).length, 1)
 })
 
-test('every input row produces exactly one result (valid or invalid) — 1:1, nothing silently discarded', () => {
+test('every input row produces exactly one result (valid or invalid): 1:1, nothing silently discarded', () => {
   const adapter = getPerformanceAdapter('myntra')!
   const rows: Record<string, string>[] = [{ 'Style ID': '1', Impressions: '10' }, { Impressions: '20' }, { 'Style ID': '3', Rating: '99' }]
   const results = adapter.parseRows(rows, PERIOD)
@@ -216,7 +216,7 @@ test('13. a monthly period is tagged on every resulting record', () => {
 
 // --- Reuse of existing Amazon infrastructure (§3) ---------------------------
 
-test('AmazonPerformanceAdapter reuses lib/accountReportStats.ts\'s parseAccountReportRow — it does not reimplement Amazon CSV parsing', () => {
+test('AmazonPerformanceAdapter reuses lib/accountReportStats.ts\'s parseAccountReportRow: it does not reimplement Amazon CSV parsing', () => {
   const fs = require('fs') as typeof import('fs')
   const path = require('path') as typeof import('path')
   const source = fs.readFileSync(path.join(__dirname, 'performanceAdapters.ts'), 'utf8')
@@ -226,7 +226,7 @@ test('AmazonPerformanceAdapter reuses lib/accountReportStats.ts\'s parseAccountR
 
 // --- Acceptance test: zero dependency on the example report's own values ----
 //
-// "Tesolute displays whatever valid Myntra report the seller uploads" —
+// "Tesolute displays whatever valid Myntra report the seller uploads":
 // not a fixed dataset. Two reports below are built from RANDOM values
 // generated at test-run time (never the same twice, never any single
 // specific worked example) specifically so this test cannot pass by
@@ -263,12 +263,12 @@ function buildSyntheticMyntraReport(rowCount: number) {
   return rows
 }
 
-test('ACCEPTANCE: two synthetic reports with completely different, randomly generated Style IDs/brands/values both parse correctly — proves zero dependency on the spec\'s own example values', () => {
+test('ACCEPTANCE: two synthetic reports with completely different, randomly generated Style IDs/brands/values both parse correctly: proves zero dependency on the spec\'s own example values', () => {
   const adapter = getPerformanceAdapter('myntra')!
   const reportA = buildSyntheticMyntraReport(5)
   const reportB = buildSyntheticMyntraReport(5)
 
-  // Structurally impossible to collide — 8 random digits each.
+  // Structurally impossible to collide: 8 random digits each.
   assert.notDeepEqual(reportA.map((r) => r['Style ID']), reportB.map((r) => r['Style ID']))
 
   const resultsA = valid(adapter.parseRows(reportA, PERIOD))
@@ -278,7 +278,7 @@ test('ACCEPTANCE: two synthetic reports with completely different, randomly gene
   assert.equal(resultsB.length, 5)
 
   // Every row's parsed externalProductId/previewValues echo back exactly
-  // what THAT row's own random Style ID was — never a fixed value, never
+  // what THAT row's own random Style ID was: never a fixed value, never
   // one report's data leaking into the other.
   for (let i = 0; i < 5; i++) {
     assert.equal(resultsA[i].record.externalProductId, reportA[i]['Style ID'])
@@ -293,7 +293,7 @@ test('ACCEPTANCE: two synthetic reports with completely different, randomly gene
   for (const id of idsA) assert.ok(!idsB.has(id))
 })
 
-test('ACCEPTANCE: a report with an unusual row count (not 4, not 15) is parsed completely — the row count itself is never assumed', () => {
+test('ACCEPTANCE: a report with an unusual row count (not 4, not 15) is parsed completely: the row count itself is never assumed', () => {
   const adapter = getPerformanceAdapter('myntra')!
   const oddRowCount = 37
   const report = buildSyntheticMyntraReport(oddRowCount)
@@ -387,7 +387,7 @@ test('groupRecordsByReportBrand groups are sorted deterministically (unspecified
   )
 })
 
-test('ACCEPTANCE: a synthetic report where every row has an independently-randomized Brand splits into exactly that many groups — proves the split is genuinely data-driven, not tuned to any fixed brand count', () => {
+test('ACCEPTANCE: a synthetic report where every row has an independently-randomized Brand splits into exactly that many groups: proves the split is genuinely data-driven, not tuned to any fixed brand count', () => {
   const rowCount = 20
   const report = buildSyntheticMyntraReport(rowCount)
   // Force a KNOWN number of distinct brands (3) across the random rows,

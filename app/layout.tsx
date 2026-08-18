@@ -18,7 +18,7 @@ export const metadata: Metadata = {
   manifest: "/site.webmanifest",
   icons: {
     // favicon.ico and apple-icon.png live in app/ and are auto-detected by
-    // Next.js file convention — only the /public icons need declaring here.
+    // Next.js file convention: only the /public icons need declaring here.
     icon: [
       { url: "/favicon-96x96.png", sizes: "96x96", type: "image/png" },
       { url: "/web-app-manifest-192x192.png", sizes: "192x192", type: "image/png" },
@@ -37,7 +37,7 @@ export default function RootLayout({
       lang="en"
       className={`${plusJakartaSans.variable} ${geistMono.variable} h-full antialiased`}
       // The pre-paint script below sets data-theme on this element before
-      // React hydrates, based on localStorage — something the server can't
+      // React hydrates, based on localStorage: something the server can't
       // know when it renders. That's an intentional, expected mismatch (the
       // same technique next-themes and similar libraries use), not a bug to
       // fix by removing the script.
@@ -45,7 +45,7 @@ export default function RootLayout({
     >
       <head>
         {/* Runs before paint so a saved "light" preference doesn't flash the
-            dark theme first — sets the same data-theme attribute ThemeToggle
+            dark theme first: sets the same data-theme attribute ThemeToggle
             manages at runtime. */}
         <script
           dangerouslySetInnerHTML={{

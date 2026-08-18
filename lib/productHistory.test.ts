@@ -1,10 +1,10 @@
-// Unit tests for lib/productHistory.ts, using Node's built-in test runner —
+// Unit tests for lib/productHistory.ts, using Node's built-in test runner:
 // same conventions as lib/catalog.test.ts (mock Supabase client, no new
 // dependency). Milestone C14 (Milestone 34).
 //
 // §18's items 19-23 (C9 enrichment / C10 generation / C11 export /
 // C12 brand ownership / C13 billing still work) are regression concerns,
-// not new C14 behavior — they're covered by re-running the existing,
+// not new C14 behavior: they're covered by re-running the existing,
 // untouched lib/productIntelligence.test.ts, lib/marketplaceAdapters.test.ts,
 // lib/exportReadiness.test.ts, lib/brands.test.ts, lib/purchases.test.ts,
 // lib/credits.test.ts, lib/webhookVerification.test.ts suites unchanged
@@ -60,7 +60,7 @@ function makeInsertMockClient(opts: { userId: string | null; result?: { data: an
 }
 
 // getProductHistory's chain (.select().eq().order().order()) never calls
-// .single() — each step must return a thenable so `await` at the end of
+// .single(): each step must return a thenable so `await` at the end of
 // the chain resolves, exactly like the real supabase-js PostgrestFilterBuilder.
 function makeHistoryReadMockClient(opts: { userId: string | null; result?: { data: any; error: any } }) {
   const calls: { op: string; column?: string; value?: any; options?: any }[] = []
@@ -259,9 +259,9 @@ test('10. exported supports marketplace and an export_id reference in metadata (
   assert.deepEqual(row.metadata, { export_id: 'export-1', format: 'csv' })
 })
 
-// --- Metadata validation (spec §5/§6 — JSON-safe, bounded, no payload dumps) --
+// --- Metadata validation (spec §5/§6: JSON-safe, bounded, no payload dumps) --
 
-test('metadata must be a flat object of strings/numbers/booleans/null — a nested object is rejected', async () => {
+test('metadata must be a flat object of strings/numbers/booleans/null: a nested object is rejected', async () => {
   const client = makeInsertMockClient({ userId: 'user-a', result: baseRow() })
   await assert.rejects(() =>
     recordProductHistoryEvent(
@@ -286,12 +286,12 @@ test('productId is required', async () => {
 
 // --- ownership / auth ---------------------------------------------------------
 
-test('14/15. recordProductHistoryEvent rejects when there is no authenticated session — never derives ownership from anything else', async () => {
+test('14/15. recordProductHistoryEvent rejects when there is no authenticated session: never derives ownership from anything else', async () => {
   const client = makeInsertMockClient({ userId: null })
   await assert.rejects(() => recordProductHistoryEvent({ productId: 'product-1', eventType: 'product_created' }, client))
 })
 
-test('owner_user_id is always derived from the session, never accepted as a parameter — recordProductHistoryEvent has no such parameter at all', async () => {
+test('owner_user_id is always derived from the session, never accepted as a parameter: recordProductHistoryEvent has no such parameter at all', async () => {
   const client = makeInsertMockClient({ userId: 'user-a', result: baseRow() })
   await recordProductHistoryEvent({ productId: 'product-1', eventType: 'product_created' }, client)
   const insertCall = client.__calls.find((c: any) => c.op === 'insert')
@@ -344,7 +344,7 @@ test('getProductHistory surfaces a genuine Supabase error rather than swallowing
   await assert.rejects(() => getProductHistory('product-1', client), (err: any) => err === dbError)
 })
 
-// --- §12 — centralized display mapping ------------------------------------------
+// --- §12: centralized display mapping ------------------------------------------
 
 test('EVENT_TYPE_LABELS has a human label for every event type, with no raw event_type string used anywhere in it', () => {
   for (const eventType of PRODUCT_HISTORY_EVENT_TYPES) {
@@ -383,14 +383,14 @@ test('describeProductHistoryEvent never exposes raw metadata JSON', () => {
   assert.ok(!('metadata' in display), 'the display object must never carry raw metadata through to the UI')
 })
 
-// --- 17/18. C7/C5 unaffected — structural check on this module's own surface --
+// --- 17/18. C7/C5 unaffected: structural check on this module's own surface --
 
-test("17. this module never imports from or writes to catalog_exports — C7 Export History stays the sole authoritative export record", () => {
+test("17. this module never imports from or writes to catalog_exports: C7 Export History stays the sole authoritative export record", () => {
   const source = readFileSync(join(__dirname, 'productHistory.ts'), 'utf8')
   assert.ok(!/catalog_exports/.test(source))
 })
 
-test('18. this module never imports lib/credits.ts or touches user_credits/credit_transactions — C14 is credit-neutral', () => {
+test('18. this module never imports lib/credits.ts or touches user_credits/credit_transactions: C14 is credit-neutral', () => {
   const source = readFileSync(join(__dirname, 'productHistory.ts'), 'utf8')
   assert.ok(!/lib\/credits/.test(source))
   assert.ok(!/user_credits/.test(source))
@@ -399,7 +399,7 @@ test('18. this module never imports lib/credits.ts or touches user_credits/credi
 
 // --- 15. append-only enforcement lives in the migration, not just app code ----
 
-test('15. the migration grants only SELECT + INSERT policies for product_history_events — no UPDATE/DELETE policy for any client role', () => {
+test('15. the migration grants only SELECT + INSERT policies for product_history_events: no UPDATE/DELETE policy for any client role', () => {
   const migration = readFileSync(
     join(__dirname, '..', 'supabase', 'migrations', '20260810_10_product_history.sql'),
     'utf8'
@@ -412,7 +412,7 @@ test('15. the migration grants only SELECT + INSERT policies for product_history
   assert.ok(!/for delete/i.test(migration), 'no "for delete" policy clause should exist in this migration at all')
 })
 
-test("the insert policy's WITH CHECK verifies both owner_user_id and product ownership via catalog_products — never a caller-supplied id alone", () => {
+test("the insert policy's WITH CHECK verifies both owner_user_id and product ownership via catalog_products: never a caller-supplied id alone", () => {
   const migration = readFileSync(
     join(__dirname, '..', 'supabase', 'migrations', '20260810_10_product_history.sql'),
     'utf8'

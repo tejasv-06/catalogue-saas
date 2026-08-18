@@ -1,8 +1,8 @@
-// Milestone C14 (Milestone 34) — regression/wiring guard for Product
+// Milestone C14 (Milestone 34): regression/wiring guard for Product
 // History integration into CatalogueWorkspace.tsx and
 // app/api/enrich-product/route.ts. Same source-inspection approach as the
 // other CatalogueWorkspace.*.test.ts files (no jest/testing-library in this
-// project) — real end-to-end behavior is covered separately by live
+// project): real end-to-end behavior is covered separately by live
 // browser verification.
 
 import { test } from 'node:test'
@@ -32,7 +32,7 @@ test('AC13. ensureServerProduct records product_created only in the branch that 
   assert.ok(earlyReturnIdx !== -1 && earlyReturnIdx < createIdx)
 })
 
-test('ensureServerProduct threads an explicit source (manual/csv/photo) into product_created metadata — never a guess made at record time', () => {
+test('ensureServerProduct threads an explicit source (manual/csv/photo) into product_created metadata: never a guess made at record time', () => {
   const body = bodyOf(workspaceSource, 'async function ensureServerProduct(', 1800)
   assert.match(body, /metadata:\s*\{\s*source\s*\}/)
 })
@@ -40,10 +40,10 @@ test('ensureServerProduct threads an explicit source (manual/csv/photo) into pro
 test('all three ensureServerProduct call sites pass an explicit, correct source', () => {
   assert.match(workspaceSource, /ensureServerProduct\(newProduct,\s*source\)/, 'commitAddProduct must thread its own source parameter through')
   assert.match(workspaceSource, /ensureServerProduct\(product,\s*'csv'\)/, 'commitCsvUpload must tag its rows as csv')
-  // Milestone C17.1 — uploadedImageUrl (single) became uploadedImageUrl ?
+  // Milestone C17.1: uploadedImageUrl (single) became uploadedImageUrl ?
   // [uploadedImageUrl] : undefined (array-or-undefined, see commitAddProduct's
   // own comment on why undefined specifically means "no new image, don't
-  // touch existing images" for Photos Only) — the 'photo' source tag itself
+  // touch existing images" for Photos Only): the 'photo' source tag itself
   // is unchanged.
   assert.match(
     workspaceSource,
@@ -63,7 +63,7 @@ test('AC14. the editingId branch of commitAddProduct persists via updateProduct 
   assert.ok(editBranchIdx < updateIdx && updateIdx < recordIdx)
 })
 
-test('the edit path is skipped entirely for a product with no serverId yet or no session — never a fabricated update', () => {
+test('the edit path is skipped entirely for a product with no serverId yet or no session: never a fabricated update', () => {
   const body = bodyOf(workspaceSource, 'function commitAddProduct(', 2600)
   assert.match(body, /if \(hasSession && existing\?\.serverId\) \{/)
 })
@@ -74,7 +74,7 @@ test("lib/catalog.ts exports updateProduct, mirroring setProductIntelligence's o
   const body = catalogSource.slice(start, start + 500)
   assert.match(body, /await requireUserId\(client\)/)
   assert.match(body, /\.from\('catalog_products'\)\s*\.update\(fields\)/)
-  assert.ok(!/owner_user_id/.test(body), 'updateProduct must never accept or set owner_user_id itself — RLS is the only enforcement')
+  assert.ok(!/owner_user_id/.test(body), 'updateProduct must never accept or set owner_user_id itself: RLS is the only enforcement')
 })
 
 // --- C14-AC15. C9 enrichment generates started/completed/failed -------------
@@ -107,7 +107,7 @@ test('AC15/AC22. enrich-product route records enrichment_failed on both failure 
   }
 })
 
-test('history recording in enrich-product is fire-and-forget (void ... .catch(...)) — a history failure can never turn a successful enrichment response into an error', () => {
+test('history recording in enrich-product is fire-and-forget (void ... .catch(...)): a history failure can never turn a successful enrichment response into an error', () => {
   const calls = enrichRouteSource.match(/void recordProductHistoryEvent\([^]*?\.catch\(/g) ?? []
   assert.equal(calls.length, 4, 'expected 4 fire-and-forget history calls: started, completed, and 2 failed sites')
 })
@@ -135,14 +135,14 @@ test("AC16/AC17. persistGenerationToCatalog distinguishes listing_generated (fir
 
 // --- C14-AC18/AC19. Approval / rejection ------------------------------------
 
-test("AC18/AC19. persistApprovalToCatalog maps the existing approve/unapprove toggle to listing_approved/listing_rejected — no second approval mechanism", () => {
+test("AC18/AC19. persistApprovalToCatalog maps the existing approve/unapprove toggle to listing_approved/listing_rejected: no second approval mechanism", () => {
   const body = bodyOf(workspaceSource, 'async function persistApprovalToCatalog(', 1600)
   const setApprovalIdx = body.indexOf('await setApproval(listingId, approved)')
   const eventIdx = body.indexOf("eventType: approved ? 'listing_approved' : 'listing_rejected'")
   assert.ok(setApprovalIdx !== -1 && eventIdx !== -1 && setApprovalIdx < eventIdx)
 })
 
-test('handleApproveMarketplace/handleUnapproveMarketplace are unchanged — persistApprovalToCatalog is still the only place approval is persisted', () => {
+test('handleApproveMarketplace/handleUnapproveMarketplace are unchanged: persistApprovalToCatalog is still the only place approval is persisted', () => {
   assert.match(workspaceSource, /function handleApproveMarketplace\(id: string, marketplace: Marketplace\) \{/)
   assert.match(workspaceSource, /function handleUnapproveMarketplace\(id: string, marketplace: Marketplace\) \{/)
   assert.match(workspaceSource, /void persistApprovalToCatalog\(id, marketplace, true\)/)
@@ -151,7 +151,7 @@ test('handleApproveMarketplace/handleUnapproveMarketplace are unchanged — pers
 
 // --- C14-AC20/AC21. exported references the existing C7 export record -------
 
-test('AC20/AC21. the exported event is recorded only after recordExport (C7) resolves, and carries that export row\'s own id — never a duplicate export record', () => {
+test('AC20/AC21. the exported event is recorded only after recordExport (C7) resolves, and carries that export row\'s own id: never a duplicate export record', () => {
   const start = workspaceSource.indexOf('async function performExport(')
   const end = workspaceSource.indexOf('const exportedByProduct = new Map', start)
   const body = workspaceSource.slice(start, end)
@@ -163,7 +163,7 @@ test('AC20/AC21. the exported event is recorded only after recordExport (C7) res
   assert.ok(recordExportIdx < thenIdx && thenIdx < eventIdx && eventIdx < exportIdMetaIdx)
 })
 
-test('C7 catalog.ts exports (recordExport, getExportHistory) are byte-identical in signature — untouched by C14', () => {
+test('C7 catalog.ts exports (recordExport, getExportHistory) are byte-identical in signature: untouched by C14', () => {
   assert.match(catalogSource, /export async function recordExport\(\s*marketplace: Marketplace,\s*listingIds: string\[\],\s*fileName: string \| null,\s*client: SupabaseClient = createClient\(\)\s*\): Promise<CatalogExportRow>/)
   assert.match(catalogSource, /export async function getExportHistory\(client: SupabaseClient = createClient\(\)\): Promise<CatalogExportRow\[\]>/)
 })
@@ -194,7 +194,7 @@ test('AC24/AC40. ProductHistory is mounted inside the existing GeneratedListingD
   assert.match(workspaceSource, /<ProductHistory productId=\{product\.serverId\} \/>/)
 })
 
-test('no new route/page files were introduced for history — app/ has no product-history route', () => {
+test('no new route/page files were introduced for history: app/ has no product-history route', () => {
   const fs = require('fs') as typeof import('fs')
   const path = require('path') as typeof import('path')
   const appDir = path.join(__dirname, '..', 'app')

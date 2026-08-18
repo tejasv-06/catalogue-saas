@@ -1,4 +1,4 @@
-// Shown wherever the queue table's data isn't resolved yet — today that's
+// Shown wherever the queue table's data isn't resolved yet: today that's
 // just the brief window before session-restore decides auto-restore vs. the
 // banner (!sessionReady), but it's generic enough to reuse for any future
 // async product fetch without rework.

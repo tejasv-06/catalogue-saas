@@ -5,7 +5,7 @@ import ThemeToggle from '@/components/ThemeToggle'
 import ToolsDropdown from '@/components/ToolsDropdown'
 import MobileMenu from '@/components/MobileMenu'
 
-// Product/For Brands/For Agencies/Pricing have no dedicated pages — they're
+// Product/For Brands/For Agencies/Pricing have no dedicated pages: they're
 // anchors into sections on this same homepage (id= on those sections in
 // app/page.tsx, including id="pricing" now that a real Pricing section
 // exists there).
@@ -23,12 +23,12 @@ export default async function Navbar() {
   const isLoggedIn = !!data?.claims
 
   return (
-    // sticky (not fixed) deliberately — it keeps its own height in normal
+    // sticky (not fixed) deliberately: it keeps its own height in normal
     // flow, so the pages that render this (/, /contact, /how-it-works)
     // don't need any compensating top padding the way a fixed header would
     // require; it only starts floating once the page scrolls past it.
     // bg/border are theme CSS vars with an added /80 opacity + backdrop-blur
-    // for the glassmorphism effect, not a literal bg-slate-950/80 — that
+    // for the glassmorphism effect, not a literal bg-slate-950/80: that
     // hardcoded value is dark-only and would pair dark-mode text colors
     // with a near-black bar in the light theme (ThemeToggle exists for a
     // reason), same fix pattern as every other color in this build.
@@ -39,7 +39,7 @@ export default async function Navbar() {
           <span className="font-bold text-lg text-[var(--heading-text)]">Tesolute</span>
         </Link>
 
-        {/* Full nav row, hidden below lg in favor of the hamburger drawer —
+        {/* Full nav row, hidden below lg in favor of the hamburger drawer:
             six items plus a CTA no longer fits comfortably at md. */}
         <div className="hidden lg:flex items-center gap-6">
           {navLinks.map((link) => (
@@ -56,13 +56,13 @@ export default async function Navbar() {
 
         <div className="hidden lg:flex items-center gap-3 shrink-0">
           <ThemeToggle />
-          {/* A first-time visitor has never used the product — "Go to
+          {/* A first-time visitor has never used the product: "Go to
               Workspace" would be a meaningless label to them, and /login
               forces a signup step before they've seen any value. Since
               /workspace is deliberately guest-accessible (free-preview
               credits), guests get "Try Tesolute Free" pointed straight at
               it instead, same destination a returning signed-in user's own
-              "Go to Workspace" resolves to — just an honest label either
+              "Go to Workspace" resolves to: just an honest label either
               way. A separate small "Sign In" stays available for anyone
               who already has an account. */}
           {!isLoggedIn && (

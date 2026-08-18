@@ -11,7 +11,7 @@ export default function ContactForm() {
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault()
-    // No backend wired up yet — this is a placeholder confirmation only.
+    // No backend wired up yet: this is a placeholder confirmation only.
     setSubmitted(true)
   }
 

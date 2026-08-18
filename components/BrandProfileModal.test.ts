@@ -1,6 +1,6 @@
 // Regression guard for components/BrandProfileModal.tsx and its wiring
 // into AppHeader.tsx / CatalogueWorkspace.tsx (Milestone C12), using Node's
-// built-in test runner — same source-inspection approach as every other
+// built-in test runner: same source-inspection approach as every other
 // CatalogueWorkspace-adjacent test file in this repo (ClientSelector.test.ts,
 // CatalogueWorkspace.addProducts.test.ts, etc.). Actual React/async
 // behavior is covered separately by live browser verification.
@@ -17,7 +17,7 @@ const workspaceSource = readFileSync(join(__dirname, 'CatalogueWorkspace.tsx'), 
 test('BrandProfileModal saves via updateBrand, never createBrand or a raw client_name/user_id field', () => {
   assert.match(modalSource, /import \{ updateBrand,/)
   assert.match(modalSource, /await updateBrand\(\s*brand\.id,/)
-  assert.ok(!/user_id/.test(modalSource), 'BrandProfileModal must never reference user_id — ownership is session-derived inside lib/brands.ts, not here')
+  assert.ok(!/user_id/.test(modalSource), 'BrandProfileModal must never reference user_id: ownership is session-derived inside lib/brands.ts, not here')
 })
 
 test('BrandProfileModal exposes all 7 required profile sections', () => {

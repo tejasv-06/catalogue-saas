@@ -1,10 +1,10 @@
 import type { CanonicalPerformanceRecord } from '@/lib/performanceAdapters'
 import { computeNormalizedMetrics, type NormalizedMetrics } from '@/lib/performanceMetrics'
 
-// Milestone C15 — §9/§10 Deterministic Diagnosis + Trend Engine.
+// Milestone C15: §9/§10 Deterministic Diagnosis + Trend Engine.
 //
 // MARKETPLACE-INDEPENDENT BY CONSTRUCTION: every function below reads only
-// CanonicalPerformanceRecord/NormalizedMetrics fields — never
+// CanonicalPerformanceRecord/NormalizedMetrics fields: never
 // record.marketplace in a branch. Marketplace-specific knowledge (how to
 // get to these canonical numbers in the first place) lives exclusively in
 // lib/performanceAdapters.ts; this file must never grow an
@@ -13,12 +13,12 @@ import { computeNormalizedMetrics, type NormalizedMetrics } from '@/lib/performa
 // §9 explicitly requires centralized, documented thresholds instead of
 // scattered magic numbers. These are reasonable, disclosed starting
 // points (general e-commerce click-through/conversion/return-rate
-// benchmarks), NOT derived from this account's own historical data — no
+// benchmarks), NOT derived from this account's own historical data: no
 // such baseline exists yet. Revisit once enough real Tesolute performance
 // history accumulates to calibrate against actual seller outcomes.
 export const PERFORMANCE_THRESHOLDS = {
   // Below this many impressions, a CTR conclusion is statistically noisy
-  // (a single extra click swings the percentage wildly) — INSUFFICIENT_DATA
+  // (a single extra click swings the percentage wildly): INSUFFICIENT_DATA
   // instead of a real verdict.
   MIN_IMPRESSIONS_FOR_CTR_JUDGMENT: 100,
   // Below this many clicks, ATC-rate/conversion conclusions are similarly
@@ -55,7 +55,7 @@ export type DiagnosisCode =
 export type Diagnosis = {
   code: DiagnosisCode
   // Higher = more actionable/urgent, used only to order multiple
-  // simultaneous diagnoses for display — never changes which codes apply.
+  // simultaneous diagnoses for display: never changes which codes apply.
   priority: number
   message: string
 }
@@ -89,7 +89,7 @@ export function diagnosePerformance(record: CanonicalPerformanceRecord): Diagnos
       diagnoses.push({
         code: 'CTR_WEAK',
         priority: 3,
-        message: 'High impressions but low click-through — the listing is being shown but not drawing clicks.'
+        message: 'High impressions but low click-through: the listing is being shown but not drawing clicks.'
       })
       diagnoses.push({
         code: 'DISCOVERABILITY_WEAK',
@@ -116,7 +116,7 @@ export function diagnosePerformance(record: CanonicalPerformanceRecord): Diagnos
       diagnoses.push({
         code: 'ATC_WEAK',
         priority: 2,
-        message: 'Clicks are not translating into add-to-carts — shoppers view the listing but rarely add it.'
+        message: 'Clicks are not translating into add-to-carts: shoppers view the listing but rarely add it.'
       })
     } else if (normalized.atcRate >= t.ATC_HEALTHY_AT_OR_ABOVE_PERCENT) {
       diagnoses.push({
@@ -140,14 +140,14 @@ export function diagnosePerformance(record: CanonicalPerformanceRecord): Diagnos
         diagnoses.push({
           code: 'CONVERSION_WEAK',
           priority: 4,
-          message: 'Shoppers are adding this to cart but not completing the purchase — possible checkout, pricing, or offer friction.'
+          message: 'Shoppers are adding this to cart but not completing the purchase: possible checkout, pricing, or offer friction.'
         })
       }
     } else if (normalized.conversionRate >= t.CONVERSION_HEALTHY_AT_OR_ABOVE_PERCENT) {
       diagnoses.push({
         code: 'CONVERSION_HEALTHY',
         priority: 1,
-        message: 'Conversion is healthy — clicks are turning into purchases at a strong rate.'
+        message: 'Conversion is healthy: clicks are turning into purchases at a strong rate.'
       })
     }
   }
@@ -170,8 +170,8 @@ export function diagnosePerformance(record: CanonicalPerformanceRecord): Diagnos
     })
   }
 
-  // Deduplicate identical codes (CONVERSION_WEAK can be pushed twice above
-  // — once generically, once with the friction-specific message — keep
+  // Deduplicate identical codes (CONVERSION_WEAK can be pushed twice above,
+  // once generically and once with the friction-specific message; keep
   // only the more specific/higher-priority one).
   const byCode = new Map<DiagnosisCode, Diagnosis>()
   for (const d of diagnoses) {
@@ -221,7 +221,7 @@ export type TrendResult = {
   diagnosis: Diagnosis | null
 }
 
-// §10 — "Do not call something 'improving' or 'declining' unless
+// §10: "Do not call something 'improving' or 'declining' unless
 // sufficient historical data exists." Requires a genuine previous period;
 // returns null (not a fabricated "stable") when there isn't one.
 export function computeTrend(current: CanonicalPerformanceRecord, previous: CanonicalPerformanceRecord | null): TrendResult | null {
@@ -242,9 +242,9 @@ export function computeTrend(current: CanonicalPerformanceRecord, previous: Cano
   }
 
   const t = PERFORMANCE_THRESHOLDS.TREND_SIGNIFICANT_CHANGE_PERCENT
-  // The single most decision-relevant signal — conversion and purchases
+  // The single most decision-relevant signal: conversion and purchases
   // are weighted over impressions/clicks, matching §10's own example
-  // ("Discoverability declined, but conversion improved" — purchases/
+  // ("Discoverability declined, but conversion improved": purchases/
   // conversion is the headline, traffic is supporting context).
   const conversionChange = trend.conversionRate.changePercent
   const purchasesChange = trend.purchases.changePercent

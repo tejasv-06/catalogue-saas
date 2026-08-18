@@ -1,4 +1,4 @@
-// Unit tests for lib/checkoutParams.ts (Milestone C13) — proves the core
+// Unit tests for lib/checkoutParams.ts (Milestone C13): proves the core
 // C13-AC3/AC4/AC5 trust boundary without any real Stripe network call:
 // buildCheckoutSessionParams' only inputs are userId/packageId/origin, and
 // every credit/price number in its output must trace back to
@@ -21,7 +21,7 @@ test('buildCheckoutSessionParams resolves price/credits from server config for a
 })
 
 test('the function signature itself has no credits/amount/price parameter to spoof', () => {
-  // buildCheckoutSessionParams({ userId, packageId, origin }) — a caller
+  // buildCheckoutSessionParams({ userId, packageId, origin }): a caller
   // has no field to put a credit count or price into even if they wanted
   // to; TypeScript's own object-literal excess-property checking on the
   // input type is the first line of defense, this just documents that the
@@ -43,7 +43,7 @@ test('user identity flows through untouched into client_reference_id and metadat
   assert.equal(result.params.metadata.userId, 'user-xyz')
 })
 
-test('success/cancel URLs point back to the existing /workspace page — no new route introduced', () => {
+test('success/cancel URLs point back to the existing /workspace page: no new route introduced', () => {
   const result = buildCheckoutSessionParams({ userId: 'user-a', packageId: 'starter', origin: 'https://example.com' })
   assert.equal(result.ok, true)
   if (!result.ok) return

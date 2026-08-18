@@ -21,7 +21,7 @@ test('22. getRecommendation returns null for a code with no defensible investiga
 
 // --- §11 language safety: never claim causation/guaranteed improvement ------
 
-test('no recommendation claims a change WILL improve sales/performance — only "consider"/"recommends reviewing"/"potential issue" language', () => {
+test('no recommendation claims a change WILL improve sales/performance: only "consider"/"recommends reviewing"/"potential issue" language', () => {
   const forbiddenPhrases = [/will improve/i, /will increase/i, /will boost/i, /guaranteed/i, /this will fix/i]
   for (const [code, text] of Object.entries(DIAGNOSIS_RECOMMENDATIONS)) {
     for (const phrase of forbiddenPhrases) {
@@ -38,7 +38,7 @@ test('every recommendation uses one of the sanctioned investigative phrasings', 
   }
 })
 
-test('this module contains no threshold numbers of its own — recommendations only ever read the DiagnosisCode, thresholds stay centralized in lib/performanceDiagnosis.ts', () => {
+test('this module contains no threshold numbers of its own: recommendations only ever read the DiagnosisCode, thresholds stay centralized in lib/performanceDiagnosis.ts', () => {
   const fs = require('fs') as typeof import('fs')
   const path = require('path') as typeof import('path')
   const source = fs.readFileSync(path.join(__dirname, 'performanceRecommendations.ts'), 'utf8')

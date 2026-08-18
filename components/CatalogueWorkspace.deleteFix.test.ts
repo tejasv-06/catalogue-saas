@@ -1,4 +1,4 @@
-// Milestone C17 — regression guard for the confirmed delete-doesn't-persist
+// Milestone C17: regression guard for the confirmed delete-doesn't-persist
 // bug (a deleted product reappeared after refresh because the old
 // handleDeleteProduct never called any server-side delete). Same
 // source-inspection approach as the other CatalogueWorkspace.*.test.ts
@@ -39,7 +39,7 @@ test('handleDeleteProduct calls the real server-side deleteProduct for a persist
   assert.match(body, /await deleteProduct\(product\.serverId\)/)
 })
 
-test('handleDeleteProduct only removes the product from local state AFTER the server delete resolves (or for a product with nothing to delete server-side) — never optimistically before it', () => {
+test('handleDeleteProduct only removes the product from local state AFTER the server delete resolves (or for a product with nothing to delete server-side): never optimistically before it', () => {
   const body = bodyOf('async function handleDeleteProduct(id: string)', 1400)
   const deleteCallIndex = body.indexOf('await deleteProduct(')
   const localRemovalIndex = body.indexOf('setDraftProducts((prev) => prev.filter((p) => p.id !== id))')

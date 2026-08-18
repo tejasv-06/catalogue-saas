@@ -1,11 +1,11 @@
 // UI regression tests for components/reports/PerformanceImportPanel.tsx.
 // Same source-inspection convention as every other *.test.ts file in this
-// repo — real rendered behavior is covered by live browser verification,
+// repo: real rendered behavior is covered by live browser verification,
 // not by these tests.
 //
 // Final architecture correction: this is a marketplace performance REPORT
 // IMPORT, not a catalog-product-matching tool. There is no "Product
-// Match" column, no dropdown, no matched/unmatched gate — every valid row
+// Match" column, no dropdown, no matched/unmatched gate: every valid row
 // imports. These tests assert that concept was actually removed, not
 // just renamed.
 
@@ -73,15 +73,15 @@ test('the first report column is sticky horizontally', () => {
   assert.match(source, /colIndex === 0 \? 'sticky left-0 z-30' : 'z-20'/)
 })
 
-test('the table is genuinely adapter-driven — PerformanceImportPanel.tsx never hardcodes a Myntra or Amazon column list of its own', () => {
+test('the table is genuinely adapter-driven: PerformanceImportPanel.tsx never hardcodes a Myntra or Amazon column list of its own', () => {
   assert.ok(!/'Style ID', 'Seller ID'/.test(source), 'columns must come from adapter.previewColumns, never a hardcoded array in the panel')
 })
 
-test('the import table never converts to a card layout on narrow screens — no responsive breakpoint classes around the table', () => {
+test('the import table never converts to a card layout on narrow screens: no responsive breakpoint classes around the table', () => {
   assert.ok(!/sm:hidden|md:hidden|lg:hidden|sm:block|md:grid-cols/.test(source))
 })
 
-test('no virtualization library was introduced — the fix is a plain array slice, not react-window/react-virtualized/etc.', () => {
+test('no virtualization library was introduced: the fix is a plain array slice, not react-window/react-virtualized/etc.', () => {
   assert.ok(!/react-window|react-virtualized|virtualiz/i.test(source))
 })
 
@@ -95,20 +95,20 @@ test('there is no "Product Match" column, header, or cell anywhere in the file\'
   assert.ok(!/Product Match/.test(codeOnly))
 })
 
-test('there is no product-selection <select>/dropdown in the preview table — no "Unmatched" concept, no per-row product choice', () => {
-  assert.ok(!/Unmatched — select a product/.test(source))
+test('there is no product-selection <select>/dropdown in the preview table: no "Unmatched" concept, no per-row product choice', () => {
+  assert.ok(!/Unmatched: select a product/.test(source))
   assert.ok(!/resolveRow|resolveMany|handleBulkAssign|selectedIndexes|bulkProductId/.test(source), 'the entire per-row/bulk resolution mechanism must be gone, not merely unused')
 })
 
-test('the panel never imports the catalog product list — importing a report never needs to know Tesolute\'s catalog at all', () => {
+test('the panel never imports the catalog product list: importing a report never needs to know Tesolute\'s catalog at all', () => {
   assert.ok(!/getCatalog|CatalogProductRow/.test(source))
 })
 
-test('the panel never imports classifyImportRows/ImportResolution/getExternalIdMappings — matching/mapping lookups are commitPerformanceImport\'s job now, not the UI\'s', () => {
+test('the panel never imports classifyImportRows/ImportResolution/getExternalIdMappings: matching/mapping lookups are commitPerformanceImport\'s job now, not the UI\'s', () => {
   assert.ok(!/classifyImportRows|ImportResolution|getExternalIdMappings/.test(source))
 })
 
-test('Confirm Import is never gated on a match count — only on there being at least one structurally valid row', () => {
+test('Confirm Import is never gated on a match count: only on there being at least one structurally valid row', () => {
   assert.match(source, /disabled=\{importing \|\| validCount === 0\}/)
   assert.ok(!/matchedCount/.test(source))
 })
@@ -118,7 +118,7 @@ test('the import button reads "Import Performance Report", not a matched-count l
   assert.ok(!/Confirm import \(/.test(source))
 })
 
-test('the status line reports rows detected / valid / invalid — never Matched/Unmatched', () => {
+test('the status line reports rows detected / valid / invalid: never Matched/Unmatched', () => {
   assert.match(source, /rows detected/)
   assert.match(source, /\{validCount\} valid/)
   assert.match(source, /\{invalidCount\} invalid/)
@@ -131,7 +131,7 @@ test('an invalid row is still visibly distinguished (left accent border) and its
   assert.match(source, /`Invalid: \$\{row\.reason\}`/)
 })
 
-test('handleConfirmImport sends every valid row\'s record to commitPerformanceImport, grouped by the report\'s own brand — no per-row filtering by product/match state', () => {
+test('handleConfirmImport sends every valid row\'s record to commitPerformanceImport, grouped by the report\'s own brand: no per-row filtering by product/match state', () => {
   const start = source.indexOf('async function handleConfirmImport')
   const end = source.indexOf('\n  }', source.indexOf('setImporting(false)', start))
   const body = source.slice(start, end)
@@ -141,7 +141,7 @@ test('handleConfirmImport sends every valid row\'s record to commitPerformanceIm
   assert.match(body, /commitPerformanceImport\(marketplace, group\.brand, group\.records\)/)
 })
 
-test('performance_imported history events are derived from the ACTUAL inserted rows\' product_id (result.inserted), only for rows that came back linked — never assumed from UI state', () => {
+test('performance_imported history events are derived from the ACTUAL inserted rows\' product_id (result.inserted), only for rows that came back linked: never assumed from UI state', () => {
   const start = source.indexOf('async function handleConfirmImport')
   const end = source.indexOf('\n  }', source.indexOf('setImporting(false)', start))
   const body = source.slice(start, end)
@@ -149,7 +149,7 @@ test('performance_imported history events are derived from the ACTUAL inserted r
   assert.match(body, /if \(row\.product_id\) allProductIds\.add\(row\.product_id\)/)
 })
 
-test('handleConfirmImport never blends different brands into one commit — groupRecordsByReportBrand is recomputed from previewRows, not read from stale state', () => {
+test('handleConfirmImport never blends different brands into one commit: groupRecordsByReportBrand is recomputed from previewRows, not read from stale state', () => {
   const start = source.indexOf('async function handleConfirmImport')
   const end = source.indexOf('\n  }', source.indexOf('setImporting(false)', start))
   const body = source.slice(start, end)
@@ -158,7 +158,7 @@ test('handleConfirmImport never blends different brands into one commit — grou
 
 // --- 11. Amazon stays a separate, adapter-owned column set ------------------
 
-test('the Amazon adapter defines its OWN column set — not the Myntra schema, not a hardcoded UI list', () => {
+test('the Amazon adapter defines its OWN column set: not the Myntra schema, not a hardcoded UI list', () => {
   const adapter = getPerformanceAdapter('amazon')!
   assert.ok(adapter.previewColumns.length > 0)
   assert.ok(!adapter.previewColumns.some((c) => c.label === 'Style ID'))
@@ -166,7 +166,7 @@ test('the Amazon adapter defines its OWN column set — not the Myntra schema, n
 
 // --- Row order / left border accent -----------------------------------------
 
-test('row state uses only a subtle left-border accent — no full-row background tint', () => {
+test('row state uses only a subtle left-border accent: no full-row background tint', () => {
   const trMatches = source.match(/<tr[^>]*>/g) ?? []
   for (const tr of trMatches) {
     assert.ok(!/bg-\[var\(--(danger|warn|success)-bg\)\]/.test(tr), `row element should not be fully tinted: ${tr}`)
@@ -174,7 +174,7 @@ test('row state uses only a subtle left-border accent — no full-row background
 })
 
 // ==================================================
-// Large report performance — PREVIEW_LIMIT
+// Large report performance: PREVIEW_LIMIT
 // ==================================================
 
 test('PREVIEW_LIMIT is 15, and only that many rows are ever rendered into the DOM (tbody maps visibleRows, not the full previewRows)', () => {
@@ -199,7 +199,7 @@ test('Confirm Import (handleConfirmImport) reads records from the full previewRo
 })
 
 test('the preview label distinguishes "first N of M" (large report) from "showing all" (small report)', () => {
-  assert.match(source, /Preview — first \$\{PREVIEW_LIMIT\} of \$\{previewRows\.length\} rows/)
+  assert.match(source, /Preview: first \$\{PREVIEW_LIMIT\} of \$\{previewRows\.length\} rows/)
   assert.match(source, /Showing \$\{previewRows\.length\} of \$\{previewRows\.length\} rows/)
   assert.match(source, /previewRows\.length > PREVIEW_LIMIT/)
 })
@@ -207,7 +207,7 @@ test('the preview label distinguishes "first N of M" (large report) from "showin
 // --- Pure-logic simulation of the exact slicing/labeling behavior -----------
 // (mirrors the component's own PREVIEW_LIMIT/visibleRows/label logic
 // byte-for-byte, since this repo has no DOM test harness to mount the real
-// component — see the file header.)
+// component: see the file header.)
 
 const PREVIEW_LIMIT = 15
 
@@ -220,9 +220,9 @@ function simulateImport(rowCount: number, invalidEvery = 0) {
   const invalidCount = previewRows.filter((r) => r.kind === 'invalid').length
   const label =
     previewRows.length > PREVIEW_LIMIT
-      ? `Preview — first ${PREVIEW_LIMIT} of ${previewRows.length} rows`
+      ? `Preview: first ${PREVIEW_LIMIT} of ${previewRows.length} rows`
       : `Showing ${previewRows.length} of ${previewRows.length} rows`
-  // Every valid row is what Confirm Import actually acts on — no
+  // Every valid row is what Confirm Import actually acts on: no
   // product-linkage filter narrows this further.
   const committed = previewRows.filter((r) => r.kind === 'valid')
   return { previewRows, visibleRows, validCount, invalidCount, label, committed }
@@ -233,7 +233,7 @@ test('a 100-row report: preview contains exactly 15 rows, summary counts represe
   assert.equal(result.previewRows.length, 100)
   assert.equal(result.visibleRows.length, 15)
   assert.equal(result.validCount, 100)
-  assert.equal(result.label, 'Preview — first 15 of 100 rows')
+  assert.equal(result.label, 'Preview: first 15 of 100 rows')
   assert.equal(result.committed.length, result.validCount)
 })
 
@@ -251,14 +251,14 @@ test('an 8-row report (fewer than PREVIEW_LIMIT): preview shows all 8, label say
   assert.equal(result.label, 'Showing 8 of 8 rows')
 })
 
-test('a 15-row report (exactly at the limit): still "Showing 15 of 15 rows", not "Preview — first 15 of 15"', () => {
+test('a 15-row report (exactly at the limit): still "Showing 15 of 15 rows", not "Preview: first 15 of 15"', () => {
   const result = simulateImport(15)
   assert.equal(result.visibleRows.length, 15)
   assert.equal(result.label, 'Showing 15 of 15 rows')
 })
 
 // ==================================================
-// Filter reset — every filter starts blank on every mount
+// Filter reset: every filter starts blank on every mount
 // ==================================================
 
 test('marketplace/periodType/periodStart/periodEnd all initialize to a blank literal, never a hardcoded selection or computed date', () => {
@@ -270,7 +270,7 @@ test('marketplace/periodType/periodStart/periodEnd all initialize to a blank lit
   assert.ok(!/useState<PerformancePeriodType>\('weekly'\)/.test(source), 'periodType must not default to a real period type')
 })
 
-test('reset() clears marketplace/periodType/periodStart/periodEnd back to blank — a fresh mount and a reset must be indistinguishable', () => {
+test('reset() clears marketplace/periodType/periodStart/periodEnd back to blank: a fresh mount and a reset must be indistinguishable', () => {
   const start = source.indexOf('function reset()')
   const end = source.indexOf('\n  }', start)
   const body = source.slice(start, end)
@@ -289,29 +289,29 @@ test('no localStorage/sessionStorage/URL-param persistence exists anywhere in th
 })
 
 // ==================================================
-// Upload UI — the file picker must never be silently inert
+// Upload UI: the file picker must never be silently inert
 // ==================================================
 // Bug found via careful trace, not assumed: the file input used to be
 // disabled={!canUpload}, so clicking "Upload report" before all four
 // setup fields were filled did nothing at all (a disabled file input
-// inside a <label> never opens the OS file dialog) — this read as "the
+// inside a <label> never opens the OS file dialog): this read as "the
 // button doesn't work." Worse, the intended fallback (handleFileChange's
 // own guard, which sets `error`) was ALSO a dead end: the error banner
 // only rendered inside the step === 'preview' block, which is never
 // reached when that guard fires and returns early. So even removing the
 // disabled attribute alone would have swapped "button does nothing" for
-// "button silently fails with an invisible error" — both are the same
+// "button silently fails with an invisible error": both are the same
 // user-facing bug. The fix has two parts, both asserted below.
 
-test('the file input is never disabled — canUpload only drives an informational hint, not whether the picker can open', () => {
+test('the file input is never disabled: canUpload only drives an informational hint, not whether the picker can open', () => {
   assert.match(source, /const canUpload = marketplace !== '' && periodType !== '' && periodStart !== '' && periodEnd !== ''/)
-  assert.ok(!/disabled=\{!canUpload\}/.test(source), 'the file input must not be disabled based on canUpload — picking a file must always be possible')
+  assert.ok(!/disabled=\{!canUpload\}/.test(source), 'the file input must not be disabled based on canUpload: picking a file must always be possible')
   const inputMatch = source.match(/<input type="file"[^/]*\/>/)
   assert.ok(inputMatch, 'expected to find the file input')
   assert.ok(!/disabled/.test(inputMatch![0]), 'the file input element itself must carry no disabled attribute at all')
 })
 
-test('the error banner renders regardless of step — a validation error set while still on \'setup\' (e.g. file picked before marketplace/period were chosen) must be visible, not silently swallowed', () => {
+test('the error banner renders regardless of step: a validation error set while still on \'setup\' (e.g. file picked before marketplace/period were chosen) must be visible, not silently swallowed', () => {
   const setupStart = source.indexOf("step === 'setup'")
   const setupEnd = source.indexOf("step === 'preview'", setupStart)
   const betweenSetupAndPreview = source.slice(setupStart, setupEnd)
@@ -328,7 +328,7 @@ test('performance import panel renders the file upload control, unconditionally'
   assert.match(source, /<input type="file" accept="\.csv" onChange=\{handleFileChange\}/)
 })
 
-test('selecting a file always invokes handleFileChange (Papa.parse -> adapter.parseRows), which itself decides whether to proceed or show an error — the DOM never pre-empts that decision', () => {
+test('selecting a file always invokes handleFileChange (Papa.parse -> adapter.parseRows), which itself decides whether to proceed or show an error: the DOM never pre-empts that decision', () => {
   const start = source.indexOf('async function handleFileChange')
   const end = source.indexOf('const csvText = await file.text()', start)
   const body = source.slice(start, end)
@@ -338,7 +338,7 @@ test('selecting a file always invokes handleFileChange (Papa.parse -> adapter.pa
   assert.match(body, /setError\(/)
 })
 
-test('a successful parse reaches the preview step — setStep(\'preview\') is the last thing handleFileChange does on the happy path', () => {
+test('a successful parse reaches the preview step: setStep(\'preview\') is the last thing handleFileChange does on the happy path', () => {
   const start = source.indexOf('async function handleFileChange')
   const end = source.indexOf('\n  }', source.indexOf("setStep('preview')", start))
   const body = source.slice(start, end)

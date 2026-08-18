@@ -1,8 +1,8 @@
-// Milestone C15 — Performance Intelligence "Generate AI Insights" step.
+// Milestone C15: Performance Intelligence "Generate AI Insights" step.
 // This is the WIRE SHAPE the client sends to app/api/generate-performance-insights.
 // Deliberately a distilled, purpose-built subset of already-computed data
 // (lib/performanceIntelligence.ts's AggregateSnapshot/ProductInsight/
-// AreaDiagnosisSummary/CohortSummary) — never the full ProductInsight
+// AreaDiagnosisSummary/CohortSummary): never the full ProductInsight
 // objects (which embed raw PerformanceHistoryRecord rows via
 // .current/.previous) and never raw report rows. Every string field here
 // is already-formatted, human-readable evidence text, not a number the

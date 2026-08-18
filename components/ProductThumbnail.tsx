@@ -28,7 +28,7 @@ export default function ProductThumbnail({
 
   const src = objectUrl || imageUrl
 
-  // Reset on every src change, not just once — a load failure on one
+  // Reset on every src change, not just once: a load failure on one
   // product's image shouldn't stick around and hide the next product's
   // (otherwise-valid) image once this thumbnail gets reused for a new src.
   useEffect(() => {

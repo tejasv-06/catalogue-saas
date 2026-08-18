@@ -1,8 +1,8 @@
-// Milestone 32 (C9 / Phase 10J) — Product Intelligence types, schema
+// Milestone 32 (C9 / Phase 10J): Product Intelligence types, schema
 // validation, and pure defaults. Deliberately no Supabase/Groq import here,
 // same reasoning as lib/catalogReconciliation.ts (C4): the highest-risk
-// logic in this milestone — trusting AI output shape before it's ever
-// persisted — should be unit-testable with plain node:test, not only
+// logic in this milestone: trusting AI output shape before it's ever
+// persisted: should be unit-testable with plain node:test, not only
 // live-verified. lib/catalog.ts (persistence) and
 // app/api/enrich-product/route.ts (orchestration) both import from here;
 // this file imports from neither.
@@ -12,7 +12,7 @@ export type ProductIntelligenceConfidence = 'high' | 'medium' | 'low' | 'unknown
 export type ProductIntelligenceField = {
   value: string | string[] | null
   confidence: ProductIntelligenceConfidence
-  // Optional short justification ("visible tag reads '100% cotton'") — only
+  // Optional short justification ("visible tag reads '100% cotton'"): only
   // included when the model actually gave one; never fabricated if absent.
   evidence?: string | null
 }
@@ -33,12 +33,12 @@ export type ProductIntelligenceFieldKey = (typeof PRODUCT_INTELLIGENCE_FIELD_KEY
 
 export type ProductIntelligenceData = Record<ProductIntelligenceFieldKey, ProductIntelligenceField>
 
-// C9 follow-up — root-cause fix for a discovered live defect: across 7 real
+// C9 follow-up: root-cause fix for a discovered live defect: across 7 real
 // Groq calls, the model reliably returned array-shaped fields (colors,
 // key_selling_points) as bare arrays (`"colors": ["red","blue"]`) instead of
 // the required `{ value, confidence }` wrapper
 // (`"colors": {"value": ["red","blue"], "confidence": "high"}`), and
-// validateProductIntelligenceData correctly rejected every one — the
+// validateProductIntelligenceData correctly rejected every one: the
 // validator was never the problem. The root cause was the prompt describing
 // the shape with abstract TypeScript-union pseudocode
 // (`"value": string | string[] | null`) instead of a concrete worked
@@ -46,7 +46,7 @@ export type ProductIntelligenceData = Record<ProductIntelligenceFieldKey, Produc
 // conceptually-list-like fields. This constant is a full, real,
 // already-valid ProductIntelligenceData object that
 // app/api/enrich-product/route.ts renders verbatim into the prompt as the
-// "here is exactly what a correct response looks like" example — kept here,
+// "here is exactly what a correct response looks like" example: kept here,
 // next to the canonical types/validator (not duplicated in the route file),
 // so the prompt's example and the validator's actual schema can never drift
 // apart. A test in productIntelligence.test.ts asserts this example passes
@@ -100,7 +100,7 @@ function isValidFieldValue(value: unknown): value is string | string[] | null {
   return Array.isArray(value) && value.every((v) => typeof v === 'string')
 }
 
-// C9-AC6/AC7 — the one function every AI response passes through before it
+// C9-AC6/AC7: the one function every AI response passes through before it
 // can ever reach persistence. Throws (never coerces/guesses/drops-silently)
 // on any structural mismatch, so a malformed model response becomes an
 // explicit 'failed' enrichment status upstream, never a half-valid record
@@ -170,7 +170,7 @@ export function buildCompletedIntelligence(data: ProductIntelligenceData, missin
   return { status: 'completed', updated_at: new Date().toISOString(), error: null, missing_information: missingInformation, data }
 }
 
-// C9-AC9 — a failed attempt never destroys a previously-completed result;
+// C9-AC9: a failed attempt never destroys a previously-completed result;
 // only status/error/timestamp move, data/missing_information carry over
 // from whatever was last known good (or stay null/[] if nothing ever
 // succeeded before).

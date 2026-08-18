@@ -12,10 +12,10 @@ import { SUPPORTED_MARKETPLACES, MARKETPLACE_LABELS } from '@/lib/platformShaper
 
 const problemFlow = ['Photos', 'Attributes', 'Keywords', 'Copy', 'Marketplace Fields', 'Validation', 'Export']
 
-// The one official Tesolute workflow — this exact 5-step sequence is what
+// The one official Tesolute workflow: this exact 5-step sequence is what
 // /how-it-works expands on and what /workspace's queue/health/drawer are
 // built around. Deliberately the only place on this page that explains the
-// workflow — see the deleted "How It Works" section below for why a second,
+// workflow: see the deleted "How It Works" section below for why a second,
 // differently-worded version doesn't also exist here.
 const solutionSteps = [
   { number: '01', title: 'Add', description: 'Upload your product photos, CSV or existing catalog data.' },
@@ -71,7 +71,7 @@ const marketplaceFields: { name: string; fields: string[] }[] = [
 const brandVoiceTones = ['Premium', 'Minimal', 'Elegant', 'Confident']
 
 const brandVoiceExamples: { product: string; copy: string }[] = [
-  { product: 'Jacquard Saree', copy: 'A quietly confident weave — traditional pattern, modern restraint.' },
+  { product: 'Jacquard Saree', copy: 'A quietly confident weave. Traditional pattern, modern restraint.' },
   { product: 'Leather Tote', copy: 'Considered materials, minimal hardware. Built for everyday use.' },
   { product: 'Ceramic Vase', copy: 'Understated form, deliberate proportions. Elegant on any shelf.' }
 ]
@@ -93,7 +93,7 @@ const withTesolutePoints = [
 ]
 
 // ---------------------------------------------------------------------------
-// Shared style tokens (reused throughout — see lib/uiClasses.ts for the
+// Shared style tokens (reused throughout: see lib/uiClasses.ts for the
 // app-wide ones like cardClass; these are landing-page-specific)
 // ---------------------------------------------------------------------------
 
@@ -115,7 +115,7 @@ export default function Home() {
       <main className="flex-1">
         {/* -------------------------------------------------------------
             HERO + PRODUCT TRANSFORMATION DEMO (spec sections 7-8)
-            Combined into one section/anchor — the demo is the direct
+            Combined into one section/anchor: the demo is the direct
             visual continuation of the hero's promise, not a separate
             topic. id="product" is the nav's "Product" anchor target. */}
         <section id="product" className="max-w-7xl mx-auto px-6 pt-16 pb-20 text-center">
@@ -124,8 +124,8 @@ export default function Home() {
             Stop Writing Listings. Start Launching Products.
           </h1>
           <p className="max-w-2xl mx-auto text-[var(--body-text)] text-base md:text-lg leading-relaxed mb-8">
-            Turn your product data and photos into marketplace-ready listings for Amazon, Flipkart, Myntra and Etsy
-            — generated, validated and ready to export.
+            Turn your product data and photos into marketplace-ready listings for Amazon, Flipkart, Myntra and Etsy.
+            Generated, validated and ready to export.
           </p>
           <div className="flex flex-wrap items-center justify-center gap-3 mb-4">
             <Link href="/workspace" className={primaryCtaClass}>
@@ -174,7 +174,7 @@ export default function Home() {
         </section>
 
         {/* -------------------------------------------------------------
-            THE TESOLUTE WORKFLOW — the one official step sequence, also
+            THE TESOLUTE WORKFLOW: the one official step sequence, also
             used (in expanded form) on /how-it-works. */}
         <section className="max-w-6xl mx-auto px-6 py-16">
           <div className="text-center mb-12">
@@ -193,7 +193,7 @@ export default function Home() {
         </section>
 
         {/* -------------------------------------------------------------
-            KEY DIFFERENTIATION — "ChatGPT vs Tesolute" (spec section 11) */}
+            KEY DIFFERENTIATION: "ChatGPT vs Tesolute" (spec section 11) */}
         <section className="max-w-6xl mx-auto px-6 py-16">
           <div className="text-center mb-12">
             <span className={eyebrowClass}>Why Tesolute?</span>
@@ -269,7 +269,7 @@ export default function Home() {
             <span className={eyebrowClass}>Less Manual Catalog Entry</span>
             <h2 className={sectionHeadingClass}>Stop typing what your product photos already show.</h2>
             <p className="max-w-2xl mx-auto text-[var(--body-text)] leading-relaxed mb-4">
-              Skip the manual attribute entry — Tesolute reads what's already in your product photos.
+              Skip the manual attribute entry. Tesolute reads what's already in your product photos.
             </p>
             <p className="text-sm text-[var(--muted-text)]">Colour · Pattern · Material · Style · Design · Features</p>
           </div>
@@ -383,7 +383,7 @@ export default function Home() {
         </section>
 
         {/* -------------------------------------------------------------
-            PROOF (spec section 20) — placeholder testimonials removed
+            PROOF (spec section 20): placeholder testimonials removed
             entirely, replaced with a Before Tesolute / With Tesolute
             comparison instead of fabricated names/quotes/results. Reuses
             the same two-column card pattern as the "Generic AI vs
@@ -423,17 +423,17 @@ export default function Home() {
         </section>
 
         {/* -------------------------------------------------------------
-            PRICING — added because the nav's "Pricing" anchor had no
+            PRICING: added because the nav's "Pricing" anchor had no
             matching section. Credit-based, using only real, already-true
             facts (10 free credits, no credit card, the real marketplace
-            list, /contact as the actual sales channel) — no invented tier
+            list, /contact as the actual sales channel): no invented tier
             names or dollar figures, since no paid-tier billing exists in
             this app yet. */}
         <section id="pricing" className="max-w-5xl mx-auto px-6 py-16 text-center scroll-mt-20">
           <span className={eyebrowClass}>Pricing</span>
           <h2 className={sectionHeadingClass}>Start free. Scale when you're ready.</h2>
           <p className="max-w-2xl mx-auto text-[var(--body-text)] leading-relaxed mb-10">
-            Tesolute runs on a simple credit system — one credit per generated listing. Every account starts with
+            Tesolute runs on a simple credit system: one credit per generated listing. Every account starts with
             free credits to try it on your own catalog.
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-left">
@@ -562,7 +562,7 @@ export default function Home() {
 
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted-text)] mb-3">Legal</p>
-            {/* Plain text, not links — no privacy/terms pages exist yet in
+            {/* Plain text, not links: no privacy/terms pages exist yet in
                 this app, and linking to a route that 404s is worse than a
                 clearly-inert label. */}
             <ul className="flex flex-col gap-2 text-sm text-[var(--muted-text)]">

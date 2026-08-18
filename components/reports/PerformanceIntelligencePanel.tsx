@@ -50,7 +50,7 @@ import { buttonPrimaryClass, buttonSecondaryClass, buttonSecondarySmallClass, ca
 import type { PerformanceStatsInput, VerifiedProductSummary } from '@/lib/performanceStatsInput'
 import type { PerformanceAIInsights } from '@/lib/performanceAIInsights'
 
-// Milestone C15 — Seller Performance Intelligence & Action Engine. This is
+// Milestone C15: Seller Performance Intelligence & Action Engine. This is
 // the presentation layer ONLY. Data -> lib/performanceIntelligence.ts
 // (KPI/diagnosis/prioritization) -> lib/performanceNarrative.ts (business
 // storytelling/action plan/report) -> this file. No calculation and no
@@ -77,7 +77,7 @@ function SeverityIcon({ severity, size = 16 }: { severity: Severity; size?: numb
   return <Icon size={size} className={`shrink-0 ${textClass}`} />
 }
 
-// P1/P2/P3 — computed, catalog-relative signals (lib/performanceIntelligence.ts's
+// P1/P2/P3: computed, catalog-relative signals (lib/performanceIntelligence.ts's
 // classifyIntelligenceBucket), never a fixed threshold: P1 = clicks/carts
 // exist but zero purchases; P2 = meaningful impressions with near-zero CTR
 // relative to THIS catalog's own median; P3 = purchases exist but low
@@ -85,11 +85,11 @@ function SeverityIcon({ severity, size = 16 }: { severity: Severity; size?: numb
 const BUCKET_META: Record<Exclude<IntelligenceBucket, null>, { label: string; title: string }> = {
   P1: { label: 'P1', title: 'Clicks or cart activity exist, but zero purchases this period.' },
   P2: { label: 'P2', title: "Meaningful impressions, but click-through rate is near zero relative to this catalog's own median." },
-  P3: { label: 'P3', title: 'Purchases exist, but traffic is low relative to this catalog — an under-exposed converter.' }
+  P3: { label: 'P3', title: 'Purchases exist, but traffic is low relative to this catalog: an under-exposed converter.' }
 }
 
 function BucketBadge({ bucket }: { bucket: IntelligenceBucket }) {
-  if (!bucket) return <span className="text-[var(--muted-text)]">—</span>
+  if (!bucket) return <span className="text-[var(--muted-text)]">N/A</span>
   const meta = BUCKET_META[bucket]
   return (
     <span
@@ -102,12 +102,12 @@ function BucketBadge({ bucket }: { bucket: IntelligenceBucket }) {
 }
 
 function fmtNum(value: number | null): string {
-  if (value === null) return '—'
+  if (value === null) return 'N/A'
   return value.toLocaleString('en-IN', { maximumFractionDigits: 0 })
 }
 
 function fmtPct(value: number | null, decimals = 2): string {
-  if (value === null) return '—'
+  if (value === null) return 'N/A'
   return `${value.toFixed(decimals)}%`
 }
 
@@ -118,7 +118,7 @@ function formatPeriodLabel(periodStart: string, periodEnd: string): string {
 }
 
 // Distills a ProductInsight down to the pre-formatted, already-verified
-// fields the AI-insights API is allowed to see — never the raw
+// fields the AI-insights API is allowed to see: never the raw
 // current/previous PerformanceHistoryRecord rows it also carries.
 function toVerifiedProductSummary(p: ProductInsight): VerifiedProductSummary {
   return {
@@ -153,19 +153,19 @@ export default function PerformanceIntelligencePanel() {
   const [historyState, setHistoryState] = useState<MarketplaceHistoryState>({ status: 'loading' })
   const [showUpload, setShowUpload] = useState(false)
   // Lets a seller dismiss the dashboard and return to a blank upload view
-  // without touching any data — historical performance rows are
+  // without touching any data: historical performance rows are
   // deliberately append-only (never deleted), so "closing" a report can
   // only ever be a view-state toggle, not data removal. Session-only by
-  // design (no localStorage) — consistent with every other piece of UI
+  // design (no localStorage): consistent with every other piece of UI
   // state in this file; refreshing intentionally shows the dashboard
   // again since the underlying report data still genuinely exists.
   const [dismissed, setDismissed] = useState(false)
 
   // Step 1: discover which (marketplace, brand) scopes actually have
-  // data — cheap (one query per marketplace, brand column only), so this
+  // data: cheap (one query per marketplace, brand column only), so this
   // always runs up front regardless of catalog size. Actual report
   // history is fetched lazily, only for the one scope currently selected
-  // (see the effect below) — never every brand's full dataset at once.
+  // (see the effect below): never every brand's full dataset at once.
   const loadScopes = useCallback(async () => {
     const results = await Promise.all(
       PERFORMANCE_MARKETPLACES.map(async (m) => {
@@ -223,14 +223,14 @@ export default function PerformanceIntelligencePanel() {
   }, [selectedMarketplace, selectedBrand])
 
   // brands is every distinct brand the just-completed import actually
-  // wrote (derived from the report's own Brand column, not user input) —
+  // wrote (derived from the report's own Brand column, not user input):
   // a single upload can now legitimately span more than one brand.
   async function handleImported(marketplace: PerformanceMarketplace, brands: (string | null)[]) {
     setShowUpload(false)
     setDismissed(false)
     const resolved = await loadScopes()
     // Jump straight to the (marketplace, brand) scope that was just
-    // imported — the seller shouldn't have to hunt for what they
+    // imported: the seller shouldn't have to hunt for what they
     // uploaded. When the import split across multiple brands, land on
     // the first one; the new brand tabs make the rest one click away.
     if ((resolved[marketplace]?.length ?? 0) > 0) {
@@ -279,7 +279,7 @@ export default function PerformanceIntelligencePanel() {
         </div>
       )}
 
-      {/* Brand selector — only shown when this marketplace has more than
+      {/* Brand selector: only shown when this marketplace has more than
           one scope with real data, so it's always unambiguous which
           brand's data is being viewed, without extra clutter for sellers
           managing just one brand. */}
@@ -395,9 +395,9 @@ function MarketplaceDashboard({
     downloadTextFile(`tesolute-${marketplace}-performance-intelligence-${currentAggregate.periodEnd}.txt`, text)
   }
 
-  // "Generate AI Insights" — a separate, explicit step from the dashboard
+  // "Generate AI Insights": a separate, explicit step from the dashboard
   // above (which is already fully rendered from computed statistics, no
-  // AI call). Sends only this distilled, already-verified summary — never
+  // AI call). Sends only this distilled, already-verified summary: never
   // the raw per-product history rows.
   const [aiInsights, setAiInsights] = useState<PerformanceAIInsights | null>(null)
   const [aiWarnings, setAiWarnings] = useState<string[]>([])
@@ -466,7 +466,7 @@ function MarketplaceDashboard({
         <div>
           <h2 className={sectionHeadingClass}>
             {PERFORMANCE_MARKETPLACE_LABELS[marketplace]} Performance Intelligence
-            {brandLabel && <span className="text-[var(--muted-text)] font-normal"> — {brandLabel}</span>}
+            {brandLabel && <span className="text-[var(--muted-text)] font-normal">: {brandLabel}</span>}
           </h2>
           <p className="text-xs text-[var(--muted-text)] mt-0.5">
             Reporting period: {formatPeriodLabel(currentAggregate.periodStart, currentAggregate.periodEnd)} · Reports analyzed: {periods.length}
@@ -485,7 +485,7 @@ function MarketplaceDashboard({
           <button type="button" onClick={handleDownload} className={buttonPrimaryClass}>
             Download Action Report
           </button>
-          <button type="button" onClick={onClose} className={buttonSecondaryClass} title="Hide this dashboard. Your imported reports are kept — this only changes what's shown right now.">
+          <button type="button" onClick={onClose} className={buttonSecondaryClass} title="Hide this dashboard. Your imported reports are kept: this only changes what's shown right now.">
             Close
           </button>
         </div>
@@ -493,7 +493,7 @@ function MarketplaceDashboard({
 
       {showUpload && <PerformanceImportPanel onImported={onImported} />}
 
-      {/* Generate AI Insights — a separate, explicit step. The dashboard
+      {/* Generate AI Insights: a separate, explicit step. The dashboard
           below is already fully rendered from computed statistics with no
           AI call; this section only ever appears once the seller asks for
           it, and only ever shows verified-stats-grounded narrative on top
@@ -580,7 +580,7 @@ function PerformanceAiInsightsSection({ insights, warnings }: { insights: Perfor
       <div>
         <p className={sectionHeadingClass}>AI Insights</p>
         <p className="text-xs text-[var(--muted-text)]">
-          Written from the verified statistics above — Tesolute&rsquo;s AI does not see raw report rows or perform its own calculations.
+          Written from the verified statistics above: Tesolute&rsquo;s AI does not see raw report rows or perform its own calculations.
         </p>
       </div>
 
@@ -703,7 +703,7 @@ function KpiSummary({ current, previous, trend }: { current: AggregateSnapshot; 
         <span>Products with sales: {fmtNum(current.productsWithSales)}</span>
         <span>Products with no sales: {fmtNum(current.productsWithNoSales)}</span>
         <span>Return rate: {fmtPct(current.returnRate)}</span>
-        <span>Average rating: {current.rating !== null ? current.rating.toFixed(1) : '—'}</span>
+        <span>Average rating: {current.rating !== null ? current.rating.toFixed(1) : 'N/A'}</span>
         <span>Consideration rate: {fmtPct(current.considerationRate)}</span>
       </div>
       {changed && (
@@ -784,7 +784,7 @@ function WhereShoppersLost({ accountDiagnoses, current }: { accountDiagnoses: Re
           <p className="text-sm text-[var(--body-text)] mt-1 ml-6">{item.headline}</p>
           <p className="text-xs text-[var(--muted-text)] mt-1 ml-6">
             <span className="font-medium">Investigate:</span> {item.investigate.join(', ')}. Tesolute does not have enough evidence in this report to
-            identify the exact cause — these are the first factors to check.
+            identify the exact cause: these are the first factors to check.
           </p>
         </div>
       ))}
@@ -844,7 +844,7 @@ function TopActionsSection({ actions }: { actions: ReturnType<typeof buildTopAct
           <div className="flex items-start gap-2">
             <SeverityIcon severity={a.severity} />
             <p className="font-medium text-[var(--heading-text)]">
-              {a.rank} — {a.title}
+              {a.rank}: {a.title}
             </p>
           </div>
           <p className="text-xs text-[var(--muted-text)] ml-6">
@@ -886,7 +886,7 @@ function ProductsToWorkOnFirst({ top, allFixNowCount, allInsights }: { top: Prod
     <div className={`p-6 flex flex-col gap-3 ${cardClass}`}>
       <div>
         <p className={sectionHeadingClass}>Products to Work On First</p>
-        <p className="text-xs text-[var(--muted-text)]">The highest-opportunity products — not your whole catalog.</p>
+        <p className="text-xs text-[var(--muted-text)]">The highest-opportunity products: not your whole catalog.</p>
       </div>
       {top.length === 0 ? (
         <p className="text-xs text-[var(--muted-text)]">No high-priority products identified this period.</p>
@@ -916,7 +916,7 @@ function ProductsToWorkOnFirst({ top, allFixNowCount, allInsights }: { top: Prod
                   </td>
                   <td className="py-2 pr-3 text-[var(--muted-text)] whitespace-nowrap">{p.evidence}</td>
                   <td className="py-2 pr-3 text-[var(--body-text)]">{describeWhyPrioritized(p)}</td>
-                  <td className="py-2 pr-3 text-[var(--body-text)]">{p.recommendedAction ?? '—'}</td>
+                  <td className="py-2 pr-3 text-[var(--body-text)]">{p.recommendedAction ?? 'N/A'}</td>
                 </tr>
               ))}
             </tbody>
@@ -946,7 +946,7 @@ function ProductsToWorkOnFirst({ top, allFixNowCount, allInsights }: { top: Prod
                 </tr>
               </thead>
               <tbody>
-                {/* No Evidence column here — the full per-product evidence
+                {/* No Evidence column here: the full per-product evidence
                     for these same products already appears once, above
                     (for the top opportunities) or is available by
                     re-sorting; this exhaustive list is a reference index by
@@ -1050,7 +1050,7 @@ function HistoricalIntelligence({
         {lines.map((line) => (
           <div key={line.label}>
             <p className="text-sm font-medium text-[var(--heading-text)]">
-              {line.label} — {line.value}
+              {line.label}: {line.value}
               {line.changeLabel && <span className="text-xs text-[var(--muted-text)]"> ({line.changeLabel})</span>}
             </p>
             <p className="text-xs text-[var(--muted-text)]">{line.explanation}</p>

@@ -100,11 +100,11 @@ export default function LeftPanel({
         {activeTab === 'manual' ? (
           <>
             {/* One-line purpose statement, matching the same pattern
-                ImageOnlyPanel already uses — the tab label alone ("Manual
+                ImageOnlyPanel already uses: the tab label alone ("Manual
                 Entry") named the mechanism but not the purpose; this closes
                 that gap for consistency across all three methods. */}
             <p className={bodyTextClass}>Add a product manually.</p>
-            {/* Milestone C17.1 — images first: this is one product with up
+            {/* Milestone C17.1: images first: this is one product with up
                 to 5 images, not a single-image field among several text
                 fields, so it leads the form rather than trailing after
                 Description like the old single-image picker did. */}
@@ -174,7 +174,7 @@ export default function LeftPanel({
         ) : (
           <>
             {/* Same purpose-statement pattern as Manual Entry above and
-                ImageOnlyPanel's existing intro line — Bulk Upload's own
+                ImageOnlyPanel's existing intro line: Bulk Upload's own
                 purpose ("add many at once") isn't obvious from the tab
                 label alone. */}
             <p className={bodyTextClass}>Add hundreds of products at once.</p>
@@ -217,27 +217,61 @@ export default function LeftPanel({
               <p className="text-sm text-[var(--danger-link-text)]">Free preview limit reached (10/10) - sign in to continue.</p>
             )}
             {pendingCsvUpload && selectedClient ? (
-              <div className={`flex flex-col gap-2 ${warningBannerClass}`}>
-                <p className={warningTextClass}>
-                  {pendingCsvUpload.mismatchedProducts.length} of{' '}
-                  {pendingCsvUpload.matchingProducts.length + pendingCsvUpload.mismatchedProducts.length} rows don't
-                  match your selected brand voice ({selectedClient.client_name}).
-                </p>
-                <div className="flex flex-col gap-3">
-                  <button onClick={onCsvAddWithoutBrandVoice} className={`${buttonAmberOutlineClass} text-left`}>
-                    Add all without brand voice
-                  </button>
-                  <button onClick={onCsvAddOnlyMatching} className={`${buttonAmberOutlineClass} text-left`}>
-                    Add only matching rows with brand voice, skip mismatches
-                  </button>
-                  <button onClick={onCsvAddAllWithBrandVoice} className={`${buttonAmberSolidClass} text-left`}>
-                    Add all anyway with {selectedClient.client_name} voice
-                  </button>
-                  <button onClick={onCsvCancelMismatch} className={`${linkButtonClass} text-left`}>
-                    Cancel
-                  </button>
-                </div>
-              </div>
+              (() => {
+                const matchingCount = pendingCsvUpload.matchingProducts.length
+                const mismatchedCount = pendingCsvUpload.mismatchedProducts.length
+                const validCount = matchingCount + mismatchedCount
+                const brand = selectedClient.client_name
+                return (
+                  <div className={`flex flex-col gap-3 ${warningBannerClass}`}>
+                    <p className={warningTextClass}>
+                      {mismatchedCount} of {validCount} rows don't match your selected brand voice ({brand}). Choose
+                      what to do with them:
+                    </p>
+                    <div className="flex flex-col gap-2">
+                      {/* Each option spells out BOTH things that actually
+                          differ between them: which rows get added, and
+                          whether {brand}'s guidelines apply to them: as a
+                          bold action plus a one-line explanation, rather
+                          than packing both into one dense sentence a seller
+                          has to parse three times to tell them apart. */}
+                      <button
+                        onClick={onCsvAddWithoutBrandVoice}
+                        className={`${buttonAmberOutlineClass} text-left flex flex-col items-start gap-0.5`}
+                      >
+                        <span className="font-semibold">Add all {validCount} rows, without {brand}'s voice</span>
+                        <span className="text-xs font-normal opacity-90">
+                          Every row gets added, but none of them will use {brand}'s brand voice: including the{' '}
+                          {matchingCount} that do match.
+                        </span>
+                      </button>
+                      <button
+                        onClick={onCsvAddOnlyMatching}
+                        className={`${buttonAmberOutlineClass} text-left flex flex-col items-start gap-0.5`}
+                      >
+                        <span className="font-semibold">Add only the {matchingCount} matching rows</span>
+                        <span className="text-xs font-normal opacity-90">
+                          Uses {brand}'s brand voice. The {mismatchedCount} mismatched rows are skipped: not added
+                          at all.
+                        </span>
+                      </button>
+                      <button
+                        onClick={onCsvAddAllWithBrandVoice}
+                        className={`${buttonAmberSolidClass} text-left flex flex-col items-start gap-0.5`}
+                      >
+                        <span className="font-semibold">Add all {validCount} rows with {brand}'s voice anyway</span>
+                        <span className="text-xs font-normal opacity-90">
+                          Applies {brand}'s brand voice to every row, including the {mismatchedCount} that don't
+                          match.
+                        </span>
+                      </button>
+                      <button onClick={onCsvCancelMismatch} className={`${linkButtonClass} text-left`}>
+                        Cancel: don't add any of these rows yet
+                      </button>
+                    </div>
+                  </div>
+                )
+              })()
             ) : (
               <button onClick={onUploadCsv} disabled={guestLimitReached} className={buttonPrimaryClass}>
                 Upload CSV
@@ -249,7 +283,7 @@ export default function LeftPanel({
               // auto table layout gives File almost no width (the three
               // number columns are just single digits) and wraps a real
               // filename across five or six lines instead of letting it
-              // scroll or truncate — uglier than either alternative, and on
+              // scroll or truncate: uglier than either alternative, and on
               // an unbreakable filename (no hyphens/spaces) it would
               // overflow the card horizontally instead. title= on the cell
               // still shows the full name on hover.

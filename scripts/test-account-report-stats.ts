@@ -58,7 +58,7 @@ console.log(`\nSessions median: ${stats.sessionsMedian}`)
 console.log(`High traffic / zero sales ASINs: ${stats.highTrafficZeroSales.length}`)
 for (const row of stats.highTrafficZeroSales.slice(0, 20)) {
   console.log(
-    `  ${row.asin}${row.sku ? ` (${row.sku})` : ''} — sessions: ${row.sessions}, ` +
+    `  ${row.asin}${row.sku ? ` (${row.sku})` : ''}: sessions: ${row.sessions}, ` +
       `page views: ${row.pageViews ?? 'n/a'}, Buy Box: ${row.buyBoxPercentage !== null ? `${row.buyBoxPercentage}%` : 'n/a'}`
   )
 }

@@ -4,24 +4,24 @@ import type { Marketplace } from '@/lib/types'
 import type { GenerationMeta } from '@/lib/listingHealth'
 import type { ProductIntelligence } from '@/lib/productIntelligence'
 
-// Milestone 21 (Step C1 of the Milestone 20 audit) — a thin, session-aware
+// Milestone 21 (Step C1 of the Milestone 20 audit): a thin, session-aware
 // wrapper around the catalog tables created in
 // supabase/migrations/20260810_02_catalog_foundation.sql. Nothing calls this
 // module yet; it is not wired into CatalogueWorkspace.tsx or the generation
 // flow. That wiring is Step C2/C3, deliberately not part of this file.
 //
 // owner_user_id has no database-side default or trigger (verified against
-// the live migration) — the RLS policies only ever CHECK that a supplied
+// the live migration): the RLS policies only ever CHECK that a supplied
 // owner_user_id matches auth.uid(), they never populate it. Every write
 // function therefore still includes owner_user_id/approved_by in the actual
 // Supabase payload, but always derived here from the authenticated session
 // (client.auth.getUser()), never accepted as a parameter from this module's
-// own callers — the same pattern already verified working end-to-end in
+// own callers: the same pattern already verified working end-to-end in
 // components/ClientSelector.tsx's handleSaveNewClient (Milestone 18/19).
 //
 // Every exported function takes an optional trailing `client` parameter,
 // defaulting to the real browser client. This is the seam lib/catalog.test.ts
-// uses to inject a mock — no behavior change for real callers, who can
+// uses to inject a mock: no behavior change for real callers, who can
 // always omit it.
 
 export type CatalogProductFields = {
@@ -29,11 +29,11 @@ export type CatalogProductFields = {
   description: string | null
   category: string | null
   image_url: string | null
-  // Milestone C17.1 — optional so every pre-existing caller (guest-path
+  // Milestone C17.1: optional so every pre-existing caller (guest-path
   // code that never touches images, and any fixture predating this
   // milestone) keeps compiling unchanged; real callers always pass it now
   // (see ensureServerProduct/commitAddProduct in CatalogueWorkspace.tsx).
-  // Ordered, primary image first — image_url above is always kept in sync
+  // Ordered, primary image first: image_url above is always kept in sync
   // as image_urls[0] (or null) by every caller, never derived here.
   image_urls?: string[]
   client_id?: string | null
@@ -47,13 +47,13 @@ export type CatalogProductRow = {
   description: string | null
   category: string | null
   image_url: string | null
-  // Milestone C17.1 — supabase/migrations/20260810_15_catalog_products_multi_image.sql,
+  // Milestone C17.1: supabase/migrations/20260810_15_catalog_products_multi_image.sql,
   // not null, defaults to '{}'. Every row genuinely has a real array (never
   // null), so this is required here, matching the DB guarantee.
   image_urls: string[]
   created_at: string
   updated_at: string
-  // Milestone 32 (C9) — additive and optional, same convention as every
+  // Milestone 32 (C9): additive and optional, same convention as every
   // other field added to a shared type after C1-C8 shipped (DraftProduct's
   // serverId/visualAttributes etc.): nullable in the DB (supabase/
   // migrations/20260810_06_product_intelligence.sql), and optional here too
@@ -179,7 +179,7 @@ export async function setApproval(
         owner_user_id: ownerUserId,
         approved,
         approved_by: ownerUserId,
-        // Always stamped on every call, approve or unapprove — this records
+        // Always stamped on every call, approve or unapprove: this records
         // "when this row was last decided," not exclusively "when it first
         // became approved." Revisit if the eventual UI (Step C3) wants the
         // narrower "only set while approved === true" meaning instead.
@@ -200,11 +200,11 @@ export type CatalogSnapshot = {
   approvals: CatalogListingApprovalRow[]
 }
 
-// Milestone 26 (Step C4) — the one read function this module has, additive
+// Milestone 26 (Step C4): the one read function this module has, additive
 // to the four existing write functions (unchanged). Selects with no explicit
 // owner filter on purpose: RLS already scopes every one of these tables to
 // auth.uid() = owner_user_id, so adding a client-side filter here would be
-// redundant at best and a false sense of security at worst — ownership
+// redundant at best and a false sense of security at worst: ownership
 // enforcement lives in the database, not in this function.
 export async function getCatalog(client: SupabaseClient = createClient()): Promise<CatalogSnapshot> {
   await requireUserId(client)
@@ -250,9 +250,9 @@ export async function recordExport(
   return data as CatalogExportRow
 }
 
-// Milestone 29 (C7) — same shape as getCatalog above: session-gated via
+// Milestone 29 (C7): same shape as getCatalog above: session-gated via
 // requireUserId, no explicit owner_user_id filter (RLS on catalog_exports
-// already scopes every row to auth.uid() = owner_user_id — see
+// already scopes every row to auth.uid() = owner_user_id: see
 // supabase/migrations/20260810_02_catalog_foundation.sql, unchanged by this
 // milestone). Ordered newest-first since this only ever backs a history
 // display; that's a display-order concern, not an ownership one.
@@ -268,11 +268,11 @@ export async function getExportHistory(client: SupabaseClient = createClient()):
   return (data ?? []) as CatalogExportRow[]
 }
 
-// Milestone 32 (C9) — single-row read for the enrichment engine. No
+// Milestone 32 (C9): single-row read for the enrichment engine. No
 // owner_user_id filter here either, same RLS-only reasoning as getCatalog/
 // getExportHistory above: catalog_products' existing SELECT policy
 // (auth.uid() = owner_user_id, from C1's foundation migration, unchanged)
-// already returns nothing for a product this session doesn't own — that's
+// already returns nothing for a product this session doesn't own: that's
 // what makes .maybeSingle() correctly resolve to null for "not found OR not
 // yours" without this function ever needing to know or check which case it
 // is. Callers (app/api/enrich-product/route.ts) must treat a null result as
@@ -294,14 +294,14 @@ export async function getProductById(
 // state, never called any server-side delete, so a reload's own
 // reconciliation (getCatalog + reconcileCatalog) pulled the still-present
 // catalog_products row straight back in. This is the one and only server
-// delete path — RLS's existing "catalog_products_owner_delete" policy
+// delete path: RLS's existing "catalog_products_owner_delete" policy
 // (auth.uid() = owner_user_id, from the C1 foundation migration, unchanged)
 // is the sole ownership check; catalog_listings/catalog_listing_approvals
 // need no separate delete call here since both already cascade
 // (`references catalog_products(id) on delete cascade`, same migration).
 // `.select('id')` on the delete turns "RLS matched zero rows" (not found,
 // or a product id this session doesn't own) into a real thrown error
-// instead of a silent no-op that could be mistaken for a genuine delete —
+// instead of a silent no-op that could be mistaken for a genuine delete:
 // the exact ambiguity that let this bug hide undetected before.
 export async function deleteProduct(productId: string, client: SupabaseClient = createClient()): Promise<void> {
   await requireUserId(client)
@@ -314,7 +314,7 @@ export async function deleteProduct(productId: string, client: SupabaseClient = 
   }
 }
 
-// Read-only safety check for bulk-delete flows (Clear All) — marketplace_performance.product_id
+// Read-only safety check for bulk-delete flows (Clear All): marketplace_performance.product_id
 // carries `on delete cascade` (supabase/migrations/20260810_11_performance_intelligence.sql), so
 // deleting a product with linked performance history would silently take that history with it.
 // This never deletes anything itself; callers use the returned set to skip those products rather
@@ -336,14 +336,14 @@ export async function getProductIdsWithPerformanceHistory(
   return new Set((data ?? []).map((row) => row.product_id).filter((id): id is string => id !== null))
 }
 
-// Milestone 32 (C9) — persists a full ProductIntelligence object (not a
+// Milestone 32 (C9): persists a full ProductIntelligence object (not a
 // partial patch) onto an existing catalog_products row. Ownership is
 // enforced the same way every other write in this module is: RLS's existing
-// UPDATE policy (auth.uid() = owner_user_id, both USING and WITH CHECK) —
+// UPDATE policy (auth.uid() = owner_user_id, both USING and WITH CHECK):
 // this function never receives or checks an owner id itself. If the row
 // isn't owned by the session, RLS returns zero rows updated, .single() then
 // throws (PGRST116), and the caller's own try/catch treats that as a
-// failure — never a silent no-op that could be mistaken for success.
+// failure: never a silent no-op that could be mistaken for success.
 export async function setProductIntelligence(
   productId: string,
   intelligence: ProductIntelligence,
@@ -367,7 +367,7 @@ export async function setProductIntelligence(
 // commitAddProduct's `editingId` branch only ever called setDraftProducts
 // (local state), so an "edited" product was never actually written back to
 // the server at all. This mirrors setProductIntelligence's exact pattern
-// one field-set over — same ownership enforcement (RLS's existing UPDATE
+// one field-set over: same ownership enforcement (RLS's existing UPDATE
 // policy, unchanged, no new policy needed), same single-row
 // .update().select().single() shape, only a partial field set so a caller
 // only ever writes the fields it actually has a new value for.

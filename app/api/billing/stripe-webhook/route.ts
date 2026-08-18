@@ -5,14 +5,14 @@ import { getCreditPackage } from '@/lib/creditPackages'
 import { verifyStripeWebhookSignature, isSupportedFulfillmentEvent, WebhookSignatureError } from '@/lib/webhookVerification'
 import { getPurchaseByCheckoutSessionId, markPurchaseFailed, awardPurchaseCredits } from '@/lib/purchases'
 
-// Milestone C13 — POST /api/billing/stripe-webhook. The ONLY authority in
+// Milestone C13: POST /api/billing/stripe-webhook. The ONLY authority in
 // this whole app that ever awards purchased credits. Nothing here trusts
-// anything from a browser request — every fact this route acts on (event
+// anything from a browser request: every fact this route acts on (event
 // authenticity, payment status, package/credit amount) is either verified
 // via Stripe's own signature mechanism or resolved from this app's own
 // trusted config/DB rows.
 //
-// Raw text, not request.json() — Stripe's signature is computed over the
+// Raw text, not request.json(): Stripe's signature is computed over the
 // exact byte sequence of the body; re-serializing a parsed object would
 // almost certainly produce a different byte sequence and fail verification
 // even for a genuine event.
@@ -37,7 +37,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Billing is not currently available' }, { status: 500 })
   }
 
-  // C13-AC8/AC9 — signature verification is mandatory and happens before
+  // C13-AC8/AC9: signature verification is mandatory and happens before
   // any parsing of the payload as a trusted event. Rejects an invalid
   // signature OR a malformed/tampered body identically (see
   // lib/webhookVerification.test.ts for direct, credential-free tests of
@@ -53,7 +53,7 @@ export async function POST(request: Request) {
     throw err
   }
 
-  // C13-AC10 — every event type not explicitly handled below is
+  // C13-AC10: every event type not explicitly handled below is
   // acknowledged (200, so Stripe doesn't retry it forever) but never
   // awards credits.
   if (!isSupportedFulfillmentEvent(event)) {
@@ -64,7 +64,7 @@ export async function POST(request: Request) {
 
   const purchase = await getPurchaseByCheckoutSessionId(session.id)
   if (!purchase) {
-    // Genuinely unexpected — every Checkout Session this app creates has a
+    // Genuinely unexpected: every Checkout Session this app creates has a
     // pending purchase row written synchronously before the browser is
     // ever redirected to Stripe. Returning 500 lets Stripe's own retry
     // schedule give a transient DB read issue a chance to resolve, rather
@@ -74,7 +74,7 @@ export async function POST(request: Request) {
   }
 
   // Defensive re-validation against the SAME trusted config the checkout
-  // route used — not because the purchase row can't be trusted (it was
+  // route used: not because the purchase row can't be trusted (it was
   // written server-side), but so a corrupted/tampered row can never result
   // in awarding an amount that doesn't match a real, currently-valid
   // package definition.
@@ -84,7 +84,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Package/credit mismatch' }, { status: 500 })
   }
 
-  // C13-AC11 — genuinely successful payment only. Checkout's own
+  // C13-AC11: genuinely successful payment only. Checkout's own
   // payment_status is Stripe's authoritative signal for this, distinct
   // from the event merely having fired.
   if (session.payment_status !== 'paid') {
@@ -97,13 +97,13 @@ export async function POST(request: Request) {
   }
 
   try {
-    // C13-AC13/AC14/AC15 — the one atomic, idempotent step. Recording
+    // C13-AC13/AC14/AC15: the one atomic, idempotent step. Recording
     // Stripe's payment identifiers happens INSIDE this same call now (see
     // supabase/migrations/20260810_09_fix_award_purchase_credits_atomicity.sql)
-    // — there is no separate prior write that could reset the purchase's
+    //: there is no separate prior write that could reset the purchase's
     // status between the signature check above and this award. A retried
     // delivery of this same event for an already-fulfilled purchase comes
-    // back with alreadyFulfilled: true and creditsRemaining: null — this
+    // back with alreadyFulfilled: true and creditsRemaining: null: this
     // is success, not an error, and must not be treated as a second award.
     const result = await awardPurchaseCredits({
       purchaseId: purchase.id,
@@ -120,9 +120,9 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ received: true, handled: true, creditsRemaining: result.creditsRemaining })
   } catch (err: any) {
-    // C13 — never award partial credits, never silently swallow. A
+    // C13: never award partial credits, never silently swallow. A
     // thrown error here means the atomic award step itself failed (a real
-    // DB error, not a guard-clause no-op) — returning 500 lets Stripe
+    // DB error, not a guard-clause no-op): returning 500 lets Stripe
     // retry, which is safe precisely because the award step is idempotent.
     console.error(`stripe-webhook: failed to fulfill purchase ${purchase.id}:`, err?.message ?? err)
     return NextResponse.json({ error: 'Failed to fulfill purchase' }, { status: 500 })

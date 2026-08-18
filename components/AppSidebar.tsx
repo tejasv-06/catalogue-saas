@@ -7,10 +7,10 @@ import type { ReactNode } from 'react'
 
 // Bulk Upload / Manual Entry / Image-Only used to live here as three
 // top-level nav destinations. They're input methods into the one Listings
-// workspace, not separate destinations — CatalogueWorkspace now owns that
+// workspace, not separate destinations: CatalogueWorkspace now owns that
 // switch as an in-panel tab-strip (see its 'Add Products' section) using
 // this same state type, which is why it's still exported from here rather
-// than moved — the smallest change that keeps that import working.
+// than moved: the smallest change that keeps that import working.
 export type WorkspaceDestination = 'csv' | 'manual' | 'image'
 
 type SidebarItemId = 'listings' | 'audit'
@@ -36,7 +36,7 @@ function AuditIcon() {
   )
 }
 
-// Points at the panel edge it collapses toward — left-facing chevron means
+// Points at the panel edge it collapses toward: left-facing chevron means
 // "collapse" (content retreats left), right-facing means "expand." Exported
 // so any other collapsible-to-a-narrow-rail panel (e.g. CatalogueWorkspace's
 // Add Products panel) reuses this exact icon instead of a second copy.
@@ -58,7 +58,7 @@ export function ChevronIcon({ pointingRight }: { pointingRight: boolean }) {
   )
 }
 
-// Two real destinations now, each its own group — Listings under Catalog,
+// Two real destinations now, each its own group: Listings under Catalog,
 // Account Audit under Tools. Account Audit was previously one divider away
 // from Bulk Upload/Manual Entry/Image-Only in a single flat list; grouping
 // makes it explicit that it's a separate tool, not a peer input method.
@@ -75,7 +75,7 @@ const groupLabelClass = 'px-3 pt-1 pb-1 text-[10px] font-semibold tracking-wider
 
 // Shared nav, rendered on both /workspace and /audit, anchored directly
 // beneath TopHeader (top-16, not top-0) and stretching to the bottom of the
-// screen. Just the two destinations now — logo, credits, theme, and logout
+// screen. Just the two destinations now: logo, credits, theme, and logout
 // all live in TopHeader instead. Both are plain Links (no client-side panel
 // switching happens at this level anymore): Listings always goes to
 // /workspace, Account Audit always goes to /audit. That route's own
@@ -87,7 +87,7 @@ export default function AppSidebar({ children }: { children: ReactNode }) {
   const isWorkspacePage = pathname === '/workspace'
   const isAuditPage = pathname === '/audit'
 
-  // Expanded by default on a first visit (no stored preference yet) — nav
+  // Expanded by default on a first visit (no stored preference yet): nav
   // should be immediately visible and discoverable without relying on the
   // user finding a hover trigger. Collapsing is an explicit, persisted
   // choice via the toggle button below, not the default.
@@ -109,7 +109,7 @@ export default function AppSidebar({ children }: { children: ReactNode }) {
 
   function renderItem(item: (typeof NAV_ITEMS)[number], compactLabel: boolean) {
     const isActive = item.id === 'audit' ? isAuditPage : isWorkspacePage
-    // Only the desktop rail (compactLabel=true) ever collapses — the mobile
+    // Only the desktop rail (compactLabel=true) ever collapses: the mobile
     // bar (compactLabel=false) always shows full labels regardless of this
     // state, since collapse is a desktop-only concept here.
     const isIconOnly = compactLabel && collapsed
@@ -130,10 +130,10 @@ export default function AppSidebar({ children }: { children: ReactNode }) {
       {/* Desktop: fixed-left icon rail anchored below TopHeader (top-16, not
           top-0), stretching to the bottom of the screen. Expanded (256px) by
           default; the toggle button below collapses it to 56px icon-only,
-          click-driven and persisted via localStorage — no hover behavior.
+          click-driven and persisted via localStorage: no hover behavior.
           Expanded is now the persistent default rather than a transient
           hover preview, so it PUSHES the content area (see the padding on
-          the wrapper below) instead of overlaying on top of it — an overlay
+          the wrapper below) instead of overlaying on top of it: an overlay
           would otherwise permanently cover the leftmost ~200px of page
           content (e.g. the marketplace chips) for every first-time visitor. */}
       <nav
@@ -163,7 +163,7 @@ export default function AppSidebar({ children }: { children: ReactNode }) {
         </div>
       </nav>
 
-      {/* Mobile / tablet: normal-flow horizontal bar — no collapse concept
+      {/* Mobile / tablet: normal-flow horizontal bar: no collapse concept
           here, always shows full labels. Same grouping as the desktop rail,
           via a vertical divider instead of a label (no room for both). */}
       <nav aria-label="Main navigation" className="flex lg:hidden items-center gap-1 p-2 overflow-x-auto bg-[var(--card-bg)] border-b border-[var(--card-border)]">
@@ -173,7 +173,7 @@ export default function AppSidebar({ children }: { children: ReactNode }) {
       </nav>
 
       {/* flex-1 min-h-0: this and the mobile nav bar above are siblings
-          inside the parent's own flex-col — this claims whatever height is
+          inside the parent's own flex-col: this claims whatever height is
           left over after that bar's real rendered height, rather than a
           fixed height that doesn't know the bar is even there. */}
       <div

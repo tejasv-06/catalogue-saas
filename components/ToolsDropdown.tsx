@@ -54,7 +54,7 @@ export default function ToolsDropdown() {
       <button
         type="button"
         // A real pointer click fires mouseenter (opening it) immediately
-        // before the click event — a toggle here would immediately close
+        // before the click event: a toggle here would immediately close
         // what hover just opened. Click just ensures it's open; outside
         // click, mouseleave, or Escape are what close it.
         onClick={() => setOpen(true)}
@@ -80,7 +80,7 @@ export default function ToolsDropdown() {
 
       {open && (
         // The visual gap between trigger and panel used to be a `mt-2`
-        // margin on the menu box itself — margin isn't part of the box for
+        // margin on the menu box itself: margin isn't part of the box for
         // hit-testing, so that 8px strip was dead space: moving the cursor
         // from the trigger straight down into it fired mouseleave on this
         // container (whose own hover box only wraps the trigger, since

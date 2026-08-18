@@ -5,11 +5,11 @@ import { useFocusTrap } from '@/lib/useFocusTrap'
 import { CREDIT_PACKAGE_IDS, CREDIT_PACKAGES, type CreditPackageId } from '@/lib/creditPackages'
 import { cardClass, sectionHeadingClass, bodyTextClass, buttonPrimaryClass, linkButtonClass, dangerBannerClass, dangerTextClass } from '@/lib/uiClasses'
 
-// Milestone C13 — package selection + checkout initiation. Reuses the
+// Milestone C13: package selection + checkout initiation. Reuses the
 // established modal shell (fixed inset-0 z-40 overlay + backdrop +
 // useFocusTrap + cardClass panel), same convention as every other modal in
 // this app. lib/creditPackages.ts has no secrets and no env reads, so it's
-// safe to import directly here — this is display data only; the actual
+// safe to import directly here: this is display data only; the actual
 // credit/price resolution the payment depends on happens again, from the
 // same file, server-side in app/api/billing/create-checkout/route.ts,
 // never trusted from this component's own copy of the numbers.
@@ -33,7 +33,7 @@ export default function BuyCreditsModal({ onClose }: { onClose: () => void }) {
       if (!res.ok || !data?.url) {
         throw new Error(data?.error || 'Could not start checkout')
       }
-      // Full-page redirect to Stripe Checkout — no local credit increment
+      // Full-page redirect to Stripe Checkout: no local credit increment
       // happens anywhere in this flow, before or after this point.
       window.location.href = data.url
     } catch (err: any) {

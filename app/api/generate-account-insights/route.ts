@@ -24,7 +24,7 @@ TONE RULE - executive and constructive, never alarming:
 Frame problems as "Key Risk Factors" and opportunities as "Optimization Opportunities." Describe what is happening and what to do about it without theatrics. NEVER use aggressive, alarming, or dramatic language or metaphors - for example, never write words or phrases like "kill," "dangerously," "hacked," "bleeding budget," "black hole," or "pinball machine." If you catch yourself reaching for a dramatic metaphor, cut it and state the fact plainly instead.
 
 STYLE RULE - no em dashes:
-Never use an em dash (—) anywhere in your output, in any field. Use a period, colon, comma, or a standard hyphen (-) instead.
+Never use the em dash character anywhere in your output, in any field. Use a period, colon, comma, or a standard hyphen (-) instead.
 
 You are auditing REAL account data. You do not have access to raw numbers or the ability to calculate anything. You only have the "VERIFIED STATS" block given to you in the user message, which was computed by verified account-analysis code, not by you.
 
@@ -65,7 +65,7 @@ Field-by-field guidance:
   Only include an item if the verified stats actually support it. Do not list all four categories by default just to cover them.
 - strategicSummary: one closing paragraph tying the findings and action plan together and to a business outcome.`
 
-// Claude has no strict json_object response mode like Groq/OpenAI — it's
+// Claude has no strict json_object response mode like Groq/OpenAI: it's
 // prompted into JSON-only output instead, and occasionally still wraps that
 // in a ```json fence despite the instruction not to. Strip it defensively.
 function extractJsonContent(raw: string): string {
@@ -78,7 +78,7 @@ async function callGroq(userMessage: string): Promise<string> {
   const completion = await groq.chat.completions.create({
     model: 'qwen/qwen3.6-27b',
     response_format: { type: 'json_object' },
-    // This is a reasoning model — it spends a large, variable number of
+    // This is a reasoning model: it spends a large, variable number of
     // hidden reasoning tokens before emitting the actual JSON content. The
     // account-audit output (5 narrative sections + an action list) needs far
     // more budget than a short answer; too low a cap truncates the response
@@ -127,7 +127,7 @@ function computeVerificationWarnings(insights: AccountInsights, allowedTokens: S
   return [
     ...new Set(
       extractStatTokens(collectOutputText(insights)).filter(
-        // "100%" is exempted — it's overwhelmingly used as a generic ceiling
+        // "100%" is exempted: it's overwhelmingly used as a generic ceiling
         // reference ("not converting 100% of visitors"), not a claimed stat,
         // and flagging it on every run was pure noise.
         (token) => token !== '100%' && !allowedTokens.has(normalizeStatToken(token))
@@ -137,7 +137,7 @@ function computeVerificationWarnings(insights: AccountInsights, allowedTokens: S
 }
 
 export async function POST(request: Request) {
-  // Previously missing entirely — this route was reachable unauthenticated,
+  // Previously missing entirely: this route was reachable unauthenticated,
   // bypassing the login gate that /audit/page.tsx enforces at the page
   // level. Needs the real user id anyway to check/deduct credits, so this
   // closes that gap as a side effect of wiring credits in.
@@ -204,7 +204,7 @@ export async function POST(request: Request) {
   let verificationWarnings = computeVerificationWarnings(insights, allowedTokens)
 
   // The "100 minus a verified percentage" pattern is rule 5's exact forbidden
-  // arithmetic — a model output is non-deterministic enough that a second,
+  // arithmetic: a model output is non-deterministic enough that a second,
   // independent pass often just doesn't repeat the same derivation. Retry
   // once before showing anything, rather than surfacing a warning the user
   // has to notice and act on themselves.
@@ -217,7 +217,7 @@ export async function POST(request: Request) {
       insights = retryInsights
       verificationWarnings = computeVerificationWarnings(retryInsights, allowedTokens)
     } catch {
-      // Retry itself failed (network/parse) — fall back to the original,
+      // Retry itself failed (network/parse): fall back to the original,
       // already-flagged result rather than losing the response entirely.
     }
   }
@@ -226,7 +226,7 @@ export async function POST(request: Request) {
     await deductCredits(userId, CREDIT_COSTS.accountAudit, 'account_audit')
   } catch (err: any) {
     // Same reasoning as generate-single: the audit already succeeded and
-    // shipped to the client — a bookkeeping write failing afterward
+    // shipped to the client: a bookkeeping write failing afterward
     // shouldn't turn that into an error response.
     console.error('Failed to deduct credits:', err.message)
   }

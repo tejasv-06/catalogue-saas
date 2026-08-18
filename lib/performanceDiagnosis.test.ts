@@ -40,7 +40,7 @@ function codes(diagnoses: { code: string }[]): string[] {
 test('the diagnosis engine source contains no marketplace branching at all (mandatory, §20)', () => {
   const source = readFileSync(join(__dirname, 'performanceDiagnosis.ts'), 'utf8')
   // Comment lines legitimately name the forbidden pattern for context
-  // (this file's own header explains the rule) — only real code lines
+  // (this file's own header explains the rule): only real code lines
   // must never contain it.
   const codeOnly = source
     .split('\n')
@@ -59,7 +59,7 @@ test('diagnosePerformance produces byte-identical diagnoses for an amazon record
 
 // --- §9 centralized, documented thresholds -----------------------------------
 
-test('thresholds are centralized in one exported, documented config — not scattered magic numbers', () => {
+test('thresholds are centralized in one exported, documented config: not scattered magic numbers', () => {
   assert.ok(PERFORMANCE_THRESHOLDS.CTR_WEAK_BELOW_PERCENT > 0)
   assert.ok(PERFORMANCE_THRESHOLDS.CONVERSION_WEAK_BELOW_PERCENT > 0)
   assert.ok(PERFORMANCE_THRESHOLDS.RETURN_RATE_HIGH_AT_OR_ABOVE_PERCENT > 0)
@@ -81,7 +81,7 @@ test('no other diagnosis fires when there is truly no data at all', () => {
 
 // --- 18. Weak discoverability / CTR diagnosis --------------------------------
 
-test('18. DISCOVERABILITY_WEAK + CTR_WEAK — high impressions, low click-through (§9\'s own worked example)', () => {
+test('18. DISCOVERABILITY_WEAK + CTR_WEAK: high impressions, low click-through (§9\'s own worked example)', () => {
   const r = record({ impressions: 10000, clicks: 20 }) // 0.2% CTR
   const diagnoses = diagnosePerformance(r)
   assert.ok(codes(diagnoses).includes('CTR_WEAK'))
@@ -97,13 +97,13 @@ test('CTR_HEALTHY + TRAFFIC_HEALTHY when click-through is strong', () => {
 
 // --- 19. Weak conversion diagnosis -------------------------------------------
 
-test('19. CONVERSION_WEAK — healthy clicks, low purchases (§9\'s own worked example)', () => {
+test('19. CONVERSION_WEAK: healthy clicks, low purchases (§9\'s own worked example)', () => {
   const r = record({ impressions: 2000, clicks: 100, purchases: 1 }) // 1% conversion
   const diagnoses = diagnosePerformance(r)
   assert.ok(codes(diagnoses).includes('CONVERSION_WEAK'))
 })
 
-test('CONVERSION_HEALTHY when clicks convert well — "strong listing performance" per §9', () => {
+test('CONVERSION_HEALTHY when clicks convert well: "strong listing performance" per §9', () => {
   const r = record({ impressions: 2000, clicks: 100, purchases: 15 }) // 15% conversion
   const diagnoses = diagnosePerformance(r)
   assert.ok(codes(diagnoses).includes('CONVERSION_HEALTHY'))
@@ -139,7 +139,7 @@ test('RATING_WEAK fires only for a genuinely low, genuinely reported rating (0 =
 
 // --- 15/16/17. Trend calculation, improving/declining ------------------------
 
-test('15. computeTrend returns null when there is no previous period — never fabricates a trend from one data point', () => {
+test('15. computeTrend returns null when there is no previous period: never fabricates a trend from one data point', () => {
   const current = record({ purchases: 10 })
   assert.equal(computeTrend(current, null), null)
 })

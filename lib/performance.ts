@@ -3,13 +3,13 @@ import { createClient } from '@/lib/supabase/client'
 import { requireUserId } from '@/lib/catalog'
 import type { CanonicalPerformanceRecord, PerformanceMarketplace } from '@/lib/performanceAdapters'
 
-// Milestone C15 — data-access layer, same session-aware-wrapper pattern as
+// Milestone C15: data-access layer, same session-aware-wrapper pattern as
 // lib/catalog.ts and lib/productHistory.ts: every exported function takes
 // an optional trailing `client`, defaulting to the real browser client, so
 // the exact same code works from a client component or (if ever needed) a
 // server route's session-bound client. No service-role client anywhere in
 // this file. Ownership is enforced by the migration's own RLS policies
-// (supabase/migrations/20260810_11_performance_intelligence.sql) — this
+// (supabase/migrations/20260810_11_performance_intelligence.sql): this
 // module's job is shape validation and orchestration, never a second
 // ownership check.
 
@@ -24,7 +24,7 @@ export type ExternalIdMappingRow = {
 
 export type MarketplacePerformanceRow = {
   id: string
-  // Optional (migration 20260810_13) — a performance row is a fact about
+  // Optional (migration 20260810_13): a performance row is a fact about
   // the uploaded report on its own (external_product_id, Brand, Article
   // Type, and every metric already come from the file). Catalog linkage is
   // a separate, later enrichment, never a precondition for import: null
@@ -33,13 +33,13 @@ export type MarketplacePerformanceRow = {
   product_id: string | null
   owner_user_id: string
   // Which of the owner's brands/seller accounts this REPORT belongs to
-  // (migration 20260810_14) — distinct from metadata.brand, which is the
+  // (migration 20260810_14): distinct from metadata.brand, which is the
   // per-PRODUCT "Brand" column the report itself reports (e.g. one seller
   // account's catalog can carry several product brands). This field scopes
   // which rows are ever analyzed together: two different brands' reports
   // must never blend into one catalog's statistics, even for the same
   // owner and marketplace. Nullable for rows imported before brand
-  // scoping existed — a real, distinct "unspecified" scope, never merged
+  // scoping existed: a real, distinct "unspecified" scope, never merged
   // with a named brand's data.
   brand: string | null
   marketplace: PerformanceMarketplace
@@ -91,7 +91,7 @@ function rowToRecord(row: MarketplacePerformanceRow): CanonicalPerformanceRecord
 
 // Looks up EVERY known (marketplace, external_id) -> product_id mapping
 // for the current owner in one query, so a report with many rows doesn't
-// issue one lookup per row. Never matches by name/brand/title/MRP (§7) —
+// issue one lookup per row. Never matches by name/brand/title/MRP (§7):
 // this is the only lookup key that exists.
 export async function getExternalIdMappings(
   marketplace: PerformanceMarketplace,
@@ -107,7 +107,7 @@ export async function getExternalIdMappings(
   return new Map((data ?? []).map((row: any) => [row.external_id, row.product_id as string]))
 }
 
-// Records a new, user-confirmed mapping — the ONLY way an external id
+// Records a new, user-confirmed mapping: the ONLY way an external id
 // becomes matchable going forward (never inferred/guessed). Ownership of
 // BOTH the product and the mapping row is enforced by RLS's WITH CHECK
 // (see the migration), not re-checked here.
@@ -131,11 +131,11 @@ export async function createExternalIdMapping(
   return data as ExternalIdMappingRow
 }
 
-// Reverse lookup of getExternalIdMappings — this ONE product's own
+// Reverse lookup of getExternalIdMappings: this ONE product's own
 // mappings across every marketplace, keyed by marketplace. Powers the
 // proactive "Marketplace IDs" field on the product drawer, so a seller
 // can type in a known Style ID/ASIN before any report is ever uploaded.
-// Still strictly (marketplace, external_id) -> product_id — same table,
+// Still strictly (marketplace, external_id) -> product_id: same table,
 // same key, just entered by a human ahead of time instead of resolved
 // during import.
 export async function getProductExternalIds(
@@ -153,7 +153,7 @@ export async function getProductExternalIds(
 }
 
 // catalog_product_external_ids is a correctable mapping table (unlike
-// marketplace_performance's append-only rows) — its own migration grants
+// marketplace_performance's append-only rows): its own migration grants
 // an owner delete policy specifically so a stale/incorrect mapping can be
 // removed. Used by setProductExternalId below when a product's id for a
 // marketplace changes.
@@ -172,7 +172,7 @@ export async function removeExternalIdMapping(
 // This one is for the product-side editor: a seller typing a known Style
 // ID/ASIN directly onto a product ahead of any upload. If this product
 // already had a DIFFERENT external_id for the marketplace, that stale
-// row is removed first — a product should only ever map to one
+// row is removed first: a product should only ever map to one
 // external_id per marketplace at a time.
 export async function setProductExternalId(
   productId: string,
@@ -198,7 +198,7 @@ export type CommitImportResult = {
   inserted: MarketplacePerformanceRow[]
 }
 
-// The one write path for performance data (§17 append-only — see the
+// The one write path for performance data (§17 append-only: see the
 // migration's own comment: no update/delete policy exists at all, so
 // there is no "overwrite" method to accidentally call). Every row in one
 // call shares one import_batch_id, which is what makes "this whole
@@ -206,24 +206,24 @@ export type CommitImportResult = {
 //
 // Final architecture correction: the uploaded report IS the source of
 // truth for the row (external_product_id, Brand, Article Type, every
-// metric — see lib/performanceAdapters.ts) — importing it never requires
+// metric; see lib/performanceAdapters.ts). Importing it never requires
 // a product to be chosen first. product_id is looked up opportunistically
 // against any mapping the seller has already created (via the product's
 // own "Marketplace IDs" field, setProductExternalId) and left null
 // otherwise (migration 20260810_13 made the column optional for exactly
 // this). This never infers identity from Brand/Article Type/MRP/etc (§7)
-// — it's still strictly the same (marketplace, external_id) lookup
+//: it's still strictly the same (marketplace, external_id) lookup
 // getExternalIdMappings always was, just no longer a precondition for the
 // row to be importable.
 //
 // `brand` is derived by the caller from the report's OWN Brand column
 // (lib/performanceAdapters.ts's groupRecordsByReportBrand), never typed
-// by hand — every record passed in one call must already share the same
+// by hand: every record passed in one call must already share the same
 // brand (or genuinely have none). `brand: null` is a real, deliberate
 // scope: a report format with no Brand column at all (Amazon's Business
 // Report) has nothing to derive, so its rows are scoped "unspecified,"
 // the same first-class scope getMarketplacePerformanceHistory/
-// getBrandScopesForMarketplace already support — never an error and
+// getBrandScopesForMarketplace already support: never an error and
 // never a fabricated brand name.
 export async function commitPerformanceImport(
   marketplace: PerformanceMarketplace,
@@ -236,7 +236,7 @@ export async function commitPerformanceImport(
   }
   const trimmedBrand = brand === null ? null : brand.trim()
   if (trimmedBrand === '') {
-    throw new Error('performance: brand must not be an empty/whitespace-only string — pass null for the unspecified scope instead')
+    throw new Error('performance: brand must not be an empty/whitespace-only string, pass null for the unspecified scope instead')
   }
 
   const ownerUserId = await requireUserId(client)
@@ -276,7 +276,7 @@ export async function commitPerformanceImport(
 
 // --- Reads ---------------------------------------------------------------
 
-// Product-scoped only (§17 performance requirement — never the whole
+// Product-scoped only (§17 performance requirement: never the whole
 // account's history for one product view), newest period first. Optional
 // marketplace filter for a single-marketplace panel.
 export async function getProductPerformance(
@@ -313,18 +313,18 @@ function rowToHistoryRecord(row: MarketplacePerformanceRow): PerformanceHistoryR
   return { ...rowToRecord(row), productId: row.product_id, brand: row.brand }
 }
 
-// Account-wide, (marketplace, brand)-scoped history — EVERY row for this
+// Account-wide, (marketplace, brand)-scoped history: EVERY row for this
 // owner in this marketplace AND this brand, across every product AND
 // every period, including unlinked rows (product_id null). Powers
 // lib/performanceIntelligence.ts, which needs the full picture (current
 // status, historical trend, product prioritization) for ONE brand's
-// catalog — never blended with a different brand's reports, even for the
+// catalog: never blended with a different brand's reports, even for the
 // same owner and marketplace (that's the whole point of brand scoping;
 // see migration 20260810_14). Distinct from getProductPerformance above,
 // which stays product-scoped and unchanged, still used by
 // ProductPerformance.tsx.
 // `brand: null` explicitly queries the "unspecified" scope (rows imported
-// before brand scoping existed) — a real, distinct scope per migration
+// before brand scoping existed): a real, distinct scope per migration
 // 20260810_14's own comment, never silently merged with a named brand's
 // data and never silently dropped either.
 export async function getMarketplacePerformanceHistory(
@@ -348,9 +348,9 @@ export async function getMarketplacePerformanceHistory(
 }
 
 // Every distinct NAMED brand this owner has already uploaded a report
-// for, within one marketplace — powers the upload form's brand
+// for, within one marketplace: powers the upload form's brand
 // autocomplete only. Rows imported before brand scoping existed (brand IS
-// NULL) are deliberately excluded — there's nothing sensible to prefill
+// NULL) are deliberately excluded: there's nothing sensible to prefill
 // into a free-text input for "unspecified." See getBrandScopesForMarketplace
 // below for the dashboard's brand selector, which DOES need to represent
 // that scope (it has to remain choosable, not just typeable).
@@ -366,7 +366,7 @@ export async function getBrandsForMarketplace(marketplace: PerformanceMarketplac
 export type BrandScope = { brand: string | null; label: string }
 
 // Every distinct (marketplace, brand) scope this owner has DATA for,
-// including the "unspecified" (brand IS NULL) scope — powers the
+// including the "unspecified" (brand IS NULL) scope: powers the
 // dashboard's brand selector, which must show every scope with real
 // data, never silently hide legacy rows just because they predate brand
 // scoping. Distinct from getBrandsForMarketplace above (upload-form-only,

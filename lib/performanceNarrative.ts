@@ -14,12 +14,12 @@ import {
   type SegmentDimension
 } from '@/lib/performanceIntelligence'
 
-// Milestone C15 — Seller Performance Intelligence & Action Engine, the
+// Milestone C15: Seller Performance Intelligence & Action Engine, the
 // storytelling layer. This is where "Data -> KPI -> Interpretation ->
 // Diagnosis -> Priority" (lib/performanceIntelligence.ts,
 // lib/performanceDiagnosis.ts, lib/performanceMetrics.ts) becomes
 // "Action -> Measurement" (this file). Nothing here recomputes a metric
-// or re-derives a diagnosis — every function takes already-computed
+// or re-derives a diagnosis: every function takes already-computed
 // AggregateSnapshot / Diagnosis[] / ProductInsight[] and turns it into the
 // sentences a seller actually reads. Depends on
 // lib/performanceIntelligence.ts (never the reverse) to avoid a circular
@@ -27,10 +27,10 @@ import {
 //
 // PRESENTATION-NEUTRAL: this file returns a `severity` classification
 // (never an emoji or a color), so the UI layer decides how severity is
-// rendered (a professional icon, per the design requirement — no
+// rendered (a professional icon, per the design requirement: no
 // emoji/colored circles). Word choice throughout: never "healthy"
-// without a disclosed basis — only "increased / declined / strong signal
-// / weak signal / opportunity / concern / insufficient activity" — and
+// without a disclosed basis: only "increased / declined / strong signal
+// / weak signal / opportunity / concern / insufficient activity": and
 // never a claimed CAUSE, only what to INVESTIGATE (§2/§19).
 
 export type Severity = 'critical' | 'warning' | 'positive' | 'info'
@@ -66,7 +66,7 @@ export type SituationSummary = {
   implication: string
 }
 
-// The single biggest, most actionable opportunity — reuses whichever
+// The single biggest, most actionable opportunity: reuses whichever
 // diagnosis summarizeAreaDiagnoses already ranked highest (its own
 // fix-order priority, not a second "biggest gap" heuristic), so the
 // executive status and the funnel story (D/F, below) can never contradict
@@ -92,7 +92,7 @@ export function describeSituation(current: AggregateSnapshot, accountDiagnoses: 
       funnelLine,
       primaryOpportunity: 'Building a reliable baseline',
       explanation: 'This period does not have enough impressions or clicks for Tesolute to confidently diagnose an opportunity.',
-      implication: 'Keep uploading reports as they become available — the picture becomes more reliable with more data.'
+      implication: 'Keep uploading reports as they become available: the picture becomes more reliable with more data.'
     }
   }
 
@@ -104,7 +104,7 @@ export function describeSituation(current: AggregateSnapshot, accountDiagnoses: 
       funnelLine,
       primaryOpportunity: 'Add to Cart → Purchase',
       explanation: `${fmtNum(current.addToCarts)} shoppers showed purchase interest by adding a product to cart, but ${current.purchases === 0 ? 'no order was completed' : 'comparatively few orders were completed'} during this period.`,
-      implication: 'The immediate priority is converting existing shopper interest into purchases — not simply generating more impressions.'
+      implication: 'The immediate priority is converting existing shopper interest into purchases: not simply generating more impressions.'
     }
   }
   if (area === 'product-page-engagement') {
@@ -147,7 +147,7 @@ export function describeSituation(current: AggregateSnapshot, accountDiagnoses: 
       implication: 'Investigate recent reviews for recurring product-quality or expectation issues.'
     }
   }
-  // stock-recovery — inventory-age data suggests a recent stock-out; the
+  // stock-recovery: inventory-age data suggests a recent stock-out; the
   // remaining possibility once none of the funnel/returns/rating branches
   // above matched.
   return {
@@ -297,7 +297,7 @@ export function describeWhatChanged(current: AggregateSnapshot, previous: Aggreg
       changeLabel: pctChangeLabel(current.purchases, previous.purchases),
       explanation:
         (current.purchases ?? 0) === 0 && (previous.purchases ?? 0) === 0
-          ? 'No change in final conversion — purchases remained at zero.'
+          ? 'No change in final conversion: purchases remained at zero.'
           : purchDir === 'up'
             ? 'More shoppers completed a purchase than in the previous period.'
             : purchDir === 'down'
@@ -309,7 +309,7 @@ export function describeWhatChanged(current: AggregateSnapshot, previous: Aggreg
 
 // --- L. Historical intelligence (3+ reports) --------------------------
 
-// Only fires with real evidence across 3+ real periods (§3 — never
+// Only fires with real evidence across 3+ real periods (§3: never
 // pretend historical confidence that doesn't exist). Each branch is a
 // genuine, data-checked combination of classified trends, not a single
 // hardcoded string.
@@ -342,7 +342,7 @@ export function describeMultiPeriodStory(periods: PeriodGroup[]): string | null 
     return 'You are receiving less traffic, but the traffic you do receive is engaging more. Before trying to increase traffic, focus on converting this higher-quality interest.'
   }
   if (purchasesTrend === 'improving') {
-    return `Purchases improved across the last ${periods.length} reports — whatever changed recently appears to be working. Keep monitoring to confirm the trend holds.`
+    return `Purchases improved across the last ${periods.length} reports: whatever changed recently appears to be working. Keep monitoring to confirm the trend holds.`
   }
   if (purchasesTrend === 'declining') {
     return `Purchases declined across the last ${periods.length} reports despite ${ctrTrend === 'improving' || clicksTrend === 'improving' ? 'improving traffic engagement' : 'stable traffic'}. This points to a growing purchase-conversion opportunity.`
@@ -353,7 +353,7 @@ export function describeMultiPeriodStory(periods: PeriodGroup[]): string | null 
 export type PersistentProblemNote = { area: Exclude<ProblemArea, null>; label: string; periodsPersistent: number }
 
 // Surfaces problem areas present in the CURRENT period AND every prior
-// available period — "persistent" per §3/§L, never claimed with fewer
+// available period: "persistent" per §3/§L, never claimed with fewer
 // than 2 periods of actual evidence.
 export function describePersistentProblems(diagnosesByPeriod: AreaDiagnosisSummary[][]): PersistentProblemNote[] {
   if (diagnosesByPeriod.length < 2) return []
@@ -368,7 +368,7 @@ export function describePersistentProblems(diagnosesByPeriod: AreaDiagnosisSumma
   return notes
 }
 
-// --- F/E. "Where are you losing shoppers" — numbered opportunity list ------
+// --- F/E. "Where are you losing shoppers": numbered opportunity list ------
 
 export type AttentionItem = {
   severity: Severity
@@ -410,7 +410,7 @@ export function buildAttentionItems(accountDiagnoses: AreaDiagnosisSummary[], cu
 
 // --- H. Top 3 Actions -------------------------------------------------
 
-// Deliberately no `evidence` field here — full per-product evidence
+// Deliberately no `evidence` field here: full per-product evidence
 // (impressions/clicks/carts/purchases) appears exactly once, in the
 // Products to Work On First list. This section references the same
 // products by ID only (§ no cross-section repetition).
@@ -508,7 +508,7 @@ export function describeWhyPrioritized(insight: ProductInsight): string {
   const area = insight.topProblem?.area ?? null
 
   if (area === 'purchase-conversion') {
-    return `This product already receives meaningful visibility and has generated ${fmtNum(c.addToCarts)} ${pluralize(c.addToCarts, 'add-to-cart')} from ${fmtNum(c.clicks)} clicks, but ${c.purchases === 0 ? 'no purchases' : 'very few purchases'} — one of the strongest existing purchase opportunities in this report.`
+    return `This product already receives meaningful visibility and has generated ${fmtNum(c.addToCarts)} ${pluralize(c.addToCarts, 'add-to-cart')} from ${fmtNum(c.clicks)} clicks, but ${c.purchases === 0 ? 'no purchases' : 'very few purchases'}: one of the strongest existing purchase opportunities in this report.`
   }
   if (area === 'product-page-engagement') {
     return `This product is attracting ${fmtNum(c.clicks)} clicks, but only ${fmtNum(c.addToCarts)} ${pluralize(c.addToCarts, 'shopper is', 'shoppers are')} adding it to cart.`
@@ -523,12 +523,12 @@ export function describeWhyPrioritized(insight: ProductInsight): string {
     return `Average rating for this product is ${c.rating !== null ? c.rating.toFixed(1) : 'N/A'} this period.`
   }
   if (area === 'stock-recovery') {
-    return "This product's inventory-age data suggests a recent stock-out, and visibility remains low — marketplace ranking may not have fully recovered yet."
+    return "This product's inventory-age data suggests a recent stock-out, and visibility remains low: marketplace ranking may not have fully recovered yet."
   }
   if (insight.priority === 'scale') {
-    return `This product converted ${fmtNum(c.purchases)} ${pluralize(c.purchases, 'purchase')} from ${fmtNum(c.clicks)} clicks — one of the stronger signals in this report.`
+    return `This product converted ${fmtNum(c.purchases)} ${pluralize(c.purchases, 'purchase')} from ${fmtNum(c.clicks)} clicks: one of the stronger signals in this report.`
   }
-  // No area/topProblem at all (low-priority/insufficient activity) — never
+  // No area/topProblem at all (low-priority/insufficient activity): never
   // fall back to the raw diagnosis message, which may use language
   // ("healthy") this layer deliberately avoids everywhere else.
   return 'Not enough activity yet for a specific recommendation.'
@@ -548,7 +548,7 @@ const DIMENSION_LABEL: Record<SegmentDimension, string> = { articleType: 'Articl
 // Surfaces at most the single most-deviating segment per dimension, and
 // only when the deviation is large enough to matter (reuses the same
 // significant-change threshold everywhere else in this codebase already
-// applies — no new arbitrary number). Never claims causality — a
+// applies, no new arbitrary number). Never claims causality: a
 // descriptive comparison against this seller's own catalog average only.
 export function describeSegmentInsights(insights: SegmentInsight[]): SegmentNarrative[] {
   const byDimension = new Map<SegmentDimension, SegmentInsight[]>()
@@ -584,7 +584,7 @@ function productItem(p: ProductInsight): ActionPlanItem {
 }
 
 // Organized by PROBLEM AREA (purchase-conversion, click-through,
-// product-page-engagement), not by priority tier — a seller thinks "what
+// product-page-engagement), not by priority tier: a seller thinks "what
 // kind of opportunity am I working this week," not "here's my fix-now
 // list again." Every item still traces to a specific product; the
 // measurement phases are process steps that genuinely have no single
@@ -603,19 +603,19 @@ export function generateActionPlan(productInsights: ProductInsight[]): ActionPla
 
   const fifteenDay: ActionPlanPhase[] = [
     {
-      label: 'Days 1-3 — Focus on high-intent products with cart activity but weak purchases',
+      label: 'Days 1-3: Focus on high-intent products with cart activity but weak purchases',
       items: purchaseGroup.length > 0 ? purchaseGroup.slice(0, 5).map(productItem) : emptyItem('No products currently show add-to-carts or clicks without purchases.')
     },
     {
-      label: 'Days 4-7 — Improve high-click, low-cart products',
+      label: 'Days 4-7: Improve high-click, low-cart products',
       items: pageGroup.length > 0 ? pageGroup.slice(0, 5).map(productItem) : emptyItem('No products currently show clicks without add-to-carts.')
     },
     {
-      label: 'Days 8-10 — Review high-impression, low-click products',
+      label: 'Days 8-10: Review high-impression, low-click products',
       items: clickGroup.length > 0 ? clickGroup.slice(0, 5).map(productItem) : emptyItem('No products currently show meaningful impressions without clicks.')
     },
     {
-      label: 'Days 11-15 — Measure the next report and reassess',
+      label: 'Days 11-15: Measure the next report and reassess',
       items: [
         { title: 'Do not keep changing everything', detail: 'Upload and compare your next report before making further changes.' },
         { title: 'Which products improved?', detail: 'Check each product you changed against this baseline.' },
@@ -630,15 +630,15 @@ export function generateActionPlan(productInsights: ProductInsight[]): ActionPla
 
   const thirtyDay: ActionPlanPhase[] = [
     {
-      label: 'Week 1 — Fix highest-intent products',
+      label: 'Week 1: Fix highest-intent products',
       items: purchaseGroup.length > 0 ? purchaseGroup.slice(0, 5).map(productItem) : emptyItem('No high-opportunity purchase-conversion problems identified.')
     },
     {
-      label: 'Week 2 — Improve engagement opportunities',
+      label: 'Week 2: Improve engagement opportunities',
       items: [...pageGroup, ...clickGroup].length > 0 ? [...pageGroup, ...clickGroup].slice(0, 8).map(productItem) : emptyItem('No high-opportunity engagement/click problems identified.')
     },
     {
-      label: 'Week 3 — Apply learnings to similar products',
+      label: 'Week 3: Apply learnings to similar products',
       items: [
         {
           title: 'Compare what changed',
@@ -647,7 +647,7 @@ export function generateActionPlan(productInsights: ProductInsight[]): ActionPla
       ]
     },
     {
-      label: 'Week 4 — Measure and reprioritize',
+      label: 'Week 4: Measure and reprioritize',
       items:
         scaleGroup.length > 0
           ? scaleGroup.slice(0, 5).map((p) => ({ title: `Study Style/ASIN ${p.externalProductId}`, detail: describeWhyPrioritized(p) }))
@@ -682,7 +682,7 @@ export type ActionReportInput = {
   segmentNarratives: SegmentNarrative[]
 }
 
-// Assembles the 14-section seller-facing document — something that can
+// Assembles the 14-section seller-facing document: something that can
 // actually be sent to a team, a cataloging agency, or a pricing team, not
 // a raw export of database rows. Every sentence reuses the narrative
 // functions above; no new calculation happens here.
@@ -767,7 +767,7 @@ export function buildActionReportText(input: ActionReportInput): string {
       push(`  ${line.explanation}`)
     }
   } else {
-    push('Not enough history yet — upload another report to unlock a comparison.')
+    push('Not enough history yet: upload another report to unlock a comparison.')
   }
   if (input.multiPeriodStory) {
     push('')
@@ -779,7 +779,7 @@ export function buildActionReportText(input: ActionReportInput): string {
   push('6. CATALOG OPPORTUNITY MAP')
   rule()
   for (const row of cohortMap) {
-    push(`${row.label}: ${row.count} products — ${row.description}`)
+    push(`${row.label}: ${row.count} products: ${row.description}`)
   }
   if (input.segmentNarratives.length > 0) {
     push('')
@@ -820,7 +820,7 @@ export function buildActionReportText(input: ActionReportInput): string {
   }
   if (optimize.length > 0) {
     push('Additional products to optimize:')
-    for (const p of optimize) push(`  Style/ASIN ${p.externalProductId} — ${describeWhyPrioritized(p)}`)
+    for (const p of optimize) push(`  Style/ASIN ${p.externalProductId}: ${describeWhyPrioritized(p)}`)
     push('')
   }
 
@@ -829,7 +829,7 @@ export function buildActionReportText(input: ActionReportInput): string {
   rule()
   if (scale.length > 0) {
     for (const p of scale) {
-      push(`Style/ASIN ${p.externalProductId} — ${describeWhyPrioritized(p)}`)
+      push(`Style/ASIN ${p.externalProductId}: ${describeWhyPrioritized(p)}`)
     }
     push('Study what these products have in common before applying changes to weaker products.')
   } else {
@@ -878,7 +878,7 @@ export function buildActionReportText(input: ActionReportInput): string {
   push('Seller MRP, Inventory Age, RPLC, Impressions, Clicks, Add to Carts, Purchases, Return %, Consideration %, Conversion %, and Rating.')
   push('It does NOT have access to advertising performance, ad spend, ROAS, revenue, profit, exact pricing causality, competitor pricing,')
   push('inventory availability beyond what is reported, delivery data, or the exact reason any individual shopper did not purchase.')
-  push('Where price, offer, availability, delivery, or trust are mentioned, they are areas to investigate — not confirmed causes.')
+  push('Where price, offer, availability, delivery, or trust are mentioned, they are areas to investigate: not confirmed causes.')
 
   return lines.join('\n')
 }

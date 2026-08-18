@@ -1,5 +1,5 @@
 // Unit tests for lib/brands.ts (Milestone C12), using Node's built-in test
-// runner (no new dependency — tsx is already a project devDependency).
+// runner (no new dependency: tsx is already a project devDependency).
 // Run with: npx tsx --test lib/brands.test.ts
 //
 // Mock conventions mirror lib/catalog.test.ts exactly (same fluent-builder
@@ -97,7 +97,7 @@ test('createBrand derives user_id from the session, never from a caller-supplied
   const insertCall = client.__calls.find((c: any) => c.op === 'insert')
   assert.equal(insertCall.payload.user_id, 'user-a')
   assert.equal(insertCall.payload.client_name, 'Acme')
-  // BrandFields has no user_id/owner field to begin with — this asserts
+  // BrandFields has no user_id/owner field to begin with: this asserts
   // the actual payload sent never contains a spoofable second source of
   // truth for ownership.
   assert.equal(Object.keys(insertCall.payload).filter((k) => k.includes('user')).length, 1)
@@ -108,7 +108,7 @@ test('createBrand rejects when there is no authenticated session', async () => {
   await assert.rejects(() => createBrand({ client_name: 'Acme' }, client))
 })
 
-test('updateBrand never sends a user_id/ownership field in its payload — ownership is enforced by RLS alone', async () => {
+test('updateBrand never sends a user_id/ownership field in its payload: ownership is enforced by RLS alone', async () => {
   const row = { id: 'b1', user_id: 'user-a', client_name: 'Acme Updated' }
   const client = makeMockClient({ userId: 'user-a', result: { data: row, error: null } })
 

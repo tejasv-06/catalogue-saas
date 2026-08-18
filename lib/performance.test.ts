@@ -2,11 +2,11 @@
 // client convention as lib/catalog.test.ts/lib/productHistory.test.ts.
 //
 // Final architecture correction: commitPerformanceImport no longer takes
-// ImportResolution[] (a productId chosen per row) — it takes
+// ImportResolution[] (a productId chosen per row): it takes
 // CanonicalPerformanceRecord[] directly and looks up product_id
 // opportunistically via getExternalIdMappings, leaving it null when no
 // mapping exists. classifyImportRows/ImportResolution/isNewMapping are
-// gone — there is no "matched/unmatched" gate on import anymore.
+// gone: there is no "matched/unmatched" gate on import anymore.
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -50,7 +50,7 @@ function record(overrides: Partial<CanonicalPerformanceRecord> = {}): CanonicalP
   }
 }
 
-test('matching is strictly by (marketplace, external_id) — never by name/brand/title/MRP (§7)', () => {
+test('matching is strictly by (marketplace, external_id): never by name/brand/title/MRP (§7)', () => {
   const source = readFileSync(join(__dirname, 'performance.ts'), 'utf8')
   assert.ok(!/brand_name|brandName|title|mrp|Mrp|MRP/.test(source.split('\n').filter((l) => !l.trim().startsWith('//')).join('\n')))
 })
@@ -147,7 +147,7 @@ test('23. owner_user_id is always derived from the session, never accepted as a 
 
 // --- 14. Historical snapshot preservation (append-only) -----------------------
 
-test('14. commitPerformanceImport only ever INSERTs — it never calls .update() or .delete() on marketplace_performance', () => {
+test('14. commitPerformanceImport only ever INSERTs: it never calls .update() or .delete() on marketplace_performance', () => {
   const source = readFileSync(join(__dirname, 'performance.ts'), 'utf8')
   const start = source.indexOf('export async function commitPerformanceImport')
   const end = source.indexOf('\n// --- Reads', start)
@@ -157,7 +157,7 @@ test('14. commitPerformanceImport only ever INSERTs — it never calls .update()
   assert.match(body, /\.insert\(payload\)/)
 })
 
-test('14. every row in one commit shares one import_batch_id — the historical-snapshot identity', async () => {
+test('14. every row in one commit shares one import_batch_id: the historical-snapshot identity', async () => {
   const client = makeMockClient({ userId: 'user-a', result: { data: [{ id: 'row-1' }], error: null } })
   await commitPerformanceImport('myntra', 'Acme Co', [record({ externalProductId: 'style-1' }), record({ externalProductId: 'style-2' })], client)
   const insertCall = client.__calls.find((c: any) => c.op === 'insert')
@@ -173,7 +173,7 @@ test('commitPerformanceImport rejects an empty record list rather than issuing a
 
 // --- Final architecture correction: import never requires/creates a match ---
 
-test('commitPerformanceImport imports a row with NO existing mapping — product_id is null, never required, and the insert is never blocked by it', async () => {
+test('commitPerformanceImport imports a row with NO existing mapping: product_id is null, never required, and the insert is never blocked by it', async () => {
   const client = makeMockClient({ userId: 'user-a', result: { data: [], error: null } })
   await commitPerformanceImport('myntra', 'Acme Co', [record({ externalProductId: 'style-unlinked' })], client)
   const insertCall = client.__calls.find((c: any) => c.op === 'insert')
@@ -181,7 +181,7 @@ test('commitPerformanceImport imports a row with NO existing mapping — product
   assert.equal(insertCall.payload[0].product_id, null)
 })
 
-test('commitPerformanceImport sets product_id opportunistically when an existing mapping is found — same (marketplace, external_id) lookup as before, just not a precondition anymore', async () => {
+test('commitPerformanceImport sets product_id opportunistically when an existing mapping is found: same (marketplace, external_id) lookup as before, just not a precondition anymore', async () => {
   const client = makeMockClient({
     userId: 'user-a',
     result: { data: [{ external_id: 'style-1', product_id: 'product-a' }], error: null }
@@ -191,13 +191,13 @@ test('commitPerformanceImport sets product_id opportunistically when an existing
   assert.equal(insertCall.payload[0].product_id, 'product-a')
 })
 
-test('commitPerformanceImport never writes to catalog_product_external_ids — it only reads (select) existing mappings, never creates one', async () => {
+test('commitPerformanceImport never writes to catalog_product_external_ids: it only reads (select) existing mappings, never creates one', async () => {
   const client = makeMockClient({ userId: 'user-a', result: { data: [{ id: 'row-1' }], error: null } })
   await commitPerformanceImport('myntra', 'Acme Co', [record({ externalProductId: 'style-brand-new' })], client)
-  assert.ok(!client.__calls.some((c: any) => c.op === 'upsert'), 'commit must never write a mapping — that is setProductExternalId\'s job, a separate optional action')
+  assert.ok(!client.__calls.some((c: any) => c.op === 'upsert'), 'commit must never write a mapping: that is setProductExternalId\'s job, a separate optional action')
 })
 
-test('a report with a mix of linked and unlinked Style IDs imports ALL of them in one call — no per-row gate', async () => {
+test('a report with a mix of linked and unlinked Style IDs imports ALL of them in one call: no per-row gate', async () => {
   const client = makeMockClient({
     userId: 'user-a',
     result: { data: [{ external_id: 'style-known', product_id: 'product-a' }], error: null }
@@ -215,7 +215,7 @@ test('a report with a mix of linked and unlinked Style IDs imports ALL of them i
   assert.equal(insertCall.payload.find((p: any) => p.external_product_id === 'style-unknown-2').product_id, null)
 })
 
-test('zero-value metrics are preserved through commit — 0 is never coerced to null', async () => {
+test('zero-value metrics are preserved through commit: 0 is never coerced to null', async () => {
   const client = makeMockClient({ userId: 'user-a', result: { data: [], error: null } })
   await commitPerformanceImport(
     'myntra',
@@ -234,7 +234,7 @@ test('zero-value metrics are preserved through commit — 0 is never coerced to 
   assert.equal(row.conversion_rate, 0)
 })
 
-test('Brand/Article Type/Gender/Seller MRP/Inventory Age/RPLC pass through in metadata exactly as the caller supplied them — commit never recomputes or strips them', async () => {
+test('Brand/Article Type/Gender/Seller MRP/Inventory Age/RPLC pass through in metadata exactly as the caller supplied them: commit never recomputes or strips them', async () => {
   const client = makeMockClient({ userId: 'user-a', result: { data: [], error: null } })
   const metadata = { brand: 'Acme Co', articleType: 'Category A', gender: 'Unisex', sellerId: '57985', sellerMrp: 5572, inventoryAge: 230, rplc: 2.664553 }
   await commitPerformanceImport('myntra', 'Acme Co', [record({ metadata })], client)
@@ -243,11 +243,11 @@ test('Brand/Article Type/Gender/Seller MRP/Inventory Age/RPLC pass through in me
 })
 
 // --- Brand/seller scoping (migration 20260810_14) ---------------------------
-// Every uploaded report is scoped to (owner, brand, marketplace, period) —
+// Every uploaded report is scoped to (owner, brand, marketplace, period):
 // two different brands' reports must never blend into one catalog's
 // statistics, even for the same owner and marketplace. brand is derived
 // by the CALLER from the report's own Brand column
-// (lib/performanceAdapters.ts's groupRecordsByReportBrand) — this layer's
+// (lib/performanceAdapters.ts's groupRecordsByReportBrand): this layer's
 // job is just to validate/store whatever it's handed, never to prompt
 // for one.
 
@@ -320,7 +320,7 @@ test('getBrandScopesForMarketplace rejects for a guest (no session)', async () =
   await assert.rejects(() => getBrandScopesForMarketplace('myntra', client))
 })
 
-test('getBrandScopesForMarketplace surfaces the "unspecified" (brand IS NULL) scope as a real, selectable option when legacy rows exist — never silently hides pre-brand-scoping data', async () => {
+test('getBrandScopesForMarketplace surfaces the "unspecified" (brand IS NULL) scope as a real, selectable option when legacy rows exist: never silently hides pre-brand-scoping data', async () => {
   const client = makeMockClient({
     userId: 'user-a',
     result: { data: [{ brand: null }, { brand: 'Acme Co' }], error: null }
@@ -379,7 +379,7 @@ test('getProductPerformance scopes strictly to the given product_id', async () =
 
 // --- Marketplace-wide history (Seller Performance Intelligence layer) ------
 // Unlike getProductPerformance (scoped to one product_id), this is
-// account-wide within one marketplace — every row, every product,
+// account-wide within one marketplace: every row, every product,
 // including unlinked ones (product_id null). Powers lib/performanceIntelligence.ts.
 
 test('getMarketplacePerformanceHistory rejects for a guest (no session)', async () => {
@@ -392,7 +392,7 @@ test('getMarketplacePerformanceHistory scopes strictly to the given marketplace,
   await getMarketplacePerformanceHistory('myntra', 'Acme Co', client)
   const eqCall = client.__calls.find((c: any) => c.op === 'eq')
   assert.deepEqual({ column: eqCall.column, value: eqCall.value }, { column: 'marketplace', value: 'myntra' })
-  assert.ok(!client.__calls.some((c: any) => c.op === 'eq' && c.column === 'product_id'), 'must not filter by product_id — that would exclude unlinked rows')
+  assert.ok(!client.__calls.some((c: any) => c.op === 'eq' && c.column === 'product_id'), 'must not filter by product_id: that would exclude unlinked rows')
 })
 
 test('getMarketplacePerformanceHistory orders newest period first', async () => {
@@ -403,7 +403,7 @@ test('getMarketplacePerformanceHistory orders newest period first', async () => 
   assert.deepEqual(orderCall.options, { ascending: false })
 })
 
-test('getMarketplacePerformanceHistory includes rows with product_id null (unlinked) — carries productId through on every returned record', async () => {
+test('getMarketplacePerformanceHistory includes rows with product_id null (unlinked): carries productId through on every returned record', async () => {
   const client = makeMockClient({
     userId: 'user-a',
     result: {
@@ -422,9 +422,9 @@ test('getMarketplacePerformanceHistory includes rows with product_id null (unlin
 
 // --- Proactive marketplace-id fields (product-side, pre-import) -------------
 // These write into the exact same catalog_product_external_ids table
-// commitPerformanceImport reads from — same key, same table, just entered
+// commitPerformanceImport reads from: same key, same table, just entered
 // by a human ahead of time (or after the fact). This is the ONLY place a
-// mapping is ever created — never derived from brand/category/price, and
+// mapping is ever created: never derived from brand/category/price, and
 // never a precondition for importing a report.
 
 test('getProductExternalIds rejects for a guest (no session)', async () => {

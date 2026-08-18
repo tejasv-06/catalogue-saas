@@ -7,8 +7,8 @@ import AuditHeader from '@/components/reports/AuditHeader'
 import AuditTabs from '@/components/reports/AuditTabs'
 
 // Unlike /workspace (deliberately guest-accessible), this touches a seller's
-// real revenue data — signed in only, no guest preview. This check runs
-// first, before anything else renders, exactly as before — a direct visit
+// real revenue data: signed in only, no guest preview. This check runs
+// first, before anything else renders, exactly as before: a direct visit
 // while logged out still redirects server-side with no page flash,
 // regardless of how TopHeader/AppSidebar below are laid out.
 export default async function AuditPage() {
@@ -22,7 +22,7 @@ export default async function AuditPage() {
   return (
     <div className="min-h-screen bg-[var(--page-bg)] text-[var(--body-text)]">
       {/* Always signed in past the check above, so the usage slot is always
-          the real credit balance — no guest-preview branch needed here. */}
+          the real credit balance: no guest-preview branch needed here. */}
       <TopHeader usageSlot={<CreditsBalance />} />
 
       <div className="pt-16 h-screen flex flex-col">

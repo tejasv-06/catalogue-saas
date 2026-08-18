@@ -26,7 +26,7 @@ export function formatPercent(value: number, digits = 1): string {
 
 // The exact, pre-formatted text the Groq prompt is built from. Every number
 // the model is allowed to mention appears here already rounded and
-// formatted, so it never has to do its own arithmetic — it only ever copies
+// formatted, so it never has to do its own arithmetic: it only ever copies
 // a string that already exists, which is what makes the "never invent a
 // number" rule enforceable rather than just requested.
 export function buildVerifiedStatsSummary(stats: AccountReportStats): string {
@@ -69,7 +69,7 @@ export function buildVerifiedStatsSummary(stats: AccountReportStats): string {
 }
 
 // Narrow on purpose: only currency amounts (₹ plain or lakh/crore),
-// percentages, and thousands-comma numbers — the shapes an invented
+// percentages, and thousands-comma numbers: the shapes an invented
 // statistic would actually take. Bare small integers ("30-day plan", "3
 // steps") are ordinary prose, not stats, and flagging them would just be
 // false-positive noise.
@@ -78,7 +78,7 @@ export function extractStatTokens(text: string): string[] {
   return matches ?? []
 }
 
-// Collapses formatting-only differences before comparing tokens — e.g. the
+// Collapses formatting-only differences before comparing tokens: e.g. the
 // model writing "86%" in a sentence when the verified stats say "86.0%" is
 // the same number, not a fabricated one, and shouldn't be flagged. Only
 // numeric precision/grouping is normalized here; a genuinely wrong number
@@ -111,7 +111,7 @@ export function normalizeStatToken(token: string): string {
 }
 
 // All percentage values actually shown to the model in the verified stats
-// block — the only figures a "100 minus X" complement could plausibly have
+// block: the only figures a "100 minus X" complement could plausibly have
 // been derived from.
 export function extractVerifiedPercentages(verifiedStatsSummary: string): number[] {
   return extractStatTokens(verifiedStatsSummary)
@@ -121,7 +121,7 @@ export function extractVerifiedPercentages(verifiedStatsSummary: string): number
 }
 
 // True if `token` (a flagged percentage) numerically equals 100 minus one of
-// the verified percentages — the exact "subtract from 100" arithmetic rule 5
+// the verified percentages: the exact "subtract from 100" arithmetic rule 5
 // forbids. Small tolerance absorbs rounding, not genuinely different numbers.
 const COMPLEMENT_TOLERANCE = 0.5
 export function isDerivedFromComplement(token: string, verifiedPercentages: number[]): boolean {

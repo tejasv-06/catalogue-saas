@@ -18,10 +18,10 @@ import {
   dangerTextClass
 } from '@/lib/uiClasses'
 
-// Milestone C12 — the brand profile editor. Reuses the exact modal shell
+// Milestone C12: the brand profile editor. Reuses the exact modal shell
 // convention already established by ExportGateModal/ExportSummaryModal/
 // ExportHistoryModal (fixed inset-0 z-40 overlay + backdrop + useFocusTrap
-// + cardClass panel) — no new visual language introduced. Triggered from
+// + cardClass panel): no new visual language introduced. Triggered from
 // AppHeader next to the existing ClientSelector, never a new route.
 //
 // Deliberately takes the already-fetched `brand` (Client) as its initial
@@ -29,7 +29,7 @@ import {
 // fetchClients() already does select('*'), so every field this form needs
 // is already sitting in the parent's selectedClient state by the time this
 // button is even clickable (it's only rendered when a brand is selected).
-// The only genuine async operation here is the save itself — that's what
+// The only genuine async operation here is the save itself: that's what
 // the loading state below is for, honestly, not a fabricated fetch delay.
 export default function BrandProfileModal({
   brand,
@@ -75,7 +75,7 @@ export default function BrandProfileModal({
 
   async function handleSave() {
     if (!brand.client_name.trim()) {
-      setError('Brand name is missing — this brand record looks corrupted.')
+      setError('Brand name is missing. This brand record looks corrupted.')
       return
     }
 
@@ -127,7 +127,7 @@ export default function BrandProfileModal({
             <textarea
               value={brandIdentity}
               onChange={(e) => { setBrandIdentity(e.target.value); setSaved(false) }}
-              placeholder="Core identity — who this brand is, in a sentence or two."
+              placeholder="Core identity: who this brand is, in a sentence or two."
               className={`${inputClass} w-full mt-1`}
               rows={2}
             />

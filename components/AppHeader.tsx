@@ -6,10 +6,10 @@ import { SUPPORTED_MARKETPLACES, MARKETPLACE_LABELS } from '@/lib/platformShaper
 import type { Marketplace } from '@/lib/types'
 import { labelClass, linkButtonClass } from '@/lib/uiClasses'
 
-// Slim top bar for the right panel — logo, usage/credits, theme, and logout
+// Slim top bar for the right panel: logo, usage/credits, theme, and logout
 // all live in AppSidebar now (shared with /audit). This keeps only what's
 // actually specific to generating listings: which marketplace(s) to shape
-// output for (now multi-select — a product can be generated for several at
+// output for (now multi-select: a product can be generated for several at
 // once), and which saved brand voice (if any) to apply. Sits directly on
 // the page background, not inside a card.
 export default function AppHeader({
@@ -31,7 +31,7 @@ export default function AppHeader({
   marketplaceGroupRef: RefObject<HTMLDivElement | null>
   selectedClientId: string
   onSelectClient: (client: Client | null) => void
-  // Milestone C12 — only ever called for an already-selected brand; the
+  // Milestone C12: only ever called for an already-selected brand; the
   // button below doesn't render at all otherwise, so this is never invoked
   // with no active brand.
   onOpenBrandProfile: () => void
@@ -75,7 +75,7 @@ export default function AppHeader({
           <p className={labelClass}>Brand Voice</p>
           <div className="flex items-center gap-3">
             <ClientSelector selectedClientId={selectedClientId} onSelectClient={onSelectClient} />
-            {/* Milestone C12 — only shown once a real brand is active, so
+            {/* Milestone C12: only shown once a real brand is active, so
                 "which brand is active" is never ambiguous: the button
                 itself names it. */}
             {selectedClientId && (

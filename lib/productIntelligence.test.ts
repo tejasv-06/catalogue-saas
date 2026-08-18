@@ -1,5 +1,5 @@
 // Unit tests for lib/productIntelligence.ts, using Node's built-in test
-// runner (no new dependency — tsx is already a project devDependency).
+// runner (no new dependency: tsx is already a project devDependency).
 // Run with: npx tsx --test lib/productIntelligence.test.ts
 
 import { test } from 'node:test'
@@ -46,7 +46,7 @@ test('validateProductIntelligenceData accepts array values (e.g. colors, search_
 })
 
 test('validateProductIntelligenceData accepts the array-field wrapper for key_selling_points specifically', () => {
-  // C9 follow-up regression — the exact field observed failing live (3/7
+  // C9 follow-up regression: the exact field observed failing live (3/7
   // real Groq calls specifically named this field). Confirms the CORRECT
   // shape (wrapped) is accepted; the next test confirms the WRONG shape
   // (bare array, what the model was actually sending) is rejected.
@@ -92,9 +92,9 @@ test('validateProductIntelligenceData rejects a non-object top level (e.g. malfo
   assert.throws(() => validateProductIntelligenceData([1, 2, 3]), ProductIntelligenceValidationError)
 })
 
-// C9 follow-up — locks in the exact discovered live defect as a permanent
+// C9 follow-up: locks in the exact discovered live defect as a permanent
 // regression test. The validator already rejected this correctly (that's
-// how the bug was caught live in the first place) — these tests exist so a
+// how the bug was caught live in the first place): these tests exist so a
 // future change can never silently start accepting the malformed shape
 // again, per the explicit instruction not to weaken the validator or
 // silently coerce malformed AI output.
@@ -116,12 +116,12 @@ test('validateProductIntelligenceData rejects search_keywords as a bare array', 
   assert.throws(() => validateProductIntelligenceData(data), ProductIntelligenceValidationError)
 })
 
-// C9 follow-up — the fix itself: app/api/enrich-product/route.ts now
+// C9 follow-up: the fix itself: app/api/enrich-product/route.ts now
 // renders EXAMPLE_PRODUCT_INTELLIGENCE_DATA verbatim into the prompt as a
 // concrete worked example (replacing the abstract TypeScript-union
 // description that caused the live failures). This test is the single
 // source of truth guaranteeing that example is, and stays, real, valid data
-// — if a future edit to the example ever breaks its own shape, this fails
+//: if a future edit to the example ever breaks its own shape, this fails
 // immediately instead of silently corrupting every future enrichment
 // prompt.
 test('EXAMPLE_PRODUCT_INTELLIGENCE_DATA (rendered verbatim into the enrichment prompt) is itself valid against the real validator', () => {

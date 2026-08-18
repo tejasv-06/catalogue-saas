@@ -1,10 +1,10 @@
--- Milestone C13 follow-up — fixes a real double-credit bug found during
+-- Milestone C13 follow-up: fixes a real double-credit bug found during
 -- live verification.
 --
 -- ROOT CAUSE: app/api/billing/stripe-webhook/route.ts called
 -- markPurchasePaid() (a plain, unconditional UPDATE setting
 -- status = 'paid') immediately before calling the award_purchase_credits()
--- RPC, on EVERY webhook invocation — including replays of an
+-- RPC, on EVERY webhook invocation: including replays of an
 -- already-fulfilled purchase. That UPDATE had no guard, so it silently
 -- reset status from 'fulfilled' back to 'paid', erasing the exact state
 -- award_purchase_credits()'s own `status <> 'fulfilled'` idempotency guard
@@ -18,13 +18,13 @@
 -- statement as the credit award and fulfillment flip, instead of a
 -- separate prior UPDATE. There is now exactly one write path from
 -- "payment verified" to "credits awarded, ledger recorded, purchase
--- fulfilled, Stripe identifiers captured" — no intermediate,
+-- fulfilled, Stripe identifiers captured": no intermediate,
 -- unguarded state change sits between the webhook's signature check and
 -- the atomic award anymore.
 --
 -- Signature change (3 args -> 6 args) means CREATE OR REPLACE would create
--- a second overloaded function instead of replacing this one — same
--- lesson C5's own deduct_credits migration already documented — so the
+-- a second overloaded function instead of replacing this one: same
+-- lesson C5's own deduct_credits migration already documented: so the
 -- old 3-argument signature is dropped explicitly first.
 drop function if exists public.award_purchase_credits(uuid, uuid, integer);
 

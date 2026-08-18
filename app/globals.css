@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 /* Theme system: an explicit toggle (ThemeToggle component), not
-   OS-conditional. Dark ("Night") is the default/baseline — :root holds those
+   OS-conditional. Dark ("Night") is the default/baseline: :root holds those
    values; :root[data-theme="light"] overrides them for "Day" mode. Every
    theme-sensitive class across the app reads these vars instead of hardcoded
    colors, so the toggle only ever needs to flip this one attribute. */
@@ -48,11 +48,11 @@
   --success-text: #6ee7b7;
 
   /* Sky/cyan accent for the landing page's feature-grid icons and title
-     highlights (replaced an earlier amber version) — bg/border are
+     highlights (replaced an earlier amber version): bg/border are
      semi-transparent so the same rgba works unchanged in both themes;
      --accent-sky-text is the one value that has to differ per theme, since
      sky-400 (used here) measures 7.51:1 against this dark card background
-     but drops to 2.14:1 on the light theme's near-white equivalent —
+     but drops to 2.14:1 on the light theme's near-white equivalent:
      verified with the WCAG relative-luminance formula, not eyeballed. See
      the light block below for that theme's contrast-passing value. */
   --accent-sky-bg: rgba(14, 165, 233, 0.1);
@@ -109,7 +109,7 @@
   --success-text: #047857;
 
   /* Same rgba bg/border as the dark theme (they composite correctly against
-     either card color unchanged) — only the text shade changes, to
+     either card color unchanged): only the text shade changes, to
      sky-700: 5.93:1 against the light theme's resulting background,
      comfortably past the 4.5:1 AA text minimum. sky-600 (4.10:1) was the
      next lighter step but fell just short of AA, so this goes one shade
@@ -132,7 +132,7 @@
   --font-mono: var(--font-geist-mono);
 }
 
-/* Used by the hero's "processing" checklist (HeroTransformDemo) — each item
+/* Used by the hero's "processing" checklist (HeroTransformDemo): each item
    gets a staggered animation-delay via inline style, so they read as
    sequential steps completing rather than all appearing at once. */
 @keyframes fade-in-up {
@@ -155,14 +155,14 @@ body {
   color: var(--foreground);
   /* Previously hardcoded to "Arial, Helvetica, sans-serif" here, which
      silently overrode whatever font next/font loaded above (Geist before,
-     Plus Jakarta Sans now) — the loaded font was never actually applied.
+     Plus Jakarta Sans now): the loaded font was never actually applied.
      var(--font-sans) is the fix; the Arial/Helvetica chain stays only as a
      fallback if the variable somehow fails to resolve. */
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
 }
 
 /* Tighter letter-spacing and line-height on every heading tag, set once
-   here rather than repeated per-heading className across every page —
+   here rather than repeated per-heading className across every page:
    Plus Jakarta Sans at bold weights reads slightly loose at default
    tracking on large headline sizes without this. */
 h1, h2, h3, h4, h5, h6 {
@@ -170,7 +170,7 @@ h1, h2, h3, h4, h5, h6 {
   line-height: 1.2;
 }
 
-/* Milestone C15 — themed scrollbar for internally-scrolling surfaces (the
+/* Milestone C15: themed scrollbar for internally-scrolling surfaces (the
    performance import preview table's own scroll container). Reads the
    same --card-bg/--secondary-btn-bg/--secondary-btn-bg-hover variables
    every other themed surface already uses, so it matches both the dark

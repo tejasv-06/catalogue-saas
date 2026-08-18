@@ -1,6 +1,6 @@
 // Unit tests for lib/webhookVerification.ts (Milestone C13).
 //
-// Uses the real `stripe` SDK's webhook signing helpers directly — signature
+// Uses the real `stripe` SDK's webhook signing helpers directly: signature
 // verification is pure HMAC-SHA256, entirely local, no network call and no
 // real Stripe account needed (Stripe's own test suites use exactly this
 // pattern: a syntactically-valid but fake test key, used only to construct
@@ -16,7 +16,7 @@ import assert from 'node:assert/strict'
 import Stripe from 'stripe'
 import { verifyStripeWebhookSignature, isSupportedFulfillmentEvent, WebhookSignatureError } from './webhookVerification'
 
-// Not a real Stripe secret — never used for a network call anywhere in
+// Not a real Stripe secret: never used for a network call anywhere in
 // this file, only to satisfy the SDK constructor.
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'mock_sk_test_key_for_testing_only');
 const WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || 'mock_whsec_key_for_testing_only';
@@ -58,7 +58,7 @@ test('verifyStripeWebhookSignature rejects a tampered payload (valid signature f
   const originalPayload = makeCheckoutCompletedPayload()
   const header = stripe.webhooks.generateTestHeaderString({ payload: originalPayload, secret: WEBHOOK_SECRET })
   // Same header/signature, but the body an attacker actually sent differs
-  // from what was signed — e.g. trying to inflate the credited amount by
+  // from what was signed: e.g. trying to inflate the credited amount by
   // editing the event after the fact.
   const tamperedPayload = makeCheckoutCompletedPayload({ payment_status: 'unpaid' })
 
@@ -89,7 +89,7 @@ test('isSupportedFulfillmentEvent accepts checkout.session.completed', () => {
   assert.equal(isSupportedFulfillmentEvent(event), true)
 })
 
-test('isSupportedFulfillmentEvent rejects every other event type — C13-AC10, no credit award for unsupported events', () => {
+test('isSupportedFulfillmentEvent rejects every other event type: C13-AC10, no credit award for unsupported events', () => {
   for (const type of ['payment_intent.succeeded', 'charge.refunded', 'customer.created', 'invoice.paid']) {
     const payload = JSON.stringify({ id: 'evt_x', object: 'event', type, data: { object: {} } })
     const header = stripe.webhooks.generateTestHeaderString({ payload, secret: WEBHOOK_SECRET })

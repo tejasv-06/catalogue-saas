@@ -23,7 +23,7 @@ export type AccountInsightsResponse = {
   provider: 'groq' | 'claude'
   insights: AccountInsights
   // Currency/percent/thousands-grouped numbers in the model's output that
-  // don't appear verbatim in the verified-stats text it was given — a
+  // don't appear verbatim in the verified-stats text it was given: a
   // non-fatal signal that the model may have invented or misremembered a
   // figure, surfaced for human review rather than silently trusted.
   verificationWarnings: string[]

@@ -2,14 +2,14 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/client'
 import type { Marketplace } from '@/lib/types'
 
-// Milestone C12 (Phase 10M) — session-aware Supabase wrapper for the
+// Milestone C12 (Phase 10M): session-aware Supabase wrapper for the
 // clients/Brand table, following lib/catalog.ts's exact established
 // pattern (Milestone 21/C1): every exported function derives ownership
 // from the authenticated session via requireUserId(client) ->
 // client.auth.getUser(), never from a parameter; every function takes an
 // optional trailing `client`, defaulting to the real browser client, as
 // the seam brands.test.ts uses to inject a mock. A separate file from
-// lib/catalog.ts on purpose — clients/brands is a distinct domain from
+// lib/catalog.ts on purpose: clients/brands is a distinct domain from
 // catalog_products/listings, the same reasoning lib/credits.ts and
 // lib/productIntelligence.ts already split on.
 
@@ -53,7 +53,7 @@ async function requireUserId(client: SupabaseClient): Promise<string> {
   return data.user.id
 }
 
-// No explicit owner filter — same RLS-only reasoning as lib/catalog.ts's
+// No explicit owner filter: same RLS-only reasoning as lib/catalog.ts's
 // getCatalog/getExportHistory: clients' existing SELECT policy
 // (auth.uid() = user_id, unchanged by this migration) already returns only
 // this session's own rows.
@@ -67,7 +67,7 @@ export async function listBrands(client: SupabaseClient = createClient()): Promi
 }
 
 // RLS makes "doesn't exist" and "exists but isn't yours" the same result
-// (null) — callers must not try to distinguish them, same convention as
+// (null): callers must not try to distinguish them, same convention as
 // lib/catalog.ts's getProductById.
 export async function getBrand(id: string, client: SupabaseClient = createClient()): Promise<BrandRow | null> {
   await requireUserId(client)
@@ -79,7 +79,7 @@ export async function getBrand(id: string, client: SupabaseClient = createClient
 }
 
 // user_id is derived here, from the session, and is the only ownership
-// value ever sent — fields never includes it (BrandFields has no such key),
+// value ever sent: fields never includes it (BrandFields has no such key),
 // so there is no caller-suppliable ownership field to spoof.
 export async function createBrand(fields: BrandFields, client: SupabaseClient = createClient()): Promise<BrandRow> {
   const userId = await requireUserId(client)
@@ -95,7 +95,7 @@ export async function createBrand(fields: BrandFields, client: SupabaseClient = 
 }
 
 // Ownership is enforced by RLS's existing UPDATE policy (USING + WITH
-// CHECK auth.uid() = user_id) — this function never receives or checks an
+// CHECK auth.uid() = user_id): this function never receives or checks an
 // owner id itself, and `fields` has no user_id key to strip or trust. If
 // the row isn't owned by the session, RLS returns zero rows updated and
 // .single() throws, which the caller's try/catch must treat as failure.

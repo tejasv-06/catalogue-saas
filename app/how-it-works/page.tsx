@@ -2,7 +2,7 @@ import Link from 'next/link'
 import Navbar from '@/components/Navbar'
 import { GUEST_GENERATION_LIMIT } from '@/lib/limits'
 
-// Same 5-step workflow as the homepage's "The Tesolute Workflow" section —
+// Same 5-step workflow as the homepage's "The Tesolute Workflow" section:
 // this page is the expanded version, not a differently-worded second
 // explanation of the same thing.
 const steps = [
@@ -16,11 +16,11 @@ const steps = [
   },
   {
     title: '3. Validate',
-    body: "Every generated listing is automatically checked against the requirements of the marketplace you're selling on — required fields, character limits, and missing information are flagged before you ever see it, so you know exactly what's ready to publish and what still needs attention."
+    body: "Every generated listing is automatically checked against the requirements of the marketplace you're selling on: required fields, character limits, and missing information are flagged before you ever see it, so you know exactly what's ready to publish and what still needs attention."
   },
   {
     title: '4. Review',
-    body: "Nothing goes out unchecked. Every listing lands in a review screen where you can read exactly what Tesolute produced, see which marketplace checks passed, approve it as-is, or regenerate just the part that needs work — a title, a set of bullets, the description — without starting over. This keeps a human in the loop before anything reaches a live marketplace listing."
+    body: "Nothing goes out unchecked. Every listing lands in a review screen where you can read exactly what Tesolute produced, see which marketplace checks passed, approve it as-is, or regenerate just the part that needs work (a title, a set of bullets, the description) without starting over. This keeps a human in the loop before anything reaches a live marketplace listing."
   },
   {
     title: '5. Export',

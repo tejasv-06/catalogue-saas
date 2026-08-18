@@ -15,14 +15,14 @@ test('getCreditPackage resolves every known package id', () => {
   }
 })
 
-test('getCreditPackage returns undefined for any unknown/arbitrary package id — never a fabricated fallback', () => {
+test('getCreditPackage returns undefined for any unknown/arbitrary package id: never a fabricated fallback', () => {
   assert.equal(getCreditPackage('mega-pack-100000-credits'), undefined)
   assert.equal(getCreditPackage(''), undefined)
   assert.equal(getCreditPackage('__proto__'), undefined)
   assert.equal(getCreditPackage('constructor'), undefined)
 })
 
-test('CREDIT_PACKAGES has no Shopify or unrelated entries — exactly the fixed package set', () => {
+test('CREDIT_PACKAGES has no Shopify or unrelated entries: exactly the fixed package set', () => {
   assert.deepEqual(new Set(CREDIT_PACKAGE_IDS), new Set(['starter', 'pro', 'business']))
 })
 

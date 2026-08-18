@@ -1,10 +1,10 @@
--- Milestone 11 — Schema foundation for the future persistent catalog.
+-- Milestone 11: Schema foundation for the future persistent catalog.
 -- Run this in the Supabase SQL editor (Dashboard > SQL Editor) once, same
 -- manual-apply discipline as the sibling migration files in this folder.
 --
 -- NOTHING in the current application reads or writes these tables yet. They
 -- exist so a future milestone (Phase C+) has real, RLS-protected storage to
--- write to — this migration only creates the tables, it does not wire
+-- write to: this migration only creates the tables, it does not wire
 -- generate-single, CatalogueWorkspace.tsx, or the export flow to them.
 --
 -- NAMING DECISION: a legacy `products` table already exists (see the sibling
@@ -19,7 +19,7 @@
 -- OWNERSHIP: catalog_products is owned directly by auth.users.id
 -- (owner_user_id), NOT via the `clients` table. The future direction is
 -- User -> Brand -> Product -> Listing -> Listing Approval, but `clients`
--- (the future "Brand") has no enforced per-user ownership yet — fixing that
+-- (the future "Brand") has no enforced per-user ownership yet: fixing that
 -- is Phase G, explicitly out of scope here. catalog_products.client_id is
 -- included as an OPTIONAL, nullable link to an existing `clients` row (so a
 -- product can reference a brand-voice profile once one is eventually
@@ -28,7 +28,7 @@
 --
 -- catalog_listings.owner_user_id is a deliberate denormalization (also
 -- derivable via catalog_listings.product_id -> catalog_products.owner_user_id)
--- so its own RLS policies can check ownership directly with no join —
+-- so its own RLS policies can check ownership directly with no join:
 -- simpler and cheaper to evaluate on every row than a subquery per check.
 
 create table if not exists catalog_products (
@@ -46,15 +46,15 @@ create table if not exists catalog_products (
 create index if not exists catalog_products_owner_idx on catalog_products(owner_user_id);
 create index if not exists catalog_products_client_idx on catalog_products(client_id);
 
--- One row per (product, marketplace) — the entity that does not exist at
+-- One row per (product, marketplace): the entity that does not exist at
 -- all in the current architecture, where a "listing" is only ever a key
 -- inside a client-side generatedContent map (lib/types.ts). marketplace is
 -- constrained to the same four values SUPPORTED_MARKETPLACES defines in
--- lib/platformShapers.ts today — no marketplace is invented here beyond
+-- lib/platformShapers.ts today: no marketplace is invented here beyond
 -- what the current TypeScript model already supports.
 --
 -- shaped_content mirrors generatedContent[marketplace] (the marketplace-
--- shaped object shapeForPlatform() produces — its exact per-marketplace
+-- shaped object shapeForPlatform() produces: its exact per-marketplace
 -- fields already vary and are already untyped `any` on the client, so jsonb
 -- is a direct, non-lossy lift, not a new source of looseness).
 -- generation_meta mirrors generationMeta[marketplace] (lib/listingHealth.ts's
@@ -76,7 +76,7 @@ create table if not exists catalog_listings (
 create index if not exists catalog_listings_product_idx on catalog_listings(product_id);
 create index if not exists catalog_listings_owner_idx on catalog_listings(owner_user_id);
 
--- 1:1 with catalog_listings — mirrors today's client-only
+-- 1:1 with catalog_listings: mirrors today's client-only
 -- approved[marketplace] boolean, but as a real, timestamped, attributable
 -- record (today's version has no "who" or "when" at all). Preparation for
 -- Phase D; the current client-side approval system is not changed by this
@@ -100,7 +100,7 @@ create index if not exists catalog_listing_approvals_owner_idx on catalog_listin
 -- marketplace (lib/exportShapers.ts / performExport in CatalogueWorkspace.tsx),
 -- so one Export row per marketplace-batch matches the real current shape.
 -- A plain listing_ids array is used instead of a separate ExportItem join
--- table — an export batch is written once and never queried/joined against
+-- table: an export batch is written once and never queried/joined against
 -- individual line items elsewhere in the current design, so a join table
 -- would add schema surface with no current read pattern to justify it.
 create table if not exists catalog_exports (
@@ -131,9 +131,9 @@ create table if not exists credit_transactions (
 
 create index if not exists credit_transactions_user_idx on credit_transactions(user_id);
 
--- RLS — every table above is user-owned and must deny cross-user access by
+-- RLS: every table above is user-owned and must deny cross-user access by
 -- default. Policies below are scoped strictly to `auth.uid() = owner_user_id`
--- (or `= user_id` for credit_transactions) — never a client-supplied value,
+-- (or `= user_id` for credit_transactions): never a client-supplied value,
 -- and never a blanket "authenticated can do anything" policy. service_role
 -- is unaffected by RLS (Postgres/Supabase default) so future server-side
 -- write paths (Phase C+) will work without any policy change here.

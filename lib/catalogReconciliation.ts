@@ -9,9 +9,9 @@ import {
 } from '@/lib/types'
 import type { CatalogSnapshot, CatalogProductRow, CatalogListingRow, CatalogListingApprovalRow } from '@/lib/catalog'
 
-// Milestone 26 (Step C4) — pure reconciliation logic, deliberately kept out
+// Milestone 26 (Step C4): pure reconciliation logic, deliberately kept out
 // of CatalogueWorkspace.tsx's closures (unlike C2/C3's persistence helpers)
-// specifically so this — the highest-risk logic in the milestone — can be
+// specifically so this (the highest-risk logic in the milestone) can be
 // unit-tested for real with node:test, not just live-verified. Nothing here
 // touches Supabase directly; it only transforms already-fetched rows.
 
@@ -27,13 +27,13 @@ function attemptedMarketplacesOf(
   return SUPPORTED_MARKETPLACES.filter((m) => generatedContent[m] !== null || generationError[m] !== null)
 }
 
-// CRITICAL NULL-CONTENT RULE — a catalog_listings row with
+// CRITICAL NULL-CONTENT RULE: a catalog_listings row with
 // shaped_content === null (a pre-Milestone-25 row, or a failed dual-write)
 // must never overwrite valid local content. Content/meta/error/id are
 // treated as one atomic unit per marketplace: only taken from the server
 // when shaped_content is actually present, identical whether merging into
 // an existing local product or constructing a server-only one.
-// listingServerIds is the one exception — a listing row's own id is real
+// listingServerIds is the one exception: a listing row's own id is real
 // and worth capturing regardless of whether its content happens to be
 // null, since a future regenerate (upsert on the existing
 // (product_id, marketplace) row) and any approval/export action both need
@@ -57,11 +57,11 @@ function applyListing(
   if (approval) approved[listing.marketplace] = approval.approved
 }
 
-// A local DraftProduct with a matching serverId — server listing data wins
+// A local DraftProduct with a matching serverId: server listing data wins
 // per marketplace only when non-null (see applyListing); brandName,
 // description, category, imageUrl, imageFile, imageUrls, skipBrandVoice,
 // and visualAttributes are NOT touched here and stay exactly as the local
-// copy has them (Rules 9–11) — none of those are reconstructed from the
+// copy has them (Rules 9–11): none of those are reconstructed from the
 // server (imageUrls is covered automatically by the `...local` spread
 // below, same as imageUrl always has been).
 export function mergeDraftWithServer(
@@ -120,7 +120,7 @@ export function buildDraftFromServer(
     category: serverProduct.category ?? '',
     imageFile: null,
     imageUrl: serverProduct.image_url,
-    // Milestone C17.1 — server rows always have a real array (schema
+    // Milestone C17.1: server rows always have a real array (schema
     // default '{}'), but a stale/mocked CatalogProductRow predating the
     // migration might not; falling back to [image_url] (not []) keeps a
     // single-image server product showing its one real image here rather
@@ -130,14 +130,14 @@ export function buildDraftFromServer(
     approved,
     status: computeStatus(generatedContent, attemptedMarketplacesOf(generatedContent, generationError)),
     generationError,
-    // Rule 9 — not persisted server-side (only catalog_products.client_id
+    // Rule 9: not persisted server-side (only catalog_products.client_id
     // is; there is no per-product "was brand voice skipped" column), so a
     // server-only-hydrated product always defaults to false, same as a
     // brand-new product does today. Documented limitation, not a schema
     // change.
     skipBrandVoice: false,
     generationMeta,
-    // Rule 11 — not persisted anywhere in catalog_listings; a
+    // Rule 11: not persisted anywhere in catalog_listings; a
     // server-only-hydrated product can never show "Detected from image"
     // until regenerated. Documented limitation, not a schema change.
     visualAttributes: null
@@ -145,11 +145,11 @@ export function buildDraftFromServer(
 }
 
 // Matches server catalog_products to local DraftProducts using ONLY
-// DraftProduct.serverId (Rule 6) — never brand name/description/category/
+// DraftProduct.serverId (Rule 6): never brand name/description/category/
 // image/array position/content, no fuzzy matching. A local product whose
 // serverId doesn't match any current server row (deleted server-side, or
 // simply not synced yet) is preserved unchanged, same as a product with no
-// serverId at all (Rule 5) — this function only ever adds or updates, it
+// serverId at all (Rule 5): this function only ever adds or updates, it
 // never removes a local product on its own.
 export function reconcileCatalog(
   localProducts: DraftProduct[],

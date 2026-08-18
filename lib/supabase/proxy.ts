@@ -23,7 +23,7 @@ export async function updateSession(request: NextRequest) {
     }
   )
 
-  // Refreshes the session cookie if one exists, but no longer gates access —
+  // Refreshes the session cookie if one exists, but no longer gates access:
   // /workspace is publicly viewable now. CatalogueWorkspace.tsx checks session
   // client-side purely to decide whether to show the Brand/Clients dropdown.
   const { data } = await supabase.auth.getClaims()

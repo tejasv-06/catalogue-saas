@@ -24,7 +24,7 @@ function humanizeColumnKey(key: string): string {
     .join(' ')
 }
 
-// Human-readable CSV header for every generated column, per marketplace —
+// Human-readable CSV header for every generated column, per marketplace:
 // same keys as exportColumns, "Generated " + Title Case instead of the raw
 // snake_case key. Exists so a raw-vs-AI-output column can be told apart at a
 // glance in a spreadsheet (see performExport in CatalogueWorkspace.tsx,
@@ -37,7 +37,7 @@ export const generatedColumnLabels: Record<string, Record<string, string>> = Obj
 )
 
 // The seller's own raw input, never touched by generation (see
-// lib/types.ts's DraftProduct — brandName/category/description/imageUrl are
+// lib/types.ts's DraftProduct: brandName/category/description/imageUrl are
 // written once at add-time, whether from Manual Entry, Photos Only, or a
 // Bulk Upload CSV row, and generation only ever writes into
 // generatedContent, a separate field). Positioned before a marketplace's
@@ -55,9 +55,9 @@ export function buildRawColumnsRow(product: {
     'Original Brand': product.brandName || '',
     'Original Category': product.category || '',
     'Original Description': product.description || '',
-    // product.imageUrl already holds whichever real reference applies — the
+    // product.imageUrl already holds whichever real reference applies: the
     // Supabase Storage URL for an uploaded image (Manual Entry/Photos Only)
-    // or the raw URL string from a Bulk Upload CSV's own image column —
+    // or the raw URL string from a Bulk Upload CSV's own image column:
     // never a placeholder; null only when no image was ever provided.
     'Original Image': product.imageUrl || 'No image provided'
   }

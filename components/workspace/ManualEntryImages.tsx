@@ -5,21 +5,21 @@ import ProductThumbnail from '@/components/ProductThumbnail'
 import { MAX_MANUAL_IMAGES, type ManualImageSlot } from '@/lib/types'
 import { labelClass, bodyTextClass } from '@/lib/uiClasses'
 
-// Milestone C17.1 — Manual Entry's multi-image picker. Replaces the single
+// Milestone C17.1: Manual Entry's multi-image picker. Replaces the single
 // "Upload Product Image" input with a compact grid of up to
 // MAX_MANUAL_IMAGES thumbnails (fixed-size, matching ProductThumbnail's own
-// pixel-size API, not a responsive aspect-square grid — this is what lets
+// pixel-size API, not a responsive aspect-square grid: this is what lets
 // the row wrap naturally at narrow panel widths per the milestone's own
 // spec, and keeps ProductThumbnail completely unmodified/reused as-is,
 // rendered once per slot). Every image is ONE product's images, never
-// separate products — order here IS the persisted order (DraftProduct.
+// separate products: order here IS the persisted order (DraftProduct.
 // imageUrls / catalog_products.image_urls), and the first slot is always
 // the primary image (labeled, never silently reassigned by anything,
 // including AI analysis).
 //
 // No drag-and-drop library: this codebase has no existing reorder pattern
 // to reuse (verified before writing this file), and the milestone spec
-// explicitly says not to introduce a complex one — small ‹/› move buttons
+// explicitly says not to introduce a complex one: small ‹/› move buttons
 // are the smallest mechanism that actually reorders.
 export default function ManualEntryImages({
   images,
@@ -36,11 +36,11 @@ export default function ManualEntryImages({
 }) {
   const tileSize = 72
   // Every empty slot up to the cap gets its own "Add Image" tile, not just
-  // one — makes the "up to 5" capacity visible at a glance (per §11/§12:
+  // one: makes the "up to 5" capacity visible at a glance (per §11/§12:
   // "the seller must immediately understand that they can add multiple
   // images") rather than implied by a counter next to a single tile.
   // Clicking ANY of them opens the same file picker (see the one shared,
-  // standalone hidden <input> below) — multi-select there can still fill
+  // standalone hidden <input> below): multi-select there can still fill
   // several of these tiles in one pick.
   const emptySlotCount = MAX_MANUAL_IMAGES - images.length
 
@@ -105,7 +105,7 @@ export default function ManualEntryImages({
           </div>
         ))}
 
-        {/* One real input, standalone (not wrapped in any one tile) — every
+        {/* One real input, standalone (not wrapped in any one tile): every
             empty tile below just calls .click() on it, so all of them open
             the exact same multi-select file picker. */}
         <input
@@ -116,7 +116,7 @@ export default function ManualEntryImages({
           onChange={(e) => {
             const files = Array.from(e.target.files ?? [])
             if (files.length > 0) onAddFiles(files)
-            // Uncontrolled native input — cleared immediately so picking
+            // Uncontrolled native input: cleared immediately so picking
             // the exact same file again later (e.g. after removing it)
             // still fires onChange.
             e.target.value = ''
@@ -124,7 +124,7 @@ export default function ManualEntryImages({
           className="hidden"
         />
 
-        {/* One tile per remaining slot — never more than MAX_MANUAL_IMAGES
+        {/* One tile per remaining slot: never more than MAX_MANUAL_IMAGES
             tiles total (filled + empty combined), so this can never offer a
             6th image. */}
         {Array.from({ length: emptySlotCount }).map((_, i) => (

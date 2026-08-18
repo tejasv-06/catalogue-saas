@@ -82,7 +82,7 @@ test('no calculated metric ever produces NaN or Infinity for any input combinati
 
 // --- Source metric preserved, never overwritten (§8) --------------------------
 
-test('computeNormalizedMetrics preserves a source-supplied conversionRate verbatim — never recalculates over it', () => {
+test('computeNormalizedMetrics preserves a source-supplied conversionRate verbatim: never recalculates over it', () => {
   const record = baseRecord({ purchases: 1, clicks: 7, conversionRate: 14.285714 })
   const normalized = computeNormalizedMetrics(record)
   assert.equal(normalized.conversionRate, 14.285714)
@@ -111,7 +111,7 @@ test('computeNormalizedMetrics never fabricates atcRate from anything other than
   assert.equal(computeNormalizedMetrics(record).atcRate, null)
 })
 
-test('computeNormalizedMetrics calculates conversionRate from purchases/clicks when the source did not supply one — §8\'s "calculate where raw metrics exist" half, not just the "preserve source" half', () => {
+test('computeNormalizedMetrics calculates conversionRate from purchases/clicks when the source did not supply one: §8\'s "calculate where raw metrics exist" half, not just the "preserve source" half', () => {
   const record = baseRecord({ purchases: 3, clicks: 30, conversionRate: null })
   const normalized = computeNormalizedMetrics(record)
   assert.equal(normalized.conversionRate, 10)

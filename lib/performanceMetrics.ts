@@ -1,6 +1,6 @@
 import type { CanonicalPerformanceRecord } from '@/lib/performanceAdapters'
 
-// Milestone C15 — §8 Calculated Metrics. Pure functions only, each with
+// Milestone C15: §8 Calculated Metrics. Pure functions only, each with
 // exactly one job: turn two raw counts into a percentage, or return null
 // when that would be undefined/misleading. Never NaN, never Infinity,
 // never a fabricated 0 for "no data" (see each function's own comment).
@@ -29,13 +29,13 @@ export type NormalizedMetrics = {
   conversionRate: number | null
 }
 
-// §8 — "if the source already supplies a metric... preserve the source
+// §8: "if the source already supplies a metric... preserve the source
 // value. Do not blindly overwrite source metrics with a locally
 // calculated value." Every field here follows the same rule: prefer the
 // record's own already-set value (Myntra's real Conversion %, Amazon's
 // real Unit Session %, either adapter's real ctr if one is ever added) and
 // only fall back to a local calculation when the source genuinely didn't
-// supply one — never the reverse. `??` (not `||`) so a real, source-
+// supply one: never the reverse. `??` (not `||`) so a real, source-
 // reported 0 is preserved as 0, never treated as "missing" and
 // recalculated over.
 export function computeNormalizedMetrics(record: CanonicalPerformanceRecord): NormalizedMetrics {

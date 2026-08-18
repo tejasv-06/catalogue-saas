@@ -1,8 +1,8 @@
 // Regression guard for Milestone 32 (C9)'s addition to
 // components/CatalogueWorkspace.tsx, using Node's built-in test runner (no
-// new dependency — tsx is already a project devDependency). Same
+// new dependency: tsx is already a project devDependency). Same
 // source-inspection approach as CatalogueWorkspace.addProducts.test.ts (C8)
-// and ClientSelector.test.ts — this file's actual React/async behavior is
+// and ClientSelector.test.ts: this file's actual React/async behavior is
 // covered separately by live browser verification against the real
 // database, not by these tests.
 
@@ -25,8 +25,8 @@ test('handleAnalyzeProduct requires a resolved serverId before calling the enric
 })
 
 // handleAnalyzeProduct (manual) and ensureProductIntelligence (automatic,
-// pre-generation) now share one real implementation —
-// runProductIntelligenceAnalysis — rather than each independently calling
+// pre-generation) now share one real implementation:
+// runProductIntelligenceAnalysis: rather than each independently calling
 // fetch('/api/enrich-product') itself. These tests follow the call, not the
 // literal fetch, so both callers are proven to go through the same code.
 test('handleAnalyzeProduct delegates to the one shared runProductIntelligenceAnalysis implementation', () => {
@@ -44,7 +44,7 @@ test('runProductIntelligenceAnalysis calls the enrich-product API with only prod
 test('runProductIntelligenceAnalysis uses a single-flight guard (enrichingProductId) around the request, safe against a second product finishing first', () => {
   const body = bodyOf('async function runProductIntelligenceAnalysis(')
   assert.match(body, /setEnrichingProductId\(id\)/)
-  // Guarded functional clear (not a bare setEnrichingProductId(null)) — this
+  // Guarded functional clear (not a bare setEnrichingProductId(null)): this
   // function is now reachable from two different products' calls, and a
   // second (different) product's finally block must never clear the FIRST
   // product's still-in-flight enrichingProductId out from under it.
@@ -55,7 +55,7 @@ test('ensureProductIntelligence reuses an already-completed analysis without a n
   const body = bodyOf('async function ensureProductIntelligence(')
   assert.match(body, /if \(product\.productIntelligence\?\.status === 'completed'\)/)
   // The completed-data branch must return before ever reaching serverId/
-  // hasSession checks or a fetch — confirmed structurally by requiring the
+  // hasSession checks or a fetch: confirmed structurally by requiring the
   // completed-status check to appear before any fetch call in this function.
   const completedIdx = body.search(/product\.productIntelligence\?\.status === 'completed'/)
   const fetchIdx = body.search(/runProductIntelligenceAnalysis\(/)
@@ -95,10 +95,10 @@ test('generateForProductMarketplace sends the resolved intelligence data (not a 
   assert.match(body, /productIntelligence:\s*intelligenceData \?\? undefined/)
 })
 
-test('Product Intelligence is never mixed across products — ensureProductIntelligence always receives and returns data scoped to the one product passed in', () => {
+test('Product Intelligence is never mixed across products: ensureProductIntelligence always receives and returns data scoped to the one product passed in', () => {
   const body = bodyOf('async function ensureProductIntelligence(')
   // Every branch reads/writes exclusively via `product` (the function's own
-  // parameter) or the id-keyed cache — never a bare/shared variable name
+  // parameter) or the id-keyed cache: never a bare/shared variable name
   // that could leak one product's result into another's request.
   assert.ok(!/\bcurrentIntelligence\b|\blastIntelligence\b/.test(body))
   assert.match(body, /productIntelligencePromises\.current\.(get|set)\(product\.id/)
@@ -108,7 +108,7 @@ test('catalog hydration carries product_intelligence through by serverId without
   const body = bodyOf('getCatalog()', 1500)
   assert.match(body, /reconcileCatalog\(prev, server, computeProductStatus\)/)
   assert.match(body, /intelligenceByServerId/)
-  // lib/catalogReconciliation.ts (C4) must remain byte-for-byte untouched —
+  // lib/catalogReconciliation.ts (C4) must remain byte-for-byte untouched:
   // this pass happens entirely in CatalogueWorkspace.tsx, after reconcileCatalog
   // returns, never inside it.
   assert.match(body, /const intelligenceByServerId = new Map\(server\.products\.map/)
@@ -123,7 +123,7 @@ test('GeneratedListingDrawer receives the enrichment trigger and single-flight s
 })
 
 // --- Automatic-trigger scope: exactly one real call site, inside
-// generation itself — never opening a drawer, never a page refresh. ---
+// generation itself: never opening a drawer, never a page refresh. ---
 
 test('ensureProductIntelligence is called from exactly one place in the whole file: inside generateForProductMarketplace', () => {
   const occurrences = [...source.matchAll(/ensureProductIntelligence\(/g)]
@@ -147,7 +147,7 @@ test('opening a product drawer (setViewingTarget) never triggers Product Intelli
   }
 })
 
-test('the mount-time catalog hydration effect (page refresh) never triggers Product Intelligence — it only reads and merges already-persisted results', () => {
+test('the mount-time catalog hydration effect (page refresh) never triggers Product Intelligence: it only reads and merges already-persisted results', () => {
   const body = bodyOf('getCatalog()', 1500)
   assert.ok(!/ensureProductIntelligence|runProductIntelligenceAnalysis/.test(body))
 })
@@ -155,17 +155,17 @@ test('the mount-time catalog hydration effect (page refresh) never triggers Prod
 // --- Credit safety: enrichment has no credit cost to duplicate, and this
 // change must not add one. ---
 
-test('app/api/enrich-product/route.ts has no credit deduction — Product Intelligence remains unmetered, so running it automatically introduces no new/duplicate charge', () => {
+test('app/api/enrich-product/route.ts has no credit deduction: Product Intelligence remains unmetered, so running it automatically introduces no new/duplicate charge', () => {
   const routeSource = readFileSync(join(__dirname, '..', 'app', 'api', 'enrich-product', 'route.ts'), 'utf8')
   assert.ok(!/deductCredits|assertSufficientCredits|CREDIT_COSTS/.test(routeSource))
 })
 
 // --- Existing visualAttributes ("Detected from image") behavior is
-// untouched — it's a byproduct of generate-single, not something this
+// untouched: it's a byproduct of generate-single, not something this
 // change reroutes through Product Intelligence. ---
 
 test('visualAttributes merge in generateForProductMarketplace is unchanged by the Product Intelligence wiring', () => {
-  // Wider window than the default 3000 — this function is long, and the
+  // Wider window than the default 3000: this function is long, and the
   // visualAttributes merge sits well past the intelligence/fetch code near
   // its top (~6.5k chars in).
   const body = bodyOf('async function generateForProductMarketplace(', 10000)

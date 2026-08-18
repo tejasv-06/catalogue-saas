@@ -1,4 +1,4 @@
-// Milestone C15 — Performance Intelligence "Generate AI Insights" step,
+// Milestone C15: Performance Intelligence "Generate AI Insights" step,
 // output shape. Mirrors lib/accountInsights.ts's pattern exactly (same
 // established, working shape for a verified-stats-only narrative).
 
@@ -33,7 +33,7 @@ export type PerformanceAIInsights = {
 export type PerformanceAIInsightsResponse = {
   insights: PerformanceAIInsights
   // Percent/thousands-grouped numbers in the model's output that don't
-  // appear verbatim in the verified-stats text it was given — a
+  // appear verbatim in the verified-stats text it was given: a
   // non-fatal signal the model may have invented or misremembered a
   // figure, surfaced for human review rather than silently trusted.
   verificationWarnings: string[]

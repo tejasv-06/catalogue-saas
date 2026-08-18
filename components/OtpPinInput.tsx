@@ -4,7 +4,7 @@ import { useRef, type ClipboardEvent, type KeyboardEvent } from 'react'
 
 const OTP_LENGTH = 6
 
-// Six separate boxes rather than one text field — the standard OTP pattern,
+// Six separate boxes rather than one text field: the standard OTP pattern,
 // and what lets each digit auto-advance focus as it's typed. Paste of a full
 // code (from a password manager or copied out of the email) still works,
 // distributing across all six boxes from whichever one was focused.

@@ -4,16 +4,16 @@ import { useEffect, useState } from 'react'
 import { getProductHistory, describeProductHistoryEvent, type ProductHistoryEventRow } from '@/lib/productHistory'
 import { labelClass } from '@/lib/uiClasses'
 
-// Milestone C14 (Milestone 34) — "PRODUCT -> PRODUCT EVENTS/HISTORY ->
+// Milestone C14 (Milestone 34): "PRODUCT -> PRODUCT EVENTS/HISTORY ->
 // TIMELINE," mounted inside the existing product detail/review drawer
 // (GeneratedListingDrawer in CatalogueWorkspace.tsx), never a new
 // standalone navigation page. Self-contained: fetches getProductHistory
 // itself on mount/when productId changes, so a failure here can never break
-// the rest of the drawer — the only thing that can go wrong here is this
+// the rest of the drawer: the only thing that can go wrong here is this
 // component's own four states (loading/empty/error/loaded) below.
 //
 // Every label shown comes from lib/productHistory.ts's centralized
-// describeProductHistoryEvent/EVENT_TYPE_LABELS — this file has no display
+// describeProductHistoryEvent/EVENT_TYPE_LABELS: this file has no display
 // strings of its own beyond the four UI-state sentences.
 
 function formatEventTimestamp(iso: string): string {

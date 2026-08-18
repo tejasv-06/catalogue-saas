@@ -17,7 +17,7 @@ import { isAccountInsights, type AccountInsights, type ActionPlanItem } from '@/
 
 // ---------------------------------------------------------------------------
 // CHART-EMBEDDING DECISION (v1): charts are intentionally NOT rendered into
-// this document. The dashboard's bar/scatter charts are live Recharts SVGs —
+// this document. The dashboard's bar/scatter charts are live Recharts SVGs:
 // turning them into a static image for docx embedding needs either (a)
 // server-side chart rendering (a Node canvas/SVG renderer reproducing the
 // same chart logic, kept in sync by hand with AccountReportDashboard.tsx) or
@@ -26,7 +26,7 @@ import { isAccountInsights, type AccountInsights, type ActionPlanItem } from '@/
 // in a serverless deployment target. Neither is a small addition, so v1
 // ships without charts and says so explicitly in the document (see the note
 // paragraph below) rather than silently omitting them. If charts are wanted
-// in the doc later, (b) is the more honest approach — it reuses the actual
+// in the doc later, (b) is the more honest approach: it reuses the actual
 // rendered chart rather than a hand-maintained reimplementation that can
 // drift from what the dashboard shows.
 // ---------------------------------------------------------------------------

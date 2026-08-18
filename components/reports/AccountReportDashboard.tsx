@@ -35,11 +35,11 @@ import {
 
 // CSS custom properties resolve live as SVG attribute values in modern
 // browsers, so these track the app's dark/light toggle (app/globals.css)
-// automatically — no theme-change listener needed. Brand blue is the same
+// automatically: no theme-change listener needed. Brand blue is the same
 // accent color used everywhere else in the app (buttonPrimaryClass), not a
 // new chart-specific color. The conversion-tier colors below are literal
 // hex, not CSS vars, by explicit spec (red/yellow/green severity, constant
-// across themes — a status color, not a surface color).
+// across themes: a status color, not a surface color).
 const CHART_GRID = 'var(--row-border)'
 const CHART_AXIS = 'var(--muted-text)'
 const BRAND_BLUE = '#2563eb'
@@ -63,7 +63,7 @@ const CATEGORY_BADGE_CONFIG: Record<ActionPlanCategory, { label: string; classNa
   catalog: { label: 'Catalog', className: 'bg-slate-500/10 text-slate-500 border-slate-500/30' }
 }
 
-// Exact thresholds as specified — see the summary sent alongside this diff
+// Exact thresholds as specified: see the summary sent alongside this diff
 // for the flagged caveat on how revenue concentration behaves against these.
 function getBuyBoxStatus(value: number | null): StatusLevel | null {
   if (value === null) return null
@@ -187,7 +187,7 @@ function LeakageTooltip({ active, payload }: TooltipContentProps) {
 }
 
 // Rotated custom tick so full product titles (truncated) render under each
-// bar instead of the raw ASIN — recharts' plain `tick` boolean only ever
+// bar instead of the raw ASIN: recharts' plain `tick` boolean only ever
 // shows the literal dataKey value, so this has to be a custom renderer.
 function makeRevenueXAxisTick(titleByAsin: Map<string, string>) {
   return function RevenueXAxisTick(props: { x?: number | string; y?: number | string; payload?: { value: string } }) {
@@ -373,7 +373,7 @@ export default function AccountReportDashboard({ stats }: { stats: AccountReport
   const thresholdAsin = thresholdCount > 0 ? revenueSorted[thresholdCount - 1]?.asin : undefined
 
   // Full ranked catalog, not just the pre-filtered "high traffic zero sales"
-  // subset — the chart's point is to show the whole conversion spectrum by
+  // subset: the chart's point is to show the whole conversion spectrum by
   // traffic volume, with color doing the flagging. Capped for readability.
   const leakageData = useMemo(
     () =>

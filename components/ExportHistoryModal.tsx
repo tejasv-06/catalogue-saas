@@ -8,10 +8,10 @@ import { MARKETPLACE_LABELS } from '@/lib/platformShapers'
 import { useFocusTrap } from '@/lib/useFocusTrap'
 import { cardClass, sectionHeadingClass, bodyTextClass, linkButtonClass, buttonPrimaryClass, dangerBannerClass, dangerTextClass } from '@/lib/uiClasses'
 
-// Milestone 29 (C7) — reuses the exact modal shell already established by
+// Milestone 29 (C7): reuses the exact modal shell already established by
 // ExportGateModal/ExportSummaryModal in CatalogueWorkspace.tsx (fixed
 // inset-0 z-40 overlay + backdrop + useFocusTrap + cardClass panel) for
-// visual consistency, without adding a new route or sidebar destination —
+// visual consistency, without adding a new route or sidebar destination:
 // per the milestone brief, this stays inside the existing /workspace
 // architecture. Session-awareness is self-contained here (its own
 // supabase.auth.getUser() check) rather than threaded through

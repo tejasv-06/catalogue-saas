@@ -8,15 +8,15 @@ import { diagnosePerformance, computeTrend, type Diagnosis } from '@/lib/perform
 import { getRecommendation } from '@/lib/performanceRecommendations'
 import { labelClass, buttonSecondarySmallClass, buttonPrimarySmallClass } from '@/lib/uiClasses'
 
-// Milestone C15 — §12/§13 Performance Intelligence UI, mounted inside the
+// Milestone C15: §12/§13 Performance Intelligence UI, mounted inside the
 // existing product detail/review drawer (GeneratedListingDrawer in
 // CatalogueWorkspace.tsx), same placement convention as
-// components/ProductHistory.tsx right above it — no new top-level
+// components/ProductHistory.tsx right above it: no new top-level
 // navigation. Self-contained: fetches getProductPerformance itself, so a
 // failure here can't break the rest of the drawer.
 
 function formatMetric(value: number | null, opts: { percent?: boolean; currency?: boolean; decimals?: number } = {}): string {
-  if (value === null) return '—'
+  if (value === null) return 'N/A'
   if (opts.currency) return `₹${value.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`
   if (opts.percent) return `${value.toFixed(opts.decimals ?? 1)}%`
   return value.toLocaleString('en-IN', { maximumFractionDigits: opts.decimals ?? 0 })
@@ -172,7 +172,7 @@ export default function ProductPerformance({ productId }: { productId: string | 
                 </div>
                 <div>
                   <p className="text-xs text-[var(--muted-text)]">Rating</p>
-                  <p className="text-[var(--body-text)]">{current.rating !== null ? current.rating.toFixed(1) : '—'}</p>
+                  <p className="text-[var(--body-text)]">{current.rating !== null ? current.rating.toFixed(1) : 'N/A'}</p>
                 </div>
                 <div>
                   <p className="text-xs text-[var(--muted-text)]">Revenue</p>
@@ -209,7 +209,7 @@ export default function ProductPerformance({ productId }: { productId: string | 
                     {records.map((record, i) => (
                       <li key={`${record.periodStart}-${record.periodEnd}`} className="text-xs">
                         <p className="font-medium text-[var(--body-text)]">
-                          {i === 0 ? 'Current period' : `${records.length - i} period${records.length - i === 1 ? '' : 's'} ago`} — {formatPeriodLabel(record)}
+                          {i === 0 ? 'Current period' : `${records.length - i} period${records.length - i === 1 ? '' : 's'} ago`}: {formatPeriodLabel(record)}
                         </p>
                         <p className="text-[var(--muted-text)]">
                           Impressions: {formatMetric(record.impressions)} · Clicks: {formatMetric(record.clicks)} · Purchases: {formatMetric(record.purchases)}

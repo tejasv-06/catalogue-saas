@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server'
 
-// Milestone 11 — locked down, not deleted.
+// Milestone 11: locked down, not deleted.
 //
 // This route operated on the legacy `products` table (status='reviewed',
 // filtered by target_marketplace) with no authentication of any kind, and
 // with no ownership column on that table to scope results to a caller in
-// the first place — verified via live schema introspection this milestone,
+// the first place: verified via live schema introspection this milestone,
 // not assumed. Confirmed via repository search to have zero current callers
 // in components/, scripts/, or any deployment config; the current product's
 // real export path is entirely client-side (performExport in

@@ -1,5 +1,5 @@
 // Unit tests for lib/exportReadiness.ts (Milestone C11), using Node's
-// built-in test runner (no new dependency — tsx is already a project
+// built-in test runner (no new dependency: tsx is already a project
 // devDependency). Run with: npx tsx --test lib/exportReadiness.test.ts
 
 import { test } from 'node:test'
@@ -46,7 +46,7 @@ test('a marketplace with a missing required field is NOT_READY, with the specifi
 })
 
 test('a marketplace with a soft (warning-level) issue only is MISSING_FIELDS, not NOT_READY', () => {
-  // Over the verified Amazon title limit (75) but otherwise complete —
+  // Over the verified Amazon title limit (75) but otherwise complete:
   // computeListingHealth treats this as needs-review (warning), not
   // missing-data (error), and the readiness gate must preserve that
   // distinction rather than collapsing every non-READY case to NOT_READY.
@@ -97,7 +97,7 @@ test('evaluateSelectedMarketplaces evaluates each marketplace independently from
   assert.equal(byMarket.etsy, 'READY')
 })
 
-test('readyMarketplaces returns only the READY subset — MISSING_FIELDS and NOT_READY are both excluded', () => {
+test('readyMarketplaces returns only the READY subset: MISSING_FIELDS and NOT_READY are both excluded', () => {
   const itemsByMarketplace = new Map<any, ExportCandidateItem[]>([
     ['amazon', [readyItem('amazon')]],
     ['flipkart', [{ productId: 'p1', content: { title: 't' }, generationError: null, meta: null }]],
@@ -116,7 +116,7 @@ test('when every selected marketplace is not ready, readyMarketplaces returns an
 
 // --- 8. Readiness evaluation failure never yields an automatic READY ---
 
-test('a throwing validator never results in READY — it becomes a blocking issue instead', () => {
+test('a throwing validator never results in READY: it becomes a blocking issue instead', () => {
   // Malformed meta shape (wrong types) shouldn't be able to crash the
   // aggregation into an unhandled exception or a false READY.
   const brokenMeta: any = { titleFields: 'not-an-array' }
@@ -126,7 +126,7 @@ test('a throwing validator never results in READY — it becomes a blocking issu
   assert.notEqual(result.status, 'READY')
 })
 
-// --- 12. Adapter isolation — evaluating one marketplace cannot affect another ---
+// --- 12. Adapter isolation: evaluating one marketplace cannot affect another ---
 
 test('evaluating one marketplace does not mutate another marketplace\'s result or shared item data', () => {
   const amazonItem = readyItem('amazon')

@@ -21,7 +21,7 @@ import {
 
 const COLUMN_COUNT = 5
 
-// One row per (product, marketplace) pair that's actually been attempted —
+// One row per (product, marketplace) pair that's actually been attempted:
 // answers "is this specific listing ready to upload," which a single
 // product-level row couldn't when a product spans several marketplaces. The
 // marketplace currently generating is included too, even before it has any
@@ -37,7 +37,7 @@ function getDisplayMarketplaces(product: DraftProduct, generatingMarketplace: Ma
   return SUPPORTED_MARKETPLACES.filter((m) => displaySet.has(m))
 }
 
-// One row's worth of pre-computed display facts — built once per candidate
+// One row's worth of pre-computed display facts: built once per candidate
 // marketplace so filtering (below) and rendering both work off the exact
 // same computeListingHealth call, never a second one that could drift from it.
 type RowData = {
@@ -71,11 +71,11 @@ function buildRowData(product: DraftProduct, generatingMarketplace: Marketplace 
 }
 
 // A product can span several marketplaces at different readiness states
-// (Amazon Ready, Flipkart Needs Review) — filtering must operate at the same
+// (Amazon Ready, Flipkart Needs Review): filtering must operate at the same
 // (product, marketplace) granularity QueueRows renders at, not hide/show a
 // whole product's rows as one unit. 'all' keeps everything, including the
 // in-flight/not-yet-attempted placeholder rows; any specific status keeps
-// only the rows whose own real health.status matches it — a row still
+// only the rows whose own real health.status matches it: a row still
 // generating (health null) or never attempted (health null) never matches a
 // specific filter.
 function filterRowData(rows: RowData[], filter: ReadinessFilter): RowData[] {
@@ -84,7 +84,7 @@ function filterRowData(rows: RowData[], filter: ReadinessFilter): RowData[] {
 }
 
 // Whether this product has at least one row visible under the current
-// filter — used by QueueTable to decide which products to render at all,
+// filter: used by QueueTable to decide which products to render at all,
 // using the exact same per-row data (and therefore the exact same
 // computeListingHealth calls) QueueRows itself renders from.
 function productHasVisibleRow(product: DraftProduct, generatingMarketplace: Marketplace | null, filter: ReadinessFilter): boolean {
@@ -101,7 +101,7 @@ function QueueRows({
   onRetry
 }: {
   product: DraftProduct
-  // The one marketplace of THIS product currently generating, or null — not
+  // The one marketplace of THIS product currently generating, or null: not
   // a product-wide flag, so a row whose own marketplace already finished
   // doesn't get stuck showing "Generating…" just because a sibling row for
   // the same product is still in flight.
@@ -142,7 +142,7 @@ function QueueRows({
               </td>
             )}
             <td className="py-3 px-4 text-sm text-[var(--body-text)]">
-              {marketplace ? MARKETPLACE_LABELS[marketplace] : '—'}
+              {marketplace ? MARKETPLACE_LABELS[marketplace] : 'N/A'}
             </td>
             <td className="py-3 px-4">
               <div className="flex flex-col gap-0.5">
@@ -150,10 +150,10 @@ function QueueRows({
                 {health && <span className="text-xs text-[var(--muted-text)]">{health.percentComplete}% complete</span>}
               </div>
             </td>
-            <td className="py-3 px-4 text-sm text-[var(--body-text)]">{health ? failedChecks : '—'}</td>
+            <td className="py-3 px-4 text-sm text-[var(--body-text)]">{health ? failedChecks : 'N/A'}</td>
             <td className="py-3 px-4 whitespace-nowrap space-x-2">
               {/* marketplace narrowed explicitly (not just content||error)
-                  so onView always carries the exact row's own marketplace —
+                  so onView always carries the exact row's own marketplace:
                   this is the one (product, marketplace) pair this row
                   represents, and the drawer it opens must show only this
                   one, not every marketplace this product has ever attempted. */}
@@ -201,12 +201,12 @@ export default function QueueTable({
   draftProducts: DraftProduct[]
   // Filtering happens here, at the same (product, marketplace) granularity
   // the rows themselves render at (see filterRowData/productHasVisibleRow
-  // above) — draftProducts is passed in unfiltered so a product with, say,
+  // above): draftProducts is passed in unfiltered so a product with, say,
   // one Ready and one Needs Review marketplace can show just the matching
   // row under either filter instead of both.
   readinessFilter: ReadinessFilter
   // Only one (product, marketplace) pair is ever generating at a time (the
-  // generation loop is sequential) — passed through as-is so each row can
+  // generation loop is sequential): passed through as-is so each row can
   // tell whether it specifically is the one in flight, not just its product.
   currentlyGenerating: { productId: string; marketplace: Marketplace } | null
   selectedMarketplaces: Marketplace[]
@@ -223,25 +223,25 @@ export default function QueueTable({
   onDelete: (id: string) => void
   onRetry: (id: string, marketplace: Marketplace) => void
   // Opens the confirm dialog in CatalogueWorkspace (owns showClearAllConfirm
-  // and the actual clear-all logic) — this button never clears anything
+  // and the actual clear-all logic): this button never clears anything
   // itself.
   onClearAll: () => void
 }) {
   const hasSelectedMarketplaces = selectedMarketplaces.length > 0
 
   // Sequential "what's next" highlight: exactly one of the three actions is
-  // primary blue at a time, based on where the queue actually is — not the
+  // primary blue at a time, based on where the queue actually is: not the
   // active tab or any manual toggle.
   //
   // Two things `status` alone can no longer answer, now that a product can
   // span several marketplaces generated independently:
   //   1. "hasGenerated" (status 'generated'/'partial' existing anywhere) can
-  //      go true mid-batch — a product flips to 'partial' the instant its
+  //      go true mid-batch: a product flips to 'partial' the instant its
   //      FIRST marketplace lands, while its others are still in flight in
   //      the very same run. Gating on `generating` fixes Bulk Approve
   //      lighting up before the batch actually finishes.
   //   2. Approving a marketplace never changes `status` (approval is fully
-  //      independent of it) — so "no generated-status product exists" is
+  //      independent of it): so "no generated-status product exists" is
   //      never true again once anything has ever been generated, which
   //      made Download practically unreachable. What actually matters is
   //      whether any generated marketplace is still *unapproved* anywhere,
@@ -256,7 +256,7 @@ export default function QueueTable({
   const downloadIsPrimary = !generating && !hasDraft && !hasUnapprovedContent && hasApproved
 
   // Guests aren't credit-metered (they have the separate free-preview count
-  // shown in the header), so the cost preview only applies once signed in —
+  // shown in the header), so the cost preview only applies once signed in:
   // computed from the actual pending count and selected marketplaces, not
   // hardcoded, so it can't drift from what generating will actually cost.
   // Total cost is simply products × marketplaces (one credit per pair), the
@@ -264,7 +264,7 @@ export default function QueueTable({
   const totalGenerations = pendingCount * selectedMarketplaces.length
   const creditCost = totalGenerations * CREDIT_COSTS.listingGeneration
   // Plain label on the button itself; the cost (when it applies) is small
-  // secondary text underneath instead of folded into one long sentence —
+  // secondary text underneath instead of folded into one long sentence:
   // Generate Listings is the thing being decided, not the arithmetic.
   const generateLabel = generating ? 'Generating...' : 'Generate Listings'
   const showCreditCost = !generating && hasSession && pendingCount > 0 && hasSelectedMarketplaces
@@ -276,7 +276,7 @@ export default function QueueTable({
           <div>
             <button
               onClick={onGenerateAll}
-              // Deliberately NOT gated on hasSelectedMarketplaces — this
+              // Deliberately NOT gated on hasSelectedMarketplaces: this
               // button must stay clickable with zero marketplaces selected
               // so the click reaches handleGenerateAll's own
               // requireMarketplace() check, which is what actually shows
@@ -312,7 +312,7 @@ export default function QueueTable({
             Export Listings
           </button>
           {/* Muted/secondary destructive treatment (buttonMutedDestructiveClass:
-              same shape as buttonSecondaryClass, danger-tinted text only) —
+              same shape as buttonSecondaryClass, danger-tinted text only):
               deliberately never buttonPrimaryClass/buttonDestructiveClass's
               solid fill, so it can't be mistaken for the row's one primary
               action or read as more urgent than a plain secondary button. */}

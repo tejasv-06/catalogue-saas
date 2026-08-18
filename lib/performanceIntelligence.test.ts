@@ -1,4 +1,4 @@
-// Unit tests for lib/performanceIntelligence.ts. Milestone C15 — Seller
+// Unit tests for lib/performanceIntelligence.ts. Milestone C15: Seller
 // Performance Intelligence & Action Engine.
 
 import { test } from 'node:test'
@@ -94,7 +94,7 @@ test('aggregatePeriod sums raw counts across every product in the period', () =>
   assert.equal(agg.purchases, 2)
 })
 
-test('aggregatePeriod computes CTR/ATC-rate/conversion-rate from SUMMED counts, not an average of each product\'s own percentage — a high-traffic product must not be diluted by a low-traffic one', () => {
+test('aggregatePeriod computes CTR/ATC-rate/conversion-rate from SUMMED counts, not an average of each product\'s own percentage: a high-traffic product must not be diluted by a low-traffic one', () => {
   const group: PeriodGroup = {
     periodStart: '2026-08-08',
     periodEnd: '2026-08-14',
@@ -109,7 +109,7 @@ test('aggregatePeriod computes CTR/ATC-rate/conversion-rate from SUMMED counts, 
   assert.ok(Math.abs(agg.ctr! - 9.1) < 0.01, `expected ~9.1%, got ${agg.ctr}`)
 })
 
-test('aggregatePeriod counts distinct products, not rows — the same external id appearing twice in one period counts once', () => {
+test('aggregatePeriod counts distinct products, not rows: the same external id appearing twice in one period counts once', () => {
   const group: PeriodGroup = {
     periodStart: '2026-08-08',
     periodEnd: '2026-08-14',
@@ -170,7 +170,7 @@ test('classifyMetricTrend: a move smaller than the significance threshold is "st
   assert.equal(classifyMetricTrend([1.02, 1.0]), 'stable')
 })
 
-test('classifyMetricTrend respects higherIsBetter=false (e.g. return rate — lower is the good direction)', () => {
+test('classifyMetricTrend respects higherIsBetter=false (e.g. return rate: lower is the good direction)', () => {
   assert.equal(classifyMetricTrend([2.0, 10.0], false), 'improving')
   assert.equal(classifyMetricTrend([10.0, 2.0], false), 'declining')
 })
@@ -217,7 +217,7 @@ test('computeCatalogStats derives a meaningful-activity floor from THIS catalog\
   assert.ok(stats.meaningfulImpressionsFloor >= 10000, 'floor should track the catalog\'s own median, not stay pinned at the absolute constant')
 })
 
-test('computeCatalogStats never drops below the existing absolute reliability floor for a tiny/sparse catalog — avoids misleading conclusions for tiny datasets', () => {
+test('computeCatalogStats never drops below the existing absolute reliability floor for a tiny/sparse catalog: avoids misleading conclusions for tiny datasets', () => {
   const tinyCatalog = [historyRecord({ externalProductId: 'p1', impressions: 5, clicks: 1 })]
   const stats = computeCatalogStats(tinyCatalog)
   assert.ok(stats.meaningfulImpressionsFloor >= 100, 'must not drop below the absolute noise floor just because this catalog is tiny')
@@ -227,7 +227,7 @@ test('computeCatalogStats never drops below the existing absolute reliability fl
 
 test('computeCatalogMedians computes the catalog\'s own median CTR only from products with enough impressions to trust their own rate', () => {
   const records = [
-    // Below the reliability floor — must not pollute the median.
+    // Below the reliability floor: must not pollute the median.
     historyRecord({ externalProductId: 'noisy', impressions: 5, clicks: 5 }), // 100% CTR, but unreliable
     historyRecord({ externalProductId: 'a', impressions: 1000, clicks: 20 }), // 2%
     historyRecord({ externalProductId: 'b', impressions: 1000, clicks: 40 }) // 4%
@@ -277,7 +277,7 @@ test('diagnoseRelative: CTR healthy but conversion weak leads with Description/S
   const conversion = diagnoses.find((d) => d.area === 'purchase-conversion')
   assert.ok(conversion, 'expected a purchase-conversion diagnosis')
   assert.deepEqual(conversion!.leadSuspects, ['Description', 'Secondary images', 'Pricing'])
-  assert.ok(!diagnoses.some((d) => d.area === 'click-through'), 'CTR was at the catalog median — must not also flag click-through')
+  assert.ok(!diagnoses.some((d) => d.area === 'click-through'), 'CTR was at the catalog median: must not also flag click-through')
 })
 
 test('diagnoseRelative fix-order sequencing: when both click-through and purchase-conversion problems co-occur on the same product, click-through ranks first', () => {
@@ -291,19 +291,19 @@ test('diagnoseRelative fix-order sequencing: when both click-through and purchas
   const medians = computeCatalogMedians(records, stats)
   const diagnoses = diagnoseRelative(records[0], stats, medians)
   assert.ok(diagnoses.length >= 2, 'expected multiple co-occurring problems')
-  assert.equal(diagnoses[0].area, 'click-through', 'a visibility problem must outrank a conversion problem — fixing conversion is wasted on a product nobody clicks')
+  assert.equal(diagnoses[0].area, 'click-through', 'a visibility problem must outrank a conversion problem: fixing conversion is wasted on a product nobody clicks')
 })
 
 test('diagnoseRelative flags returns only when elevated relative to the catalog\'s own average, never a fixed percentage', () => {
   const lowReturnCatalog = [
     historyRecord({ externalProductId: 'a', returnRate: 2 }),
     historyRecord({ externalProductId: 'b', returnRate: 2 }),
-    historyRecord({ externalProductId: 'target', returnRate: 5 }) // 2.5x catalog average — elevated here
+    historyRecord({ externalProductId: 'target', returnRate: 5 }) // 2.5x catalog average: elevated here
   ]
   const highReturnCatalog = [
     historyRecord({ externalProductId: 'a', returnRate: 20 }),
     historyRecord({ externalProductId: 'b', returnRate: 20 }),
-    historyRecord({ externalProductId: 'target', returnRate: 5 }) // same 5% — NOT elevated in this catalog
+    historyRecord({ externalProductId: 'target', returnRate: 5 }) // same 5%: NOT elevated in this catalog
   ]
   const lowStats = computeCatalogStats(lowReturnCatalog)
   const lowMedians = computeCatalogMedians(lowReturnCatalog, lowStats)
@@ -313,7 +313,7 @@ test('diagnoseRelative flags returns only when elevated relative to the catalog\
   const inLowCatalog = diagnoseRelative(lowReturnCatalog[2], lowStats, lowMedians)
   const inHighCatalog = diagnoseRelative(highReturnCatalog[2], highStats, highMedians)
   assert.ok(inLowCatalog.some((d) => d.area === 'returns'), 'the same 5% return rate should be flagged in a low-return catalog')
-  assert.ok(!inHighCatalog.some((d) => d.area === 'returns'), 'the identical 5% return rate must NOT be flagged in a high-return catalog — no fixed absolute threshold')
+  assert.ok(!inHighCatalog.some((d) => d.area === 'returns'), 'the identical 5% return rate must NOT be flagged in a high-return catalog: no fixed absolute threshold')
 })
 
 test('diagnoseRelative flags rating only when below the catalog\'s own median', () => {
@@ -328,7 +328,7 @@ test('diagnoseRelative flags rating only when below the catalog\'s own median', 
   assert.ok(diagnoses.some((d) => d.area === 'rating'))
 })
 
-test('diagnoseRelative flags stock-recovery for a recently-relisted, low-visibility product — phrased as a possibility to investigate, never a confirmed cause', () => {
+test('diagnoseRelative flags stock-recovery for a recently-relisted, low-visibility product: phrased as a possibility to investigate, never a confirmed cause', () => {
   const records = [
     historyRecord({ externalProductId: 'target', impressions: 5, metadata: { inventoryAge: 2 } }), // just relisted, low visibility
     ...Array.from({ length: 5 }, (_, i) => historyRecord({ externalProductId: `p${i}`, impressions: 2000, metadata: { inventoryAge: 200 } }))
@@ -363,7 +363,7 @@ test('classifyIntelligenceBucket: P1 is clicks/carts exist, zero purchases', () 
 
 test('classifyIntelligenceBucket: P2 is meaningful impressions with near-zero CTR relative to the catalog median', () => {
   const records = [
-    // addToCarts: 0 explicitly — the default fixture value would
+    // addToCarts: 0 explicitly: the default fixture value would
     // otherwise satisfy P1's "clicks/carts exist" and take priority.
     historyRecord({ externalProductId: 'target', impressions: 2000, clicks: 0, addToCarts: 0, purchases: 0 }),
     ...Array.from({ length: 5 }, (_, i) => historyRecord({ externalProductId: `p${i}`, impressions: 2000, clicks: 80, addToCarts: 0, purchases: 0 }))
@@ -420,7 +420,7 @@ test('diagnosePeriodRelative computes catalog stats/medians from ONLY the given 
 
 // --- buildProductInsights & prioritization ---------------------------------
 
-test('buildProductInsights groups strictly by externalProductId — never by brand/title/MRP (§7/§22)', () => {
+test('buildProductInsights groups strictly by externalProductId: never by brand/title/MRP (§7/§22)', () => {
   const source = readFileSync(join(__dirname, 'performanceIntelligence.ts'), 'utf8')
   const start = source.indexOf('export function buildProductInsights')
   const end = source.indexOf('\n// --- Account-wide diagnosis rollup', start)
@@ -431,7 +431,7 @@ test('buildProductInsights groups strictly by externalProductId — never by bra
 
 test('a product with a real, high-opportunity funnel problem is prioritized "fix-now"', () => {
   // A single-product "catalog" can never trigger a below-median relative
-  // diagnosis against itself (its own value IS the median) — real
+  // diagnosis against itself (its own value IS the median): real
   // comparison products are required for a genuinely catalog-relative
   // assertion, matching how a real multi-product catalog behaves.
   const insights = buildProductInsights([
@@ -444,7 +444,7 @@ test('a product with a real, high-opportunity funnel problem is prioritized "fix
   assert.ok(target.recommendedAction)
 })
 
-test('a product with zero purchases is NEVER prioritized "scale", even if its CTR happens to be healthy (regression — this was a real bug found via live verification)', () => {
+test('a product with zero purchases is NEVER prioritized "scale", even if its CTR happens to be healthy (regression: this was a real bug found via live verification)', () => {
   const insights = buildProductInsights([historyRecord({ impressions: 500, clicks: 10, addToCarts: 0, purchases: 0 })])
   assert.notEqual(insights[0].priority, 'scale')
 })
@@ -469,7 +469,7 @@ test('a product with genuinely insufficient traffic (no reliable diagnosis at al
   assert.equal(insights[0].priority, 'low-priority')
 })
 
-test('unlinked products (productId null) still receive a full insight — diagnosis, trend eligibility, priority, recommendation, bucket (§22, no matching step reintroduced)', () => {
+test('unlinked products (productId null) still receive a full insight: diagnosis, trend eligibility, priority, recommendation, bucket (§22, no matching step reintroduced)', () => {
   const insights = buildProductInsights([
     historyRecord({ externalProductId: 'weak', productId: null, impressions: 5000, clicks: 25, purchases: 0 }),
     ...Array.from({ length: 10 }, (_, i) => historyRecord({ externalProductId: `p${i}`, impressions: 2000, clicks: 80, purchases: 8 }))
@@ -497,7 +497,7 @@ test('buildProductInsights uses the MOST RECENT period as current and the one be
   assert.equal(insights[0].periodsAvailable, 3)
 })
 
-test('buildProductInsights assigns a P1/P2/P3 bucket alongside priority — computed relative to the catalog, never a fixed number', () => {
+test('buildProductInsights assigns a P1/P2/P3 bucket alongside priority: computed relative to the catalog, never a fixed number', () => {
   const insights = buildProductInsights([
     historyRecord({ externalProductId: 'p1', clicks: 20, addToCarts: 5, purchases: 0 }),
     historyRecord({ externalProductId: 'other', impressions: 2000, clicks: 80, purchases: 8 })
@@ -505,7 +505,7 @@ test('buildProductInsights assigns a P1/P2/P3 bucket alongside priority — comp
   assert.equal(insights.find((p) => p.externalProductId === 'p1')!.bucket, 'P1')
 })
 
-test('buildProductInsights\' fix-now/optimize split is catalog-relative — the SAME product-level numbers can land in a different bucket depending on the rest of the catalog', () => {
+test('buildProductInsights\' fix-now/optimize split is catalog-relative: the SAME product-level numbers can land in a different bucket depending on the rest of the catalog', () => {
   const smallProduct = (id: string) => historyRecord({ externalProductId: id, impressions: 250, clicks: 15, addToCarts: 3, purchases: 0 })
   const lowTrafficCatalog = buildProductInsights([smallProduct('a'), historyRecord({ externalProductId: 'b', impressions: 50, clicks: 5 })])
   const aInLowTrafficCatalog = lowTrafficCatalog.find((p) => p.externalProductId === 'a')!
@@ -519,7 +519,7 @@ test('buildProductInsights\' fix-now/optimize split is catalog-relative — the 
 
 // --- topOpportunityProducts --------------------------------------------
 
-test('topOpportunityProducts ranks a priority bucket by impressions and caps it — the same ranking the UI and the downloadable report both use', () => {
+test('topOpportunityProducts ranks a priority bucket by impressions and caps it: the same ranking the UI and the downloadable report both use', () => {
   const insights = buildProductInsights([
     historyRecord({ externalProductId: 'small', impressions: 200, clicks: 3, purchases: 0 }),
     historyRecord({ externalProductId: 'big', impressions: 5000, clicks: 5, purchases: 0 })
@@ -541,12 +541,12 @@ test('topOpportunityProducts never returns products from a different priority bu
 
 // generateActionPlan/buildActionReportText moved to
 // lib/performanceNarrative.ts (the storytelling/action-plan layer, which
-// depends on this file, never the reverse) — see
+// depends on this file, never the reverse): see
 // lib/performanceNarrative.test.ts for their tests.
 
 // --- aggregatePeriod: considerationRate + sales-split fields ---------------
 
-test('aggregatePeriod aggregates considerationRate (a real, parsed Myntra field) — not left at a hardcoded null', () => {
+test('aggregatePeriod aggregates considerationRate (a real, parsed Myntra field): not left at a hardcoded null', () => {
   const group: PeriodGroup = {
     periodStart: '2026-08-08',
     periodEnd: '2026-08-14',
@@ -613,7 +613,7 @@ test('allProductsRanked orders fix-now before optimize before scale before low-p
 
 // --- buildSegmentInsights (§7, category/segment intelligence) --------------
 
-test('buildSegmentInsights only surfaces a segment once it reaches the minimum sample size — never meaningless analysis for tiny groups', () => {
+test('buildSegmentInsights only surfaces a segment once it reaches the minimum sample size: never meaningless analysis for tiny groups', () => {
   const records = Array.from({ length: 3 }, (_, i) =>
     historyRecord({ externalProductId: `p${i}`, impressions: 1000, clicks: 50, metadata: { articleType: 'Rare Item', brand: 'X', gender: 'Unisex' } })
   )
@@ -643,13 +643,13 @@ test('buildSegmentInsights never groups products with no reported value for that
 
 // --- §19/§20 discipline carried into this file ------------------------------
 
-test('this file never claims a proven cause — recommendation text still comes exclusively from lib/performanceRecommendations.ts, never invented here', () => {
+test('this file never claims a proven cause: recommendation text still comes exclusively from lib/performanceRecommendations.ts, never invented here', () => {
   const source = readFileSync(join(__dirname, 'performanceIntelligence.ts'), 'utf8')
   assert.match(source, /import \{ getAreaRecommendation \} from '@\/lib\/performanceRecommendations'/)
   assert.ok(!/will improve|guaranteed|proven to cause/i.test(source))
 })
 
-test('this file contains no generative-AI/chatbot dependency — deterministic only (§20)', () => {
+test('this file contains no generative-AI/chatbot dependency: deterministic only (§20)', () => {
   const source = readFileSync(join(__dirname, 'performanceIntelligence.ts'), 'utf8')
   assert.ok(!/openai|anthropic|groq|generateText|chat\.completions/i.test(source))
 })
@@ -660,7 +660,7 @@ test('this file never imports lib/credits.ts (§23)', () => {
 })
 
 // --- Genericity: no hardcoded threshold survives across structurally ------
-// different catalogs (per the C15 "any brand/seller/marketplace" audit —
+// different catalogs (per the C15 "any brand/seller/marketplace" audit:
 // run against a small (<20 SKU) and a larger (75+ SKU) synthetic catalog,
 // each with independently randomized values, and confirm the computed
 // thresholds/buckets/diagnoses adapt to each rather than sharing any fixed
@@ -689,7 +689,7 @@ function buildSyntheticCatalog(count: number): PerformanceHistoryRecord[] {
   })
 }
 
-test('ACCEPTANCE: computeCatalogMedians/diagnoseRelative/classifyIntelligenceBucket run cleanly and adapt to two structurally different, independently randomized catalogs (small <20 SKUs, large 75+ SKUs) — no hardcoded value carries over from one to the other', () => {
+test('ACCEPTANCE: computeCatalogMedians/diagnoseRelative/classifyIntelligenceBucket run cleanly and adapt to two structurally different, independently randomized catalogs (small <20 SKUs, large 75+ SKUs): no hardcoded value carries over from one to the other', () => {
   const small = buildSyntheticCatalog(15)
   const large = buildSyntheticCatalog(90)
 
@@ -715,7 +715,7 @@ test('ACCEPTANCE: computeCatalogMedians/diagnoseRelative/classifyIntelligenceBuc
   assert.equal(largeInsights.length, 90)
 
   // Every P1 bucket in both catalogs must independently satisfy the exact
-  // spec definition — never inferred from one catalog's own shape.
+  // spec definition: never inferred from one catalog's own shape.
   for (const insight of [...smallInsights, ...largeInsights]) {
     if (insight.bucket === 'P1') {
       const hasActivity = (insight.current.clicks ?? 0) > 0 || (insight.current.addToCarts ?? 0) > 0
@@ -740,7 +740,7 @@ test('ACCEPTANCE: computeCatalogMedians/diagnoseRelative/classifyIntelligenceBuc
 
   // The reliability floors themselves must genuinely differ between these
   // two independently-randomized catalogs (unless coincidentally equal,
-  // vanishingly unlikely at these sample sizes) — proof the thresholds are
+  // vanishingly unlikely at these sample sizes): proof the thresholds are
   // computed per-catalog, never one shared constant.
   assert.notEqual(
     smallStats.meaningfulImpressionsFloor === largeStats.meaningfulImpressionsFloor && smallMedians.medianCtr === largeMedians.medianCtr,
